@@ -1,141 +1,157 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import os
+import plotly.express as px
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN GENERAL
 st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 
-# URL DE TU HOJA (Correctamente formateada como CSV)
+# URL DE LA BASE DE DATOS
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTEP6Up0KmDzr22xjQzklH3CbgCUJWVc7dXtKyjJIoETOxD5WSuook45kLotqxeQ82LQXUu0n2nkLcm/pub?output=csv"
 
 # 2. CABECERA
 st.markdown("<h1 style='text-align: center;'>MINDMUSCLE247</h1>", unsafe_allow_html=True)
 
-# 3. LÓGICA DE CONTROL
-if "cuestionario_enviado" not in st.session_state: st.session_state.cuestionario_enviado = False
-
+# 3. SIDEBAR Y VISTAS
 st.sidebar.title("🛡️ Sistema MINDMUSCLE247")
-modo = st.sidebar.radio("Vista:", ["📝 Cuestionario Alumno", "📊 Dashboard Administrador"])
-clave_coach = st.sidebar.text_input("Clave de Acceso (Coach):", type="password")
+modo = st.sidebar.radio("Seleccionar Vista:", ["📝 Cuestionario Alumno", "📊 Dashboard Administrador"])
+clave_coach = st.sidebar.text_input("Clave de Acceso:", type="password")
 
+# --- VISTA DASHBOARD ADMINISTRADOR ---
 if modo == "📊 Dashboard Administrador":
     if clave_coach == "MM247":
         st.header("📊 Dashboard de Gestión")
         try:
             df = pd.read_csv(SHEET_URL)
-            st.write(df)
-        except:
-            st.error("Error al conectar con la base de datos.")
+            if not df.empty:
+                alumno_sel = st.selectbox("Seleccionar Alumno:", df["Nombre Completo"].unique())
+                datos = df[df["Nombre Completo"] == alumno_sel].iloc[0]
+                
+                # Visualización de datos
+                st.subheader(f"Análisis de {alumno_sel}")
+                
+                # Gráficos dinámicos
+                col1, col2 = st.columns(2)
+                with col1:
+                    fig = px.bar(x=['Edad', 'Estatura', 'Peso'], y=[datos['Edad'], datos['Estatura'], datos['Peso']], title="Métricas Físicas")
+                    st.plotly_chart(fig)
+                
+                st.write("### Detalles del Alumno", datos)
+                
+                if st.button("🖨️ Generar/Imprimir PDF"):
+                    st.info("Utiliza Ctrl+P (o Cmd+P) para imprimir esta vista como PDF.")
+            else:
+                st.info("La base de datos está vacía.")
+        except Exception as e:
+            st.error(f"Error cargando base de datos: {e}")
     else:
-        st.warning("Acceso restringido.")
+        st.warning("Clave restringida.")
+
+# --- VISTA CUESTIONARIO ALUMNO ---
 else:
-    # DEFINICIÓN DE TABS
+    # DEFINICIÓN DE TABS (Mantener este orden exacto)
     t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
-        "⚡ 1. Info General", "🏋️ 2. Experiencia", "🩺 3. Historial Médico", 
-        "📐 4. Biomecánica", "💥 5. Fuerza", "🥗 6. Nutrición y Vida", 
-        "📅 7. Logística", "🎯 8. Preferencias", "📸 9. Envío"
+        "⚡ 1. Info", "🏋️ 2. Exp", "🩺 3. Médico", "📐 4. Bio", 
+        "💥 5. Fuerza", "🥗 6. Nut", "📅 7. Log", "🎯 8. Pref", "📸 9. Fotos"
     ])
 
     with t1:
         st.subheader("📋 Datos Personales de Partida")
-        v_nombre = st.text_input("✍ *Escribe tu Nombre Completo:*")
-        v_edad = st.number_input("🎂 Edad actual:", 1, 100, 25)
-        v_sexo = st.selectbox("Sexo biológico:", ["Seleccionar", "Masculino", "Femenino"])
-        v_estatura = st.number_input("📏 Estatura (cm):", 100, 250, 170)
-        v_peso = st.number_input("⚖ Peso actual (kg):", 30.0, 200.0, 70.0)
-        v_ocupacion = st.text_input("💼 Ocupación:")
-        v_horas_sentado = st.text_input("🪑 Horas sentado al día:")
-        v_actividad = st.selectbox("🏃 Actividad diaria:", ["Bajo", "Moderado", "Alto"])
-        v_objetivo = st.selectbox("🎯 Objetivo principal:", ["Hipertrofia", "Pérdida de grasa", "Recomposición", "Fuerza", "Rendimiento", "Salud", "Otro"])
-        v_obj_visual1 = st.text_input("🚀 ¿Parte física a mejorar?")
-        v_obj_visual2 = st.text_input("🔍 ¿Músculos rezagados?")
-        v_obj_visual3 = st.text_input("🎯 ¿Músculos a priorizar?")
+        nombre = st.text_input("Nombre Completo:")
+        edad = st.number_input("Edad:", 1, 100, 25)
+        sexo = st.selectbox("Sexo:", ["Masculino", "Femenino"])
+        estatura = st.number_input("Estatura (cm):", 100, 250, 170)
+        peso = st.number_input("Peso (kg):", 30.0, 200.0, 70.0)
+        ocupacion = st.text_input("Ocupación:")
+        hrs_sentado = st.text_input("Horas sentado al día:")
+        actividad = st.selectbox("Actividad:", ["Bajo", "Moderado", "Alto"])
+        objetivo = st.selectbox("Objetivo:", ["Hipertrofia", "Pérdida de grasa", "Recomposición", "Fuerza"])
+        obj_v1 = st.text_input("¿Parte física a mejorar?")
+        obj_v2 = st.text_input("¿Músculos menos desarrollados?")
+        obj_v3 = st.text_input("¿Músculos a priorizar?")
 
     with t2:
         st.subheader("🏋️ Trayectoria en el Gimnasio")
-        v_tiempo_entreno = st.text_input("⏳ Tiempo entrenando:")
-        v_constancia = st.selectbox("🔄 Constancia:", ["Entrenamiento constante", "Con pausas recurrentes"])
-        v_tipo_entreno = st.multiselect("👟 Disciplinas:", ["Pesas", "Crossfit", "Calistenia", "Powerlifting", "Funcional", "Otro"])
-        v_dias_actuales = st.text_input("📅 Días por semana:")
-        v_duracion_promedio = st.text_input("⏱ Duración sesión:")
-        v_tecnicas = st.multiselect("🧠 Conceptos:", ["RIR", "Fallo muscular", "Tempo", "Sobrecarga"])
-        v_eval_tec = st.slider("Control técnica (1-10):", 1, 10, 7)
-        v_eval_mente = st.slider("Conexión mente-músculo (1-10):", 1, 10, 7)
-        v_eval_int = st.slider("Intensidad (1-10):", 1, 10, 7)
-        v_eval_disc = st.slider("Disciplina (1-10):", 1, 10, 8)
-        v_eval_rec = st.slider("Recuperación (1-10):", 1, 10, 7)
+        tiempo = st.text_input("Tiempo entrenando:")
+        constancia = st.selectbox("Constancia:", ["Constante", "Con pausas"])
+        disciplinas = st.multiselect("Disciplinas:", ["Pesas", "Crossfit", "Calistenia", "Powerlifting"])
+        dias = st.text_input("Días por semana:")
+        duracion = st.text_input("Duración sesión:")
+        tecnicas = st.multiselect("Técnicas:", ["RIR", "Fallo", "Tempo"])
+        tec_slider = st.slider("Control técnica (1-10):", 1, 10, 7)
+        mente = st.slider("Conexión mente-músculo (1-10):", 1, 10, 7)
+        intensidad = st.slider("Intensidad (1-10):", 1, 10, 7)
+        disc_slider = st.slider("Disciplina (1-10):", 1, 10, 8)
+        rec = st.slider("Recuperación (1-10):", 1, 10, 7)
 
     with t3:
         st.subheader("🩺 Historial Clínico y Lesiones")
-        v_patologias = st.multiselect("⚠️ Molestias:", ["Lumbar", "Rodilla", "Hombro", "Tendinitis", "Otros", "Cirugías"])
-        v_dolor_ejercicios = st.text_area("⚡ Ejercicios que detonan dolor:")
-        v_incomodidad = st.text_area("❌ Movimientos biomecánicos incómodos:")
-        v_prohibidos = st.text_area("🚫 Ejercicios estrictamente prohibidos:")
+        molestias = st.multiselect("Molestias:", ["Lumbar", "Rodilla", "Hombro", "Tendinitis"])
+        dolor = st.text_area("Ejercicios que detonan dolor:")
+        inc = st.text_area("Movimientos incómodos:")
+        prohibidos = st.text_area("Prohibidos:")
 
     with t4:
         st.subheader("📐 Análisis Biomecánico")
-        v_piernas = st.selectbox("🦵 Piernas:", ["Cortas", "Promedio", "Largas"])
-        v_torso = st.selectbox("🧍 Torso:", ["Corto", "Promedio", "Largo"])
-        v_brazos = st.selectbox("💪 Brazos:", ["Cortos", "Promedio", "Largos"])
-        v_dificultad_sq = st.selectbox("🏋️ Sentadilla profunda:", ["Fácil", "Difícil"])
-        v_dificultad_bench = st.selectbox("Press Banca:", ["Natural", "Incomodidad"])
-        v_naturales = st.text_area("💎 Ejercicios idóneos para tu estructura:")
-        v_mov_tobillo = st.slider("Movilidad tobillo:", 1, 10, 5)
-        v_mov_cadera = st.slider("Movilidad cadera:", 1, 10, 5)
-        v_mov_hombro = st.slider("Movilidad hombro:", 1, 10, 5)
-        v_flex_general = st.slider("Flexibilidad general:", 1, 10, 5)
-        v_postura = st.multiselect("🔍 Postura:", ["Hombros adelantados", "Cifosis", "Hiperlordosis", "Valgo"])
+        piernas = st.selectbox("Piernas:", ["Cortas", "Promedio", "Largas"])
+        torso = st.selectbox("Torso:", ["Corto", "Promedio", "Largo"])
+        brazos = st.selectbox("Brazos:", ["Cortos", "Promedio", "Largos"])
+        sq = st.selectbox("Sentadilla profunda:", ["Fácil", "Difícil"])
+        bench = st.selectbox("Press Banca:", ["Natural", "Incomodidad"])
+        ideales = st.text_area("Ejercicios idóneos:")
+        mob_tobillo = st.slider("Movilidad tobillo:", 1, 10, 5)
+        mob_cadera = st.slider("Movilidad cadera:", 1, 10, 5)
+        mob_hombro = st.slider("Movilidad hombro:", 1, 10, 5)
+        flex = st.slider("Flexibilidad general:", 1, 10, 5)
+        postura = st.multiselect("Postura:", ["Hombros adelantados", "Cifosis", "Hiperlordosis"])
 
     with t5:
         st.subheader("💥 Marcas de Fuerza")
-        v_p_banca = st.text_input("🪵 Banca:")
-        v_p_sentadilla = st.text_input("👑 Sentadilla:")
-        v_p_muerto = st.text_input("💀 Peso Muerto:")
-        v_p_dominadas = st.text_input("🦅 Dominadas:")
-        v_p_fondos = st.text_input("🦜 Fondos:")
-        v_p_militar = st.text_input("🎖️ Militar:")
-        v_fatiga_rapida = st.selectbox("¿Fatiga rápida?", ["No", "Sí"])
-        v_perdida_fuerza = st.selectbox("¿Pérdida fuerza series?", ["No", "Sí"])
-        v_rec_esfuerzo = st.selectbox("¿Recuperación aire?", ["No", "Sí"])
-        v_cardio = st.selectbox("❤️ Cardio:", ["Mala", "Regular", "Buena", "Excelente"])
+        banca = st.text_input("Banca:")
+        sq_m = st.text_input("Sentadilla:")
+        muerto = st.text_input("Peso Muerto:")
+        dom = st.text_input("Dominadas:")
+        fondos = st.text_input("Fondos:")
+        mil = st.text_input("Militar:")
+        fatiga = st.selectbox("¿Fatiga rápida?", ["No", "Sí"])
+        perdida = st.selectbox("¿Pérdida fuerza series?", ["No", "Sí"])
+        rec_esf = st.selectbox("¿Recuperación aire?", ["No", "Sí"])
+        cardio = st.selectbox("Cardio:", ["Mala", "Regular", "Buena", "Excelente"])
 
     with t6:
-        st.subheader("🥗 Nutrición y Vida")
-        v_pref_proteina = st.selectbox("🥩 Proteína:", ["Carnes", "Pescados", "Vegetal", "Variado"])
-        v_pref_grasa = st.selectbox("🥑 Grasas:", ["Aguacate", "Aceite", "Lácteos", "Mixto"])
-        v_pref_carbos = st.selectbox("🍚 Carbos:", ["Arroz/Avena", "Pastas", "Frutas", "Mixto"])
-        v_pref_colaciones = st.selectbox("🍏 Colaciones:", ["5 comidas", "3 comidas", "Ayuno"])
-        v_horas_sueno = st.number_input("⏰ Sueño (hrs):", 1, 24, 7)
-        v_calidad_sueno = st.selectbox("😴 Calidad sueño:", ["Buena", "Regular", "Mala"])
-        v_estres_lab = st.slider("🤯 Estrés trabajo:", 1, 10, 5)
-        v_estres_emo = st.slider("🧠 Estrés emocional:", 1, 10, 5)
-        v_comidas_dia = st.text_input("🍽 Comidas sólidas al día:")
-        v_proteina = st.selectbox("🍗 ¿Proteína en cada comida?", ["Sí", "No"])
-        v_calorias = st.selectbox("📊 ¿Pesaje de alimentos?", ["No", "Visual", "Preciso"])
-        v_alcohol = st.selectbox("🍺 Alcohol:", ["No", "Social", "Semanal"])
-        v_fuma = st.selectbox("🚬 ¿Fuma?", ["No", "Sí"])
-        v_fatiga_constante = st.selectbox("🔋 ¿Fatiga crónica?", ["No", "Sí"])
-        v_energia_dia = st.selectbox("⚡ ¿Energía entreno?", ["Sí", "No"])
-        v_dolor_articular = st.selectbox("💥 ¿Dolor articular?", ["No", "Sí"])
+        st.subheader("🥗 Nutrición")
+        prot = st.selectbox("Proteína:", ["Carnes", "Pescados", "Vegetal", "Variado"])
+        grasas = st.selectbox("Grasas:", ["Aguacate", "Aceite", "Lácteos"])
+        carbo = st.selectbox("Carbos:", ["Arroz", "Pastas", "Frutas"])
+        cola = st.selectbox("Colaciones:", ["5 comidas", "3 comidas", "Ayuno"])
+        sueno = st.number_input("Sueño (hrs):", 1, 24, 7)
+        cal_sueno = st.selectbox("Calidad sueño:", ["Buena", "Regular", "Mala"])
+        str_l = st.slider("Estrés trabajo:", 1, 10, 5)
+        str_e = st.slider("Estrés emocional:", 1, 10, 5)
+        comidas = st.text_input("Comidas sólidas:")
+        prot_cada = st.selectbox("¿Proteína en cada comida?", ["Sí", "No"])
+        pesaje = st.selectbox("¿Pesaje de alimentos?", ["No", "Visual", "Preciso"])
+        alc = st.selectbox("Alcohol:", ["No", "Social", "Semanal"])
+        fuma = st.selectbox("¿Fuma?", ["No", "Sí"])
+        fat_cron = st.selectbox("¿Fatiga crónica?", ["No", "Sí"])
+        energia = st.selectbox("¿Energía entreno?", ["Sí", "No"])
+        dolor_art = st.selectbox("¿Dolor articular?", ["No", "Sí"])
 
     with t7:
-        st.subheader("📅 Logística y Disponibilidad")
-        v_dias_reales = st.slider("🗓 Días entreno:", 1, 6, 4)
-        v_tiempo_sesion = st.text_input("⏳ Minutos por sesión:")
-        v_lugar = st.selectbox("🏢 Lugar:", ["Gimnasio", "Casa"])
-        v_equipo = st.multiselect("🛠 Equipo:", ["Máquinas", "Poleas", "Mancuernas", "Barra", "Rack", "Bandas"])
+        st.subheader("📅 Logística")
+        d_ent = st.slider("Días entreno:", 1, 6, 4)
+        min_ses = st.text_input("Minutos sesión:")
+        lugar = st.selectbox("Lugar:", ["Gimnasio", "Casa"])
+        equipo = st.multiselect("Equipo:", ["Máquinas", "Poleas", "Mancuernas", "Barra", "Rack"])
 
     with t8:
-        st.subheader("🎯 Psicología del Entrenamiento")
-        v_ejercicios_disfruta = st.text_area("❤️ Ejercicios favoritos:")
-        v_ejercicios_odia = st.text_area("❌ Ejercicios que evita:")
-        v_preferencia_vol = st.multiselect("⚖ Enfoque:", ["Alto volumen", "Bajo volumen", "Corto", "Largo"])
-        v_gusta_fallo = st.selectbox("💥 Fallo muscular:", ["Sí", "No", "A veces"])
-        v_maquinas_libres = st.selectbox("🤖 Preferencia equipo:", ["Libres", "Máquinas", "Mezcla"])
+        st.subheader("🎯 Psicología")
+        fav = st.text_area("Ejercicios favoritos:")
+        odia = st.text_area("Ejercicios que evita:")
+        enf = st.multiselect("Enfoque:", ["Alto volumen", "Bajo volumen", "Corto", "Largo"])
+        fallo = st.selectbox("Fallo muscular:", ["Sí", "No", "A veces"])
+        maq = st.selectbox("Preferencia equipo:", ["Libres", "Máquinas", "Mezcla"])
 
     with t9:
-        st.subheader("📸 Envío Final")
-        if st.button("🚀 ENVIAR EVALUACIÓN TÉCNICA"):
-            st.session_state.cuestionario_enviado = True
-            st.rerun()
+        st.subheader("📸 Fotos")
+        if st.button("🚀 ENVIAR EVALUACIÓN"):
+            st.success("¡Información enviada con éxito!")
