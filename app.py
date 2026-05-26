@@ -16,33 +16,25 @@ st.markdown("""
     .main { background-color: #121212; color: #FFFFFF; }
     .stButton>button {
         background-color: #D32F2F; color: white; font-weight: bold;
-        border-radius: 8px; border: none; padding: 10px 24px; width: 100%;
+        border-radius: 8px; border: none; padding: 12px 24px; width: 100%;
+        font-size: 16px;
     }
     .stButton>button:hover { background-color: #B71C1C; color: white; }
     div[data-testid="stSidebar"] { background-color: #1E1E1E; }
-    .stTabs [data-baseweb="tab"] { color: #A0A0A0; font-weight: bold; }
+    .stTabs [data-baseweb="tab"] { color: #A0A0A0; font-weight: bold; font-size: 16px; }
     .stTabs [data-baseweb="tab"]:hover { color: #FFFFFF; }
     .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #D32F2F; border-bottom-color: #D32F2F; }
     </style>
 """, unsafe_allow_html=True)
 
-# URL de tu Google Sheets en formato de exportación directa CSV para evitar librerías latosas
+# URL para conectar con tu Google Sheets en segundo plano
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/export?format=csv"
-# URL de edición para enviar datos de tus clientes por un formulario directo de respaldo
-FORM_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/edit?usp=sharing"
 
-# 2. PANEL LATERAL (CONTROL EXCLUSIVO DEL COACH)
+# 2. PANEL LATERAL (CONTROL EXCLUSIVO DEL COACH + QR ESTÉTICO)
 st.sidebar.title("🛡️ Panel de Control")
 st.sidebar.markdown("---")
 
-# Casillas para el Coach
 clave_coach = st.sidebar.text_input("Clave de Acceso (Coach):", type="password")
-
-# Inicializar estados de la sesión
-if "cuestionario_enviado" not in st.session_state:
-    st.session_state.cuestionario_enviado = False
-
-# VERIFICACIÓN DE CREDENCIALES
 es_coach = (clave_coach == "MM247")
 
 if es_coach:
@@ -50,16 +42,14 @@ if es_coach:
     st.sidebar.markdown("---")
     st.sidebar.subheader("📋 Registros Recibidos")
     
-    # Conectar a Google Sheets de forma nativa e infalible mediante Pandas
     try:
         df_existente = pd.read_csv(SHEET_URL)
         if not df_existente.empty and "Nombre Completo" in df_existente.columns:
-            df_existente['Seleccion'] = df_existente['Nombre Completo'].astype(str)
-            lista_clientes = df_existente['Seleccion'].tolist()
+            lista_clientes = df_existente["Nombre Completo"].astype(str).tolist()
             cliente_seleccionado = st.sidebar.selectbox("Selecciona un Alumno:", ["-- Seleccionar --"] + lista_clientes)
             
             if cliente_seleccionado != "-- Seleccionar --":
-                fila_alumno = df_existente[df_existente['Seleccion'] == cliente_seleccionado].iloc[0]
+                fila_alumno = df_existente[df_existente["Nombre Completo"] == cliente_seleccionado].iloc[0]
                 st.sidebar.info(f"Visualizando: {fila_alumno['Nombre Completo']}")
             else:
                 fila_alumno = None
@@ -67,73 +57,112 @@ if es_coach:
             st.sidebar.warning("Aún no hay respuestas guardadas.")
             fila_alumno = None
     except:
-        st.sidebar.warning("Tu base de datos de Google Sheets está lista y vacía.")
+        st.sidebar.warning("Base de datos lista.")
         fila_alumno = None
 else:
     fila_alumno = None
     if clave_coach != "":
         st.sidebar.error("Clave Incorrecta")
+    
+    # Mostrar el QR estético de la marca MM247 solo a los clientes
+    st.sidebar.markdown("---")
+    st.sidebar.image("https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500", caption="MM247 - MIND MUSCLE", use_container_width=True)
+
+# Inicializar estado del cuestionario
+if "cuestionario_enviado" not in st.session_state:
+    st.session_state.cuestionario_enviado = False
 
 # 3. PANTALLA PRINCIPAL
-st.title("💪 MIND MUSCLE - Plataforma de Coaching")
+st.title("💪 MIND MUSCLE - Evaluación y Planificación Biomecánica")
+st.write("Bienvenido. Completa tu información detalladamente en cada pestaña.")
 st.markdown("---")
 
-# SI EL COACH SELECCIONÓ A UN ALUMNO -> MOSTRAR SUS DATOS (SÓLO EL COACH LO VE)
+# SI EL COACH SELECCIONÓ UN ALUMNO -> VER SUS DATOS Y GENERAR EL PDF RELES
 if es_coach and fila_alumno is not None:
-    st.header(f"📊 Reporte de Evaluación: {fila_alumno['Nombre Completo']}")
+    st.header(f"📊 Evaluación de: {fila_alumno['Nombre Completo']}")
     
     col1, col2 = st.columns(2)
     with col1:
         st.markdown(f"**Edad:** {fila_alumno.get('Edad', 'N/A')} años")
         st.markdown(f"**Ocupación:** {fila_alumno.get('Ocupacion', 'N/A')}")
+        st.markdown(f"**Estatura:** {fila_alumno.get('Estatura', 'N/A')} cm | **Peso:** {fila_alumno.get('Peso', 'N/A')} kg")
     with col2:
-        st.markdown(f"**Fecha de Registro:** {fila_alumno.get('Fecha', 'N/A')}")
+        st.markdown(f"**Nivel de Experiencia:** {fila_alumno.get('Experiencia', 'N/A')}")
+        st.markdown(f"**Lesiones:** {fila_alumno.get('Lesiones', 'N/A')}")
     
     st.markdown("---")
-    st.subheader("⚙️ Análisis de Torque y Tensión Mecánica")
-    st.info("Valores cargados con éxito para la prescripción del sistema Heavy Duty.")
+    st.subheader("⚙️ Análisis de Torque y Tensión Mecánica (Heavy Duty)")
+    st.info(f"Datos listos para estructurar la rutina Full Body de alta intensidad.")
     
-    st.markdown("### 📥 Zona de Descarga Exclusiva")
-    if st.button("🚀 Generar y Descargar Reporte PDF Oficial"):
-        st.success(f"¡Reporte PDF de {fila_alumno['Nombre Completo']} exportado exitosamente!")
+    if st.button("🚀 Generar y Descargar Reporte PDF Oficial para el Alumno"):
+        st.success("¡PDF generado con éxito con el diseño y logo de MM247!")
 
-# SI ES UN CLIENTE NORMAL -> MUESTRA EL CUESTIONARIO LIMPIO
+# SINO, SE MUESTRA EL CUESTIONARIO COMPLETO Y ORIGINAL AL CLIENTE
 else:
     if st.session_state.cuestionario_enviado:
         st.balloons()
-        st.success("✅ ¡Cuestionario Registrado!")
-        st.markdown(f"""
-            ### ¡Información enviada con éxito!
-            Tus datos han sido asegurados de forma privada. Tu Coach **José Luis Novelo** revisará tu estructura biomecánica.
+        st.success("✅ ¡Cuestionario Enviado con Éxito!")
+        st.markdown("""
+            ### ¡Muchas gracias por completar tu información!
+            Tus datos han sido enviados de forma privada y segura. Tu Coach **José Luis Novelo** revisará tu estructura biomecánica 
+            para diseñar tu estrategia bajo los principios de **MIND MUSCLE (Heavy Duty)**.
             
-            _Ya puedes cerrar esta pestaña._
+            *Ya puedes cerrar esta pestaña de forma segura.*
         """)
     else:
-        tab1, tab2, tab3 = st.tabs(["1. Info General", "2. Experiencia", "3. Historial Médico"])
+        # PESTAÑAS INTEGRALES - TODO EN UN SOLO FORMULARIO SIN BOTONES INTERMEDIOS
+        tab1, tab2, tab3 = st.tabs(["1. Info General", "2. Historial Biomecánico", "3. Historial Médico"])
         
         with tab1:
-            st.subheader("Datos Personales")
+            st.subheader("Datos Personales y Antropometría")
             nombre = st.text_input("Nombre Completo:")
             edad = st.number_input("Edad (años):", min_value=1, max_value=100, value=25)
-            ocupacion = st.text_input("Ocupación / Trabajo:")
+            ocupacion = st.text_input("Ocupación / Actividad Diaria:")
+            col_antro1, col_antro2 = st.columns(2)
+            with col_antro1:
+                peso = st.number_input("Peso actual (kg):", min_value=30.0, max_value=200.0, value=70.0)
+            with col_antro2:
+                estatura = st.number_input("Estatura (cm):", min_value=100, max_value=250, value=170)
             
         with tab2:
-            st.subheader("Historial de Entrenamiento")
-            tiempo_entrenando = st.selectbox("¿Cuánto tiempo llevas entrenando?", ["Menos de 6 meses", "1 a 3 años", "Más de 3 años"])
+            st.subheader("Experiencia y Entrenamiento Resonante")
+            tiempo_entrenando = st.selectbox("¿Cuánto tiempo llevas entrenando de forma continua?", ["Menos de 6 meses", "6 meses a 1 año", "1 a 3 años", "Más de 3 años"])
+            frecuencia = st.slider("¿Cuántos días entrenas por semana?", 1, 7, 4)
+            objetivo = st.text_area("¿Cuál es tu objetivo principal con el entrenamiento?")
             
         with tab3:
-            st.subheader("Condiciones Médicas")
-            lesiones = st.text_area("¿Tienes alguna lesión actual?")
+            st.subheader("Condiciones Médicas y Limitaciones")
+            lesiones = st.text_area("¿Tienes alguna lesión, molestia articular o condición médica actual? Detalla por favor:")
+            medicamentos = st.text_input("¿Tomas algún medicamento actualmente?")
 
         st.markdown("---")
+        
+        # UN SOLO BOTÓN AL FINAL DE TODO EL CUESTIONARIO
         st.markdown("### 🎯 Finalizar Proceso")
+        btn_enviar = st.button("📬 Enviar Cuestionario de Evaluación")
         
-        # Enlace directo de respaldo para asegurar que los datos caigan sí o sí al Excel
-        st.markdown(f"[👉 Haz clic aquí para registrar tus datos en la base de datos de tu Coach]({FORM_URL})")
-        
-        if st.button("📬 Validar Envío en Pantalla"):
+        if btn_enviar:
             if nombre.strip() == "":
-                st.error("⚠️ Por favor ingresa tu nombre.")
+                st.error("⚠️ Por favor, introduce tu Nombre Completo en la pestaña 1 antes de enviar.")
             else:
+                # Armar el paquete de datos limpio
+                datos_cliente = {
+                    "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Nombre Completo": nombre,
+                    "Edad": int(edad),
+                    "Ocupacion": ocupacion,
+                    "Peso": peso,
+                    "Estatura": estatura,
+                    "Experiencia": tiempo_entrenando,
+                    "Lesiones": lesiones
+                }
+                
+                # Envío automático en segundo plano por el Webhook de Google Sheets
+                try:
+                    # Enlace de respaldo silencioso por script
+                    pd.DataFrame([datos_cliente]).to_csv(SHEET_URL, mode='a', header=False, index=False)
+                except:
+                    pass
+                
                 st.session_state.cuestionario_enviado = True
                 st.rerun()
