@@ -2,60 +2,61 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN GENERAL
+# 1. CONFIGURACIÓN
 st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 
-# URL DE LA BASE DE DATOS
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTEP6Up0KmDzr22xjQzklH3CbgCUJWVc7dXtKyjJIoETOxD5WSuook45kLotqxeQ82LQXUu0n2nkLcm/pub?output=csv"
 
 # 2. CABECERA
 st.markdown("<h1 style='text-align: center;'>MINDMUSCLE247</h1>", unsafe_allow_html=True)
 
-# 3. SIDEBAR Y VISTAS
+# 3. LÓGICA DE VISTAS
 st.sidebar.title("🛡️ Sistema MINDMUSCLE247")
 modo = st.sidebar.radio("Seleccionar Vista:", ["📝 Cuestionario Alumno", "📊 Dashboard Administrador"])
 clave_coach = st.sidebar.text_input("Clave de Acceso:", type="password")
 
-# --- VISTA DASHBOARD ADMINISTRADOR ---
+# --- VISTA ADMINISTRADOR ---
 if modo == "📊 Dashboard Administrador":
     if clave_coach == "MM247":
-        st.header("📊 Dashboard de Gestión")
+        st.header("📊 Dashboard de Gestión Integral")
         try:
             df = pd.read_csv(SHEET_URL)
             if not df.empty:
                 alumno_sel = st.selectbox("Seleccionar Alumno:", df["Nombre Completo"].unique())
                 datos = df[df["Nombre Completo"] == alumno_sel].iloc[0]
                 
-                # Visualización de datos
-                st.subheader(f"Análisis de {alumno_sel}")
+                # Métricas visuales
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Edad", datos["Edad"])
+                c2.metric("Peso", f"{datos['Peso']} kg")
+                c3.metric("Objetivo", datos["Objetivo principal"])
+                c4.metric("Sueño", f"{datos['Sueño (hrs)']} hrs")
                 
-                # Gráficos dinámicos
-                col1, col2 = st.columns(2)
-                with col1:
-                    fig = px.bar(x=['Edad', 'Estatura', 'Peso'], y=[datos['Edad'], datos['Estatura'], datos['Peso']], title="Métricas Físicas")
-                    st.plotly_chart(fig)
+                # Gráfica Dinámica
+                st.subheader("📈 Análisis de Capacidades")
+                # Seleccionamos columnas numéricas para el gráfico
+                metricas = datos[["Control técnica (1-10)", "Conexión mente-músculo (1-10)", "Intensidad (1-10)", "Disciplina (1-10)", "Recuperación (1-10)"]]
+                fig = px.bar(x=metricas.index, y=metricas.values, color=metricas.values, color_continuous_scale="RdYlGn")
+                st.plotly_chart(fig, use_container_width=True)
                 
-                st.write("### Detalles del Alumno", datos)
-                
-                if st.button("🖨️ Generar/Imprimir PDF"):
-                    st.info("Utiliza Ctrl+P (o Cmd+P) para imprimir esta vista como PDF.")
+                st.write("### Datos Completos", datos)
+                st.info("🖨️ Presiona Ctrl+P para guardar este análisis como PDF.")
             else:
-                st.info("La base de datos está vacía.")
+                st.info("Base de datos conectada, pero no hay registros.")
         except Exception as e:
-            st.error(f"Error cargando base de datos: {e}")
+            st.error(f"Error cargando dashboard: {e}")
     else:
-        st.warning("Clave restringida.")
+        st.warning("Clave incorrecta.")
 
-# --- VISTA CUESTIONARIO ALUMNO ---
+# --- VISTA CUESTIONARIO (CON TODAS LAS PREGUNTAS) ---
 else:
-    # DEFINICIÓN DE TABS (Mantener este orden exacto)
     t1, t2, t3, t4, t5, t6, t7, t8, t9 = st.tabs([
         "⚡ 1. Info", "🏋️ 2. Exp", "🩺 3. Médico", "📐 4. Bio", 
         "💥 5. Fuerza", "🥗 6. Nut", "📅 7. Log", "🎯 8. Pref", "📸 9. Fotos"
     ])
 
     with t1:
-        st.subheader("📋 Datos Personales de Partida")
+        st.subheader("📋 Datos Personales")
         nombre = st.text_input("Nombre Completo:")
         edad = st.number_input("Edad:", 1, 100, 25)
         sexo = st.selectbox("Sexo:", ["Masculino", "Femenino"])
@@ -66,11 +67,11 @@ else:
         actividad = st.selectbox("Actividad:", ["Bajo", "Moderado", "Alto"])
         objetivo = st.selectbox("Objetivo:", ["Hipertrofia", "Pérdida de grasa", "Recomposición", "Fuerza"])
         obj_v1 = st.text_input("¿Parte física a mejorar?")
-        obj_v2 = st.text_input("¿Músculos menos desarrollados?")
+        obj_v2 = st.text_input("¿Músculos rezagados?")
         obj_v3 = st.text_input("¿Músculos a priorizar?")
 
     with t2:
-        st.subheader("🏋️ Trayectoria en el Gimnasio")
+        st.subheader("🏋️ Trayectoria")
         tiempo = st.text_input("Tiempo entrenando:")
         constancia = st.selectbox("Constancia:", ["Constante", "Con pausas"])
         disciplinas = st.multiselect("Disciplinas:", ["Pesas", "Crossfit", "Calistenia", "Powerlifting"])
@@ -84,14 +85,14 @@ else:
         rec = st.slider("Recuperación (1-10):", 1, 10, 7)
 
     with t3:
-        st.subheader("🩺 Historial Clínico y Lesiones")
+        st.subheader("🩺 Historial Clínico")
         molestias = st.multiselect("Molestias:", ["Lumbar", "Rodilla", "Hombro", "Tendinitis"])
         dolor = st.text_area("Ejercicios que detonan dolor:")
         inc = st.text_area("Movimientos incómodos:")
         prohibidos = st.text_area("Prohibidos:")
 
     with t4:
-        st.subheader("📐 Análisis Biomecánico")
+        st.subheader("📐 Biomecánica")
         piernas = st.selectbox("Piernas:", ["Cortas", "Promedio", "Largas"])
         torso = st.selectbox("Torso:", ["Corto", "Promedio", "Largo"])
         brazos = st.selectbox("Brazos:", ["Cortos", "Promedio", "Largos"])
