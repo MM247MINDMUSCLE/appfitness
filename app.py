@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import qrcode
-from io import BytesIO
-from PIL import Image
+import os
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(
@@ -18,7 +16,7 @@ st.markdown("""
     <style>
     .main { background-color: #0B0B0B; color: #FFFFFF; font-family: 'Arial', sans-serif; }
     
-    /* Membrete Oficial con Logo Integrado */
+    /* Membrete Oficial */
     .brand-header {
         text-align: center;
         padding: 20px;
@@ -50,14 +48,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Render del Membrete Superior con Seguridad de Carga para el Logo
+# Render del Membrete Superior buscando el archivo local logo.png
 st.markdown('<div class="brand-header">', unsafe_allow_html=True)
-try:
-    # Intentar cargar el logotipo desde el servidor de imágenes
-    st.image("https://api.metisai.ir/img/b614d081b48fa0bd19a8984fa06cb", width=150)
-except:
-    # Si el enlace externo falla, muestra un ícono premium de respaldo para no romper la app
-    st.markdown("<h1 style='color: #E0E0E0; margin:0;'>⚡ MM247 ⚡</h1>", unsafe_allow_html=True)
+if os.path.exists("logo.png"):
+    st.image("logo.png", width=150)
+else:
+    # Respaldo si aún no se termina de subir el archivo a GitHub
+    st.markdown("<h1 style='color: #E0E0E0; margin:0; font-size: 60px;'>⚡ MM247 ⚡</h1>", unsafe_allow_html=True)
 
 st.markdown('<div class="brand-title">MINDMUSCLE247</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
@@ -92,7 +89,7 @@ if es_coach:
 else:
     if clave_coach != "":
         st.sidebar.error("Clave Incorrecta")
-    st.sidebar.info("Completa los 9 bloques técnicos para estructurar tu entrenamiento y tu plan nutritional ideal.")
+    st.sidebar.info("Completa los 9 bloques técnicos para estructurar tu entrenamiento y tu plan nutricional ideal.")
 
 # 3. INTERFAZ PRINCIPAL
 
@@ -290,8 +287,8 @@ else:
             v_maquinas_libres = st.selectbox("🤖 ¿Qué tipo de equipamiento prefieres usar en tus entrenamientos?", ["Pesos libres (Barras y mancuernas)", "Máquinas guiadas y poleas de aislamiento", "Una mezcla equilibrada de ambas herramientas"])
 
         with t9:
-            st.subheader("📸 Evaluación Visual Inicial y QR Oficial")
-            st.info("Sube tus fotos de frente, perfil y espalda desde tu galería. Tu código QR de acceso se autogenerará aquí abajo automáticamente.")
+            st.subheader("📸 Evaluación Visual Inicial y Acceso QR")
+            st.info("Sube tus fotos de frente, perfil y espalda desde tu galería.")
             
             # Carga de fotos desde la galería
             uploaded_photos = st.file_uploader(
@@ -303,25 +300,17 @@ else:
             if uploaded_photos:
                 st.success(f"💪 ¡Se han cargado {len(uploaded_photos)} imágenes correctamente!")
             
-            # --- GENERACIÓN DEL CÓDIGO QR NATIVO FIJO ---
+            # --- RENDER DEL CÓDIGO QR DESDE ARCHIVO LOCAL ---
             st.markdown("---")
             st.markdown("<div style='text-align: center; font-weight: bold; color: #757575;'>📲 ACCESO OFICIAL A TU APLICACIÓN MINDMUSCLE247</div>", unsafe_allow_html=True)
             
-            # El sistema genera el QR en memoria sin depender de enlaces caídos
-            qr_data = "https://appfitness-mindmuscle247.streamlit.app"
-            qr = qrcode.QRCode(version=1, box_size=10, border=2)
-            qr.add_data(qr_data)
-            qr.make(fit=True)
-            img_qr = qr.make_image(fill_color="black", back_color="white")
-            
-            # Convertir la imagen para mostrarla en Streamlit de forma nativa
-            buf = BytesIO()
-            img_qr.save(buf, format="PNG")
-            byte_im = buf.getvalue()
-            
             c_qr1, c_qr2, c_qr3 = st.columns([1, 1, 1])
             with c_qr2:
-                st.image(byte_im, width=200, caption="Escanéame para entrar desde el móvil")
+                if os.path.exists("qr.png"):
+                    st.image("qr.png", width=200, caption="Escanéame para entrar desde el móvil")
+                else:
+                    # Enlace de respaldo por si no usas imagen local para el QR
+                    st.markdown("<div style='text-align:center; background-color:#161616; padding:15px; border-radius:5px;'>🌐 <a href='https://appfitness-mindmuscle247.streamlit.app' target='_blank' style='color:#E0E0E0; text-decoration:none;'><b>CLICK AQUÍ PARA ABRIR EN EL CELULAR</b></a></div>", unsafe_allow_html=True)
             
             # --- EL BOTÓN DE ENVÍO AL FINAL ---
             st.markdown("---")
