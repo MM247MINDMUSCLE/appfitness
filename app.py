@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import qrcode
+from io import BytesIO
+from PIL import Image
 
 # 1. CONFIGURACIÓN DE LA PÁGINA
 st.set_page_config(
@@ -47,10 +50,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Render del Membrete Superior con el Logotipo Oficial
+# Render del Membrete Superior con Seguridad de Carga para el Logo
 st.markdown('<div class="brand-header">', unsafe_allow_html=True)
-# URL directa del logotipo negro y plata cromado guardado en el sistema
-st.image("https://api.metisai.ir/img/b614d081b48fa0bd19a8984fa06cb", width=160, channels="RGB")
+try:
+    # Intentar cargar el logotipo desde el servidor de imágenes
+    st.image("https://api.metisai.ir/img/b614d081b48fa0bd19a8984fa06cb", width=150)
+except:
+    # Si el enlace externo falla, muestra un ícono premium de respaldo para no romper la app
+    st.markdown("<h1 style='color: #E0E0E0; margin:0;'>⚡ MM247 ⚡</h1>", unsafe_allow_html=True)
+
 st.markdown('<div class="brand-title">MINDMUSCLE247</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -84,7 +92,7 @@ if es_coach:
 else:
     if clave_coach != "":
         st.sidebar.error("Clave Incorrecta")
-    st.sidebar.info("Completa los 9 bloques técnicos para estructurar tu entrenamiento y tu plan nutricional ideal.")
+    st.sidebar.info("Completa los 9 bloques técnicos para estructurar tu entrenamiento y tu plan nutritional ideal.")
 
 # 3. INTERFAZ PRINCIPAL
 
@@ -136,8 +144,8 @@ else:
         st.balloons()
         st.success("✅ ¡Cuestionario Enviado con Éxito!")
         st.markdown("""
-            ### ¡Perfecto! Tus datos han sido blindados en el sistema de MINDMUSCLE247.
-            Tus perfiles anatómicos y metas nutricionales han sido cargados. Pronto recibirás tu plan integral a medida.
+            ### ¡Perfecto! Tus datos han sido guardados en el sistema de MINDMUSCLE247.
+            Tus perfiles anatómicos y metas nutricionales han sido cargados con éxito.
         """)
     else:
         st.write("🔥 Bienvenido al radar de evaluación técnica de **MINDMUSCLE247**. Responde los siguientes bloques:")
@@ -150,17 +158,17 @@ else:
         
         with t1:
             st.subheader("📋 Datos Personales de Partida")
-            v_nombre = st.text_input("✍️ Escribe tu Nombre Completo:")
+            v_nombre = st.text_input("✍ *Escribe tu Nombre Completo:*")
             v_edad = st.number_input("🎂 Edad actual:", min_value=1, max_value=100, value=25)
-            v_sexo = st.selectbox("Option: Sexo biológico:", ["Seleccionar", "Masculino", "Femenino"])
+            v_sexo = st.selectbox("Sexo biológico:", ["Seleccionar", "Masculino", "Femenino"])
             v_estatura = st.number_input("📏 Estatura en centímetros (cm):", min_value=100, max_value=250, value=170)
-            v_peso = st.number_input("⚖️ Peso actual en báscula (kg):", min_value=30.0, max_value=200.0, value=70.0)
+            v_peso = st.number_input("⚖ Peso actual en báscula (kg):", min_value=30.0, max_value=200.0, value=70.0)
             v_ocupacion = st.text_input("💼 ¿A qué te dedicas o qué actividad realizas en tu día?")
             v_horas_sentado = st.text_input("🪑 ¿Cuántas horas pasas sentado al día?")
             v_actividad = st.selectbox("🏃 Actividad diaria general fuera del gimnasio:", ["Bajo (Inactivo / Trabajo de escritorio)", "Moderado (Movimiento constante)", "Alto (Trabajo físico muy pesado)"])
-            v_objetivo = st.selectbox("🎯 Elige tu meta principal actual:", ["Hipertrofia / ganar masa muscular", "Pérdida de grasa", "Recomposición corporal", "Fuerza", "Rendimiento deportivo", "Mejorar salud", "Corrección postural", "Otro"])
+            v_objetivo = st.selectbox(" Elige tu meta principal actual:", ["Hipertrofia / ganar masa muscular", "Pérdida de grasa", "Recomposición corporal", "Fuerza", "Rendimiento deportivo", "Mejorar salud", "Corrección postural", "Otro"])
             st.markdown("---")
-            st.subheader("👁️ Enfoque Visual Estético")
+            st.subheader("👁 Enfoque Visual Estético")
             v_obj_visual1 = st.text_input("🚀 ¿Qué zona corporal te urge o deseas mejorar con prioridad?")
             v_obj_visual2 = st.text_input("🔍 ¿Qué músculos consideras rezagados o difíciles de desarrollar?")
             v_obj_visual3 = st.text_input("🎯 ¿A qué grupos musculares le daremos enfoque absoluto?")
@@ -171,7 +179,7 @@ else:
             v_constancia = st.selectbox("🔄 ¿Has mantenido una disciplina constante o con interrupciones?", ["Entrenamiento constante", "Con pausas recurrentes"])
             v_tipo_entreno = st.multiselect("👟 Disciplinas de fuerza que has practicado anteriormente:", ["Pesas", "Crossfit", "Calistenia", "Powerlifting", "Funcional", "Otro"])
             v_dias_actuales = st.text_input("📅 ¿Cuántos días entrenas por semana actualmente?")
-            v_duracion_promedio = st.text_input("⏱️ ¿Cuánto tiempo dura tu sesión promedio en el gym?")
+            v_duracion_promedio = st.text_input("⏱ ¿Cuánto tiempo dura tu sesión promedio en el gym?")
             v_tecnicas = st.multiselect("🧠 Conceptos técnicos de entrenamiento que dominas:", ["RIR (Repeticiones en recámara)", "Fallo muscular absoluto", "Tempo (Control de velocidad)", "Sobrecarga progresiva"])
             st.markdown("---")
             st.subheader("📊 Califica tus Variables (Desliza del 1 al 10)")
@@ -223,7 +231,6 @@ else:
         with t6:
             st.subheader("🥗 Configuración del Módulo Nutricional (4 Opciones por Rubro)")
             
-            # --- SECCIÓN MULTIOPCIÓN REQUERIDA ---
             v_pref_proteina = st.selectbox("🥩 PROTEÍNA: Selecciona tu fuente principal preferida para la dieta:", [
                 "Carnes rojas, pechuga de pollo y pescados blancos/salmón",
                 "Predominancia de pescados, mariscos frescos y piezas de huevo completo",
@@ -258,7 +265,7 @@ else:
             v_calidad_sueno = st.selectbox("😴 Calidad general de tu sueño:", ["Buena e ininterrumpida", "Regular / Me despierto a veces", "Mala / Me cuesta conciliar el sueño"])
             v_estres_lab = st.slider("🤯 Nivel de estrés en tu trabajo o escuela (1 al 10):", 1, 10, 5)
             v_estres_emo = st.slider("🧠 Nivel de estrés emocional o personal diario (1 al 10):", 1, 10, 5)
-            v_comidas_dia = st.text_input("🍽️ ¿Cuántas comidas realizas de forma sólida actualmente al día?")
+            v_comidas_dia = st.text_input("🍽 ¿Cuántas comidas realizas de forma sólida actualmente al día?")
             v_proteina = st.selectbox("🍗 ¿Consumes fuentes de proteína en cada una de tus comidas actuales?", ["Sí, de forma estricta", "No, solo en las comidas principales", "No llevo control del macronutriente"])
             v_calorias = st.selectbox("📊 ¿Llevas control o pesaje de tus alimentos en este momento?", ["No, como de manera intuitiva", "Tengo noción visual pero no peso nada", "Sí, peso gramos precisos y registro en app"])
             v_alcohol = st.selectbox("🍺 ¿Consumes bebidas alcohólicas con frecuencia?", ["No", "Únicamente en eventos sociales muy ocasionales", "Sí, de manera semanal"])
@@ -269,42 +276,54 @@ else:
 
         with t7:
             st.subheader("📅 Logística y Disponibilidad Semanal")
-            v_dias_reales = st.slider("🗓️ ¿Cuántos días de lunes a sábado vas a entrenar de forma obligatoria?", 1, 6, 4)
+            v_dias_reales = st.slider("🗓 ¿Cuántos días de lunes a sábado vas a entrenar de forma obligatoria?", 1, 6, 4)
             v_tiempo_sesion = st.text_input("⏳ ¿De cuántos minutos dispones por sesión para entrenar?")
             v_lugar = st.selectbox("🏢 ¿Dónde realizarás tus rutinas?", ["Gimnasio comercial completo", "Gimnasio básico o de fraccionamiento", "Casa con equipamiento libre propio"])
-            v_equipo = st.multiselect("🛠️ Selecciona el equipo real al que tienes acceso diario:", ["Máquinas guiadas (Prensa, poleas, smith)", "Poleas ajustables", "Mancuernas pesadas", "Barra olímpica y discos libres", "Rack completo de sentadillas", "Bandas elásticas", "Otro"])
+            v_equipo = st.multiselect("🛠 Selecciona el equipo real al que tienes acceso diario:", ["Máquinas guiadas (Prensa, poleas, smith)", "Poleas ajustables", "Mancuernas pesadas", "Barra olímpica y discos libres", "Rack completo de sentadillas", "Bandas elásticas", "Otro"])
 
         with t8:
             st.subheader("🎯 Psicología del Entrenamiento")
             v_ejercicios_disfruta = st.text_area("❤️ Ejercicios que te encantan, dominas y disfrutas incluir en tu rutina:")
             v_ejercicios_odia = st.text_area("❌ Ejercicios que te causan pereza, incomodidad o prefieres evitar:")
-            v_preferencia_vol = st.multiselect("⚖️ ¿Qué enfoque de entrenamiento se adapta mejor a tu mente?", ["Alto volumen (Muchos ejercicios y series)", "Bajo volumen con alta intensidad (Pocas series al límite)", "Sesiones de entrenamiento compactas y rápidas", "Sesiones largas con descansos amplios"])
+            v_preferencia_vol = st.multiselect("⚖ ¿Qué enfoque de entrenamiento se adapta mejor a tu mente?", ["Alto volumen (Muchos ejercicios y series)", "Bajo volumen con alta intensidad (Pocas series al límite)", "Sesiones de entrenamiento compactas y rápidas", "Sesiones largos con descansos amplios"])
             v_gusta_fallo = st.selectbox("💥 ¿Sabes lo que es y disfrutas llevar una serie al fallo muscular absoluto?", ["Sí, me fascina entrenar a máxima intensidad", "No, prefiero mantenerme seguro lejos del fallo", "A veces, solo en ciertos ejercicios guiados"])
             v_maquinas_libres = st.selectbox("🤖 ¿Qué tipo de equipamiento prefieres usar en tus entrenamientos?", ["Pesos libres (Barras y mancuernas)", "Máquinas guiadas y poleas de aislamiento", "Una mezcla equilibrada de ambas herramientas"])
 
         with t9:
-            st.subheader("📸 Evaluación Visual Inicial (Privado y Confidencial)")
-            st.info("Sube tus fotos de frente, perfil y espalda. Al terminar, presiona el botón de abajo para consolidar tu registro técnico.")
+            st.subheader("📸 Evaluación Visual Inicial y QR Oficial")
+            st.info("Sube tus fotos de frente, perfil y espalda desde tu galería. Tu código QR de acceso se autogenerará aquí abajo automáticamente.")
             
-            # --- CARGA NATIVA DESDE LA GALERÍA ---
+            # Carga de fotos desde la galería
             uploaded_photos = st.file_uploader(
-                "📬 Selecciona o arrastra tus fotos desde tu galería (Formatos aceptados: PNG, JPG, JPEG):", 
+                "📬 Selecciona tus fotos desde tu galería (PNG, JPG, JPEG):", 
                 type=["png", "jpg", "jpeg"], 
                 accept_multiple_files=True
             )
             
             if uploaded_photos:
-                st.success(f"💪 ¡Se han cargado correctamente {len(uploaded_photos)} imágenes de evaluación!")
+                st.success(f"💪 ¡Se han cargado {len(uploaded_photos)} imágenes correctamente!")
             
-            # QR INTERACTIVO INTEGRADO DIRECTAMENTE AL FINAL
+            # --- GENERACIÓN DEL CÓDIGO QR NATIVO FIJO ---
             st.markdown("---")
-            st.markdown("<div style='text-align: center; font-weight: bold; color: #757575;'>📲 CÓDIGO QR - ACCESO OFICIAL MINDMUSCLE247</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align: center; font-weight: bold; color: #757575;'>📲 ACCESO OFICIAL A TU APLICACIÓN MINDMUSCLE247</div>", unsafe_allow_html=True)
+            
+            # El sistema genera el QR en memoria sin depender de enlaces caídos
+            qr_data = "https://appfitness-mindmuscle247.streamlit.app"
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            img_qr = qr.make_image(fill_color="black", back_color="white")
+            
+            # Convertir la imagen para mostrarla en Streamlit de forma nativa
+            buf = BytesIO()
+            img_qr.save(buf, format="PNG")
+            byte_im = buf.getvalue()
+            
             c_qr1, c_qr2, c_qr3 = st.columns([1, 1, 1])
             with c_qr2:
-                # Código QR renderizado en vivo para el dispositivo del alumno
-                st.image("https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=https://appfitness-mindmuscle247.streamlit.app&color=000000&bgcolor=FFFFFF", use_container_width=True)
+                st.image(byte_im, width=200, caption="Escanéame para entrar desde el móvil")
             
-            # --- EL BOTÓN DE ENVÍO APARECE ÚNICAMENTE AL FINAL DE LA ÚLTIMA PREGUNTA ---
+            # --- EL BOTÓN DE ENVÍO AL FINAL ---
             st.markdown("---")
             st.subheader("🎯 Finalizar y Guardar Registro en la Base de Datos")
             btn_enviar = st.button("🚀 ENVIAR EVALUACIÓN TÉCNICA MINDMUSCLE247")
@@ -313,7 +332,6 @@ else:
                 if v_nombre.strip() == "":
                     st.error("⚠️ Error Crítico: Es obligatorio rellenar tu Nombre Completo en la Pestaña 1 para procesar tus respuestas.")
                 else:
-                    # Estructuración plana de las variables hacia Google Sheets sin referencias personales anteriores
                     registro_bd = {
                         "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Nombre Completo": v_nombre,
@@ -333,7 +351,7 @@ else:
                         "Sueno_Horas": v_horas_sueno, "Sueno_Calidad": v_calidad_sueno, "Estres_Metricas": f"Lab: {v_estres_lab} | Emo: {v_estres_emo}",
                         "Alimentacion_Metricas": f"Comidas: {v_comidas_dia} | Prot: {v_proteina} | Cals: {v_calorias} | Alc: {v_alcohol} | Fuma: {v_fuma} | Fatiga: {v_fatiga_constante} | Ener: {v_energia_dia} | Artic: {v_dolor_articular}",
                         "Disponibilidad_Real": v_dias_reales, "Lugar_Entreno": v_lugar, "Preferencias_Vol_Int": f"Pref: {', '.join(v_preferencia_vol)} | Fallo: {v_gusta_fallo} | Tipo: {v_maquinas_libres}",
-                        "Fotos_Link": f"Cargados {len(uploaded_photos)} archivos desde galería" if uploaded_photos else "No cargadas"
+                        "Fotos_Link": f"Cargados {len(uploaded_photos)} archivos" if uploaded_photos else "No cargadas"
                     }
                     
                     try:
