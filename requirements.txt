@@ -3,4 +3,5 @@ pandas
 qrcode
 pillow
 plotly
-st-gsheets-connectionfpdf2
+st-gsheets-connection
+fpdf2
