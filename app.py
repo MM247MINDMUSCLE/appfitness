@@ -14,17 +14,37 @@ st.set_page_config(
 # Estilos visuales premium (MINDMUSCLE247 Negro y Plata Cromada)
 st.markdown("""
     <style>
+    /* Fondo general oscuro */
     .main { background-color: #0B0B0B; color: #FFFFFF; font-family: 'Arial', sans-serif; }
     
-    /* Membrete Oficial */
-    .brand-header {
-        text-align: center;
-        padding: 20px;
-        background: linear-gradient(180deg, #1A1A1A 0%, #0B0B0B 100%);
-        border-bottom: 3px solid #E0E0E0;
-        margin-bottom: 25px;
+    /* ELIMINAR LA BARRA NEGRA SUPERIOR Y ESPACIOS CORRECTOS */
+    [data-testid="stHeader"] { background-color: rgba(0,0,0,0) !important; }
+    .stApp img { border: none !important; box-shadow: none !important; }
+    
+    /* Contenedor del Membrete Centrado */
+    .brand-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 30px 10px;
+        background: #0B0B0B;
+        margin-bottom: 20px;
     }
-    .brand-title { font-size: 42px; font-weight: 900; color: #FFFFFF; margin: 10px 0 0 0; letter-spacing: 3px; }
+    .brand-title-main {
+        font-size: 52px;
+        font-weight: 900;
+        color: #FFFFFF;
+        letter-spacing: 5px;
+        font-family: 'Arial Black', sans-serif;
+        margin: 0;
+        line-height: 1;
+    }
+    
+    /* Estructura de Pestañas Premium */
+    .stTabs [data-baseweb="tab"] { color: #757575; font-weight: bold; font-size: 15px; }
+    .stTabs [data-baseweb="tab"]:hover { color: #FFFFFF; }
+    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #E0E0E0; border-bottom-color: #E0E0E0; }
     
     /* Botón de Envío Único al Final */
     .stButton>button {
@@ -36,11 +56,6 @@ st.markdown("""
     }
     .stButton>button:hover { background-color: #FFFFFF; box-shadow: 0px 6px 20px rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
     
-    /* Estructura de Pestañas */
-    .stTabs [data-baseweb="tab"] { color: #757575; font-weight: bold; font-size: 14px; }
-    .stTabs [data-baseweb="tab"]:hover { color: #FFFFFF; }
-    .stTabs [data-baseweb="tab"][aria-selected="true"] { color: #E0E0E0; border-bottom-color: #E0E0E0; }
-    
     /* Inputs Estilizados */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea, .stSelectbox>div>div, .stNumberInput>div>div>input {
         background-color: #161616 !important; color: white !important; border: 1px solid #333333 !important;
@@ -48,16 +63,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Render del Membrete Superior buscando el archivo local logo.png
-st.markdown('<div class="brand-header">', unsafe_allow_html=True)
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=150)
-else:
-    # Respaldo si aún no se termina de subir el archivo a GitHub
-    st.markdown("<h1 style='color: #E0E0E0; margin:0; font-size: 60px;'>⚡ MM247 ⚡</h1>", unsafe_allow_html=True)
-
-st.markdown('<div class="brand-title">MINDMUSCLE247</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+# 2. CABECERA CENTRADA: LOGO A UN COSTADO DEL NOMBRE (SIN BARRAS NEGRAS)
+c_logo1, c_logo2, c_logo3 = st.columns([1, 3, 1])
+with c_logo2:
+    st.markdown('<div class="brand-container">', unsafe_allow_html=True)
+    # Mostramos el logo y el nombre alineados horizontalmente
+    col_img, col_txt = st.columns([1, 3])
+    with col_img:
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=110)
+        else:
+            st.markdown("<h1 style='color:#E0E0E0; margin:0;'>💪</h1>", unsafe_allow_html=True)
+    with col_txt:
+        st.markdown('<div style="padding-top: 25px;"><h1 class="brand-title-main">MINDMUSCLE</h1></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # URL de conexión a tu Google Sheets
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/export?format=csv"
@@ -65,7 +84,7 @@ SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKys
 if "cuestionario_enviado" not in st.session_state:
     st.session_state.cuestionario_enviado = False
 
-# 2. PANEL LATERAL DE CONTROL (MODO COACH)
+# 3. PANEL LATERAL DE CONTROL (MODO COACH)
 st.sidebar.title("🛡️ Sistema MINDMUSCLE247")
 clave_coach = st.sidebar.text_input("Clave de Acceso (Coach):", type="password")
 es_coach = (clave_coach == "MM247")
@@ -91,7 +110,7 @@ else:
         st.sidebar.error("Clave Incorrecta")
     st.sidebar.info("Completa los 9 bloques técnicos para estructurar tu entrenamiento y tu plan nutricional ideal.")
 
-# 3. INTERFAZ PRINCIPAL
+# 4. INTERFAZ PRINCIPAL
 
 # VISTA EXCLUSIVA DEL COACH
 if es_coach and fila_alumno is not None:
@@ -166,9 +185,9 @@ else:
             v_objetivo = st.selectbox(" Elige tu meta principal actual:", ["Hipertrofia / ganar masa muscular", "Pérdida de grasa", "Recomposición corporal", "Fuerza", "Rendimiento deportivo", "Mejorar salud", "Corrección postural", "Otro"])
             st.markdown("---")
             st.subheader("👁 Enfoque Visual Estético")
-            v_obj_visual1 = st.text_input("🚀 ¿Qué zona corporal te urge o deseas mejorar con prioridad?")
-            v_obj_visual2 = st.text_input("🔍 ¿Qué músculos consideras rezagados o difíciles de desarrollar?")
-            v_obj_visual3 = st.text_input("🎯 ¿A qué grupos musculares le daremos enfoque absoluto?")
+            v_obj_visual1 = st.text_input("🚀 ¿Qué parte de tu físico quieres mejorar más?")
+            v_obj_visual2 = st.text_input("🔍 ¿Qué músculos sientes menos desarrollados?")
+            v_obj_visual3 = st.text_input("🎯 ¿Qué músculos quieres priorizar?")
 
         with t2:
             st.subheader("🏋️ Trayectoria en el Gimnasio")
@@ -226,10 +245,10 @@ else:
             v_cardio = st.selectbox("❤️ ¿Cómo calificas tu resistencia cardiovascular en este momento?", ["Mala", "Regular", "Buena", "Excelente"])
 
         with t6:
-            st.subheader("🥗 Configuración del Módulo Nutricional (4 Opciones por Rubro)")
+            st.subheader("🥗 Configuración del Módulo Nutricional")
             
             v_pref_proteina = st.selectbox("🥩 PROTEÍNA: Selecciona tu fuente principal preferida para la dieta:", [
-                "Carnes rojas, pechuga de pollo y pescados blancos/salmón",
+                "Carnes rojas, pechuga de pollo y prestigiosos pescados blancos/salmón",
                 "Predominancia de pescados, mariscos frescos y piezas de huevo completo",
                 "Fuentes de origen vegetal, legumbres y proteína aislada de soya/chícharo",
                 "Esquema completamente variado, flexible y abierto sin restricciones alimenticias"
@@ -253,7 +272,7 @@ else:
                 "3 comidas completas y fuertes + 2 colaciones intermedias rápidas/ligeras",
                 "3 comidas principales sólidas y abundantes a lo largo del día (Sin colaciones)",
                 "Dividir la ingesta en 4 o 5 comidas medianas distribuidas equitativamente",
-                "Esquema concentrado de alimentación (Ideal para protocolos de ayuno intermitente)"
+                "Esquema concentrado de alimentación (Ideal para protocols de ayuno intermitente)"
             ])
             
             st.markdown("---")
@@ -283,7 +302,7 @@ else:
             v_ejercicios_disfruta = st.text_area("❤️ Ejercicios que te encantan, dominas y disfrutas incluir en tu rutina:")
             v_ejercicios_odia = st.text_area("❌ Ejercicios que te causan pereza, incomodidad o prefieres evitar:")
             v_preferencia_vol = st.multiselect("⚖ ¿Qué enfoque de entrenamiento se adapta mejor a tu mente?", ["Alto volumen (Muchos ejercicios y series)", "Bajo volumen con alta intensidad (Pocas series al límite)", "Sesiones de entrenamiento compactas y rápidas", "Sesiones largos con descansos amplios"])
-            v_gusta_fallo = st.selectbox("💥 ¿Sabes lo que es y disfrutas llevar una serie al fallo muscular absoluto?", ["Sí, me fascina entrenar a máxima intensidad", "No, prefiero mantenerme seguro lejos del fallo", "A veces, solo en ciertos ejercicios guiados"])
+            v_gusta_fallo = st.selectbox("💥 ¿Te gusta entrenar al fallo muscular absoluto?", ["Sí", "No", "A veces"])
             v_maquinas_libres = st.selectbox("🤖 ¿Qué tipo de equipamiento prefieres usar en tus entrenamientos?", ["Pesos libres (Barras y mancuernas)", "Máquinas guiadas y poleas de aislamiento", "Una mezcla equilibrada de ambas herramientas"])
 
         with t9:
@@ -300,17 +319,17 @@ else:
             if uploaded_photos:
                 st.success(f"💪 ¡Se han cargado {len(uploaded_photos)} imágenes correctamente!")
             
-            # --- RENDER DEL CÓDIGO QR DESDE ARCHIVO LOCAL ---
+            # --- GENERACIÓN DEL QR MEDIANTE LA API DE GOOGLE (100% FIABLE Y EN VIVO) ---
             st.markdown("---")
-            st.markdown("<div style='text-align: center; font-weight: bold; color: #757575;'>📲 ACCESO OFICIAL A TU APLICACIÓN MINDMUSCLE247</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align: center; font-weight: bold; color: #757575; font-size: 16px; margin-bottom: 15px;'>📲 ACCESO OFICIAL A TU APLICACIÓN MINDMUSCLE247</div>", unsafe_allow_html=True)
             
             c_qr1, c_qr2, c_qr3 = st.columns([1, 1, 1])
             with c_qr2:
-                if os.path.exists("qr.png"):
-                    st.image("qr.png", width=200, caption="Escanéame para entrar desde el móvil")
-                else:
-                    # Enlace de respaldo por si no usas imagen local para el QR
-                    st.markdown("<div style='text-align:center; background-color:#161616; padding:15px; border-radius:5px;'>🌐 <a href='https://appfitness-mindmuscle247.streamlit.app' target='_blank' style='color:#E0E0E0; text-decoration:none;'><b>CLICK AQUÍ PARA ABRIR EN EL CELULAR</b></a></div>", unsafe_allow_html=True)
+                # Generamos el QR de tu link oficial de forma dinámica usando Google Charts
+                link_app = "https://appfitness-mindmuscle247.streamlit.app"
+                qr_url = f"https://chart.googleapis.com/chart?chs=250x250&cht=qr&chl={link_app}&choe=UTF-8"
+                
+                st.image(qr_url, caption="Escanéame para entrar desde el móvil", use_container_width=True)
             
             # --- EL BOTÓN DE ENVÍO AL FINAL ---
             st.markdown("---")
@@ -324,10 +343,10 @@ else:
                     registro_bd = {
                         "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                         "Nombre Completo": v_nombre,
-                        "Edad": int(v_edad), "Sexo": v_sexo, "Estatura": v_estatura, "Peso": v_peso,
+                        "Edad": int(v_edad), "Sexo": v_sexo, "Estatura": v_estatura, "Peso": v_weight,
                         "Ocupacion": v_ocupacion, "Horas_Sentado": v_horas_sentado, "Actividad_Diaria": v_actividad,
                         "Objetivo": v_objetivo,
-                        "Musculos_Prioridad": f"Prioridad: {v_obj_visual1} | Rezago: {v_obj_visual2} | Enfoque: {v_obj_visual3}",
+                        "Musculos_Prioridad": f"Mejorar: {v_obj_visual1} | Rezago: {v_obj_visual2} | Priorizar: {v_obj_visual3}",
                         "Tiempo_Entreno": v_tiempo_entreno, "Constancia": v_constancia, "Tipo_Entrenamiento": ", ".join(v_tipo_entreno),
                         "Dias_Entreno": v_dias_actuales, "Duracion_Entreno": v_duracion_promedio,
                         "Autoevaluacion_Metricas": f"Tec: {v_eval_tec}, Mente: {v_eval_mente}, Int: {v_eval_int}, Disc: {v_eval_disc}, Rec: {v_eval_rec}",
