@@ -110,7 +110,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             st.markdown("<div class='section-header'>🥗 Desgaste Diario y Entorno Nutricional</div>", unsafe_allow_html=True)
             col5, col6 = st.columns(2)
             with col5:
-                actividad_diaria = st.selectbox("Desgaste del Día a Día fuera del Gimnasio (Gasto NEAT):", ["Seleccione...", "Sedentario Pasivo (Trabajo sentado, computadora, mínimo movimiento)", "Moderado Activo (Trabajo de pie, caminatas intermitentes, comercio)", "Intensidad Alta (Movimiento constante, carga de objetos, construcción)"])
+                actividad_diaria = st.selectbox("Desgaste del Día a Día fuera del Gimnasio (Gasto NEAT):", ["Seleccione...", "Sedentario Pasivo (Trabajo sentado, computadora, mínimo movement)", "Moderado Activo (Trabajo de pie, caminatas intermitentes, comercio)", "Intensidad Alta (Movimiento constante, carga de objetos, construcción)"])
                 cantidad_comidas = st.selectbox("Disponibilidad logística para distribución de comidas:", ["Seleccione...", "2 comidas grandes al día", "3 comidas estándar al día", "4 comidas distribuidas", "5 comidas o más"])
             with col6:
                 consumo_agua = st.selectbox("Consumo diario promedio de agua natural:", ["Seleccione...", "Insuficiente (Menos de 1.5 Litros)", "Adecuado (Entre 1.5 y 3 Litros)", "Óptimo (Más de 3 Litros)"])
@@ -136,7 +136,6 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             if "Seleccione..." in [edad_sel, peso_sel, estatura_sel, genero, meta_cliente, lesiones, patologias, medicamentos, analiticas, alta_medica, actividad_diaria, cantidad_comidas, consumo_agua, horas_sueno, nivel_estres, experiencia, frecuencia, tiempo_sesion, entorno_entreno, fuerza_actual, cardio_actual] or not nombre.strip():
                 st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios. Revisa todas las pestañas.")
             else:
-                # Extraer valores numéricos puros de los strings para calcular el IMC automáticamente
                 p_num = float(peso_sel.replace(" kg", ""))
                 e_num = float(estatura_sel.replace(" cm", "")) / 100.0
                 imc_num = round(p_num / (e_num ** 2), 1)
@@ -177,7 +176,6 @@ elif opcion == "📊 Dashboard Administrador":
         if df_existente.empty or len(df_existente) == 0:
             st.warning("No hay registros en la base de datos o el formato de lectura falló.")
         else:
-            # KPIS animados superiores
             st.markdown("### 📈 Estado Global del Gimnasio")
             kpi1, kpi2, kpi3 = st.columns(3)
             with kpi1:
@@ -200,7 +198,6 @@ elif opcion == "📊 Dashboard Administrador":
             idx_alumno = df_existente[df_existente["Nombre"] == alumno_sel].index[0]
             datos_alumno = df_existente.loc[idx_alumno]
             
-            # Formatear la vista quitando cualquier residuo de nan
             nombre_display = str(datos_alumno['Nombre']).title()
             peso_display = str(datos_alumno.get('Rango Peso', 'No especificado'))
             estatura_display = str(datos_alumno.get('Rango Estatura', 'No especificado'))
@@ -210,7 +207,6 @@ elif opcion == "📊 Dashboard Administrador":
             lesion_display = str(datos_alumno.get('Lesiones', 'Ninguna'))
             experiencia_display = str(datos_alumno.get('Experiencia', 'No especificado'))
             
-            # Contenedor visual moderno del Alumno Seleccionado
             st.markdown(f"### 👤 Expediente Actualizado: {nombre_display}")
             c_info1, c_info2 = st.columns(2)
             with c_info1:
@@ -222,10 +218,6 @@ elif opcion == "📊 Dashboard Administrador":
                 st.markdown(f"**🥗 Gasto Diario NEAT:** {neat_display}")
                 st.markdown(f"**🏋️ Madurez Muscular:** {experiencia_display}")
             
-            # =============================================================================
-            # MOTOR DE INTELIGENCIA / GENERACIÓN AUTOMÁTICA SEGÚN META
-            # =============================================================================
-            # Si los campos están vacíos o son "nan", la app genera automáticamente la prescripción
             v_propuesta = str(datos_alumno.get("Propuesta General", "")).strip()
             v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
             v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
@@ -331,10 +323,11 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(rutina))
                     
-                    pdf_data = pdf.output(dest='S').encode('latin-1', errors='ignore')
+                    # RETORNO ARREGLADO: Sin método .encode(), directo a bytes estructurados
+                    pdf_data = pdf.output(dest='S')
                     st.download_button(
                         label="⬇️ Descargar Reporte PDF Oficial MM247",
-                        data=pdf_data,
+                        data=bytes(pdf_data),
                         file_name=f"Reporte_MM247_{nombre_display.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
