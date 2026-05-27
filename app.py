@@ -21,7 +21,7 @@ st.markdown("""
     .main-title { font-size:42px; font-weight:bold; color:#111111; text-align:center; margin-bottom:0px; }
     .subtitle { font-size:18px; color:#555555; text-align:center; margin-bottom:30px; }
     .section-header { font-size:22px; font-weight:bold; color:#111111; margin-top:20px; margin-bottom:10px; border-bottom: 2px solid #111111; padding-bottom:5px; }
-    .stButton>button { background-color: #111111; color: white; width: 100%; border-radius: 4px; font-weight: bold; }
+    .stButton>button { background-color: #111111; color: white; width: 100%; border-radius: 4px; font-weight: bold; height: 45px; }
     .stButton>button:hover { background-color: #444444; color: white; }
     </style>
     """, unsafe_allow_html=True)
@@ -30,17 +30,22 @@ st.markdown("""
 opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
 
 # =============================================================================
-# MÓDULO 1: CUESTIONARIO 100% OPCIÓN MÚLTIPLE (30 VARIABLES ESTÁNDAR)
+# MÓDULO 1: CUESTIONARIO CON BOTÓN EXCLUSIVO AL FINAL
 # =============================================================================
 if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Evaluación Diagnóstica Estandarizada - Ninguna Respuesta al Azar</div>", unsafe_allow_html=True)
     
-    st.info("📌 Todas las preguntas son obligatorias y de selección cerrada para garantizar la máxima precisión en el cálculo de tu balance energético y diseño biomecánico.")
+    st.info("📌 Todos los campos son estrictamente obligatorios. Por favor, navega a través de las pestañas y completa cada sección. El botón de registro aparecerá al final de la última pestaña.")
     
     with st.form("cuestionario_cerrado_mm247", clear_on_submit=True):
         
-        tab1, tab2, tab3, tab4 = st.tabs(["👤 Perfil y Biotipo", "🩺 Historial Fisioclínico", "🥗 Nutrición y Desgaste Diario", "🏋️ Madurez Muscular y Tiempos"])
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "👤 1. Perfil y Biotipo", 
+            "🩺 2. Historial Fisioclínico", 
+            "🥗 3. Nutrición y Desgaste Diario", 
+            "🏋️ 4. Madurez Muscular y Tiempos (Final)"
+        ])
         
         with tab1:
             st.markdown("<div class='section-header'>📊 Rango Demográfico y Antropometría</div>", unsafe_allow_html=True)
@@ -139,7 +144,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     "Seleccione...",
                     "Principiante Absoluto (Nunca he entrenado con pesas)",
                     "Principiante Intermedio (Menos de 1 año, conozco los nombres de máquinas)",
-                    "Intermedio Avanzado (1 a 3 años de consistencia, sé entrenar con intensidad)",
+                    "Intermedio Avanzado (1 a 3 años de comodidad/consistencia)",
                     "Avanzado Competitivo (Más de 3 años aplicando sobrecarga progresiva)"
                 ])
                 frecuencia = st.selectbox("Días Disponibles a la semana para Entrenar:", [
@@ -161,12 +166,13 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 cardio_actual = st.selectbox("Actividad Cardiovascular complementaria actual:", [
                     "Seleccione...", "Nulo / Sin trabajo cardiovascular", "Cardio LISS (Caminata / Elíptica suave)", "Cardio HIIT / Deportes de alta intensidad"
                 ])
+            
+            # EL BOTÓN AHORA VIVE EXCLUSIVAMENTE AL FINAL DE LA CUARTA PESTAÑA
+            st.markdown("<br><hr>", unsafe_allow_html=True)
+            enviar_datos = st.form_submit_button("🚀 Registrar evaluación de máxima precisión MM247")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        enviar_datos = st.form_submit_button("🚀 Registrar Evaluación de Máxima Precisión MM247")
-        
         if enviar_datos:
-            # Validación estricta en bloque de que ningún campo se quede en el valor por defecto
+            # Validación estricta: No se permite enviar si algún campo se quedó en "Seleccione..." o vacío
             if (not nombre.strip() or rango_edad == "Seleccione..." or genero == "Seleccione..." or 
                 rango_peso == "Seleccione..." or rango_estatura == "Seleccione..." or porcentaje_grasa == "Seleccione..." or
                 meta_cliente == "Seleccione..." or lesiones == "Seleccione..." or patologias == "Seleccione..." or 
@@ -175,7 +181,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or experiencia == "Seleccione..." or 
                 frecuencia == "Seleccione..." or tiempo_sesion == "Seleccione..." or entorno_entreno == "Seleccione..." or 
                 fuerza_actual == "Seleccione..." or cardio_actual == "Seleccione..."):
-                st.error("❌ Error en el envío: Todos los campos desplegables son obligatorios para garantizar un reporte sin margen de error.")
+                st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios y deben contener una selección válida. Por favor, revisa todas las pestañas.")
             else:
                 nueva_fila = pd.DataFrame([{
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -194,10 +200,10 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     st.success("✅ ¡Evaluación estandarizada inyectada en la base de datos con éxito!")
                     st.balloons()
                 except Exception as err:
-                    st.error(f"Error de base de datos: {err}")
+                    st.error(f"Error de base de datos al guardar: {err}")
 
 # =============================================================================
-# MÓDULO 2: PANEL DE CONTROL ADM Y COMPILADOR PDF PROFESIONAL
+# MÓDULO 2: PANEL DE CONTROL ADMINISTRADOR
 # =============================================================================
 elif opcion == "📊 Dashboard Administrador":
     st.markdown("<div class='main-title'>🔐 Panel Administrador MM247</div>", unsafe_allow_html=True)
@@ -218,7 +224,6 @@ elif opcion == "📊 Dashboard Administrador":
             idx_alumno = df_existente[df_existente["Nombre"] == alumno_sel].index[0]
             datos_alumno = df_existente.loc[idx_alumno]
             
-            # Panel Analítico de Datos de Entrada para el Diagnóstico del Coach
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown(f"**👤 Alumno:** {datos_alumno['Nombre']} ({datos_alumno['Rango Edad']}) | **Género:** {datos_alumno['Género']}")
@@ -242,8 +247,8 @@ elif opcion == "📊 Dashboard Administrador":
                 st.markdown("### 🏋️ 3. Rutina Semanal Completa (Enfoque Biomecánico Adaptado)")
                 rutina = st.text_area("Escriba la dosificación de series, repeticiones y ejercicios blindados contra lesiones:", value=str(datos_alumno.get("Rutina Biomecánica", "")))
                 
-                guardar_cambios = st.form_submit_button("💾 Guardar Cambios en Base de Datos Nube")
-                if guardar_cambios:
+                guardar_changes = st.form_submit_button("💾 Guardar Cambios en Base de Datos Nube")
+                if guardar_changes:
                     try:
                         df_existente.at[idx_alumno, "Propuesta General"] = propuesta
                         df_existente.at[idx_alumno, "Balance Energético"] = balance
@@ -254,13 +259,11 @@ elif opcion == "📊 Dashboard Administrador":
                     except Exception as e_save:
                         st.error(f"Fallo de sincronización: {e_save}")
             
-            # COMPILACIÓN DEL PDF OFICIAL DE PRECISIÓN MM247
             if st.button("🖨️ Compilar y Exportar Reporte PDF Oficial"):
                 try:
                     pdf = FPDF()
                     pdf.add_page()
                     
-                    # Encabezado Corporativo
                     pdf.set_font("Arial", "B", 18)
                     pdf.cell(0, 10, "MINDMUSCLE247", ln=True, align="C")
                     pdf.set_font("Arial", "B", 11)
@@ -268,7 +271,6 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.line(10, 28, 200, 28)
                     pdf.ln(8)
                     
-                    # Bloque Fijo de Métricas Estandarizadas
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, f"FICHA TÉCNICA CLÍNICA - ALUMNO: {datos_alumno['Nombre'].upper()}", ln=True)
                     pdf.set_font("Arial", "", 10)
@@ -279,21 +281,18 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.cell(0, 5, f"Meta Establecida: {datos_alumno['Meta']}", ln=True)
                     pdf.ln(5)
                     
-                    # 1. Diagnóstico Clínico
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Propuesta General"]))
                     pdf.ln(5)
                     
-                    # 2. Plan Alimenticio
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "2. PLAN ALIMENTICIO Y BALANCE ENERGÉTICO AJUSTADO AL DESGASTE DIARIO", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Balance Energético"]))
                     pdf.ln(5)
                     
-                    # 3. Rutina Semanal
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "3. RUTINA SEMANAL COMPLETA (DOSIFICACIÓN Y BIOMECÁNICA)", ln=True)
                     pdf.set_font("Arial", "", 10)
