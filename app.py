@@ -40,7 +40,7 @@ st.markdown("""
         border-left: 5px solid #111111;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15 rgba(0,0,0,0.1); }
+    .metric-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
     .metric-title { font-size: 14px; color: #666666; font-weight: bold; text-transform: uppercase; }
     .metric-value { font-size: 24px; color: #111111; font-weight: bold; margin-top: 5px; }
     
@@ -198,7 +198,7 @@ elif opcion == "📊 Dashboard Administrador":
             lesion_display = str(datos_alumno.get('Lesiones', 'Ninguna'))
             experiencia_display = str(datos_alumno.get('Experiencia', 'No especificado'))
             frecuencia_display = str(datos_alumno.get('Frecuencia', '3 Días por semana'))
-            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutos'))
+            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutes'))
             grasa_display = str(datos_alumno.get('Grasa', ''))
 
             st.markdown(f"### 👤 Expediente Actualizado: {nombre_display}")
@@ -271,7 +271,7 @@ elif opcion == "📊 Dashboard Administrador":
                             st.rerun()
                         except Exception as e_save: st.error(f"Fallo de sincronización: {e_save}")
             
-            # --- COMPILADOR PDF DE ALTA ARMONÍA, COLORES Y RECUADROS ---
+            # --- COMPILADOR PDF CORREGIDO (set_line_width SUSTITUIDO) ---
             if st.button("🖨️ Compilar y Exportar Reporte PDF Premium"):
                 try:
                     pdf = FPDF()
@@ -282,7 +282,6 @@ elif opcion == "📊 Dashboard Administrador":
 
                     # ---------------- HOJA 1: FORMATO ORIGINAL CON BRANDING ELEVADO ----------------
                     pdf.add_page()
-                    # Encabezado corporativo (Gris Oscuro / Negro)
                     pdf.set_fill_color(26, 26, 26) 
                     pdf.rect(0, 0, 210, 38, "F")
                     
@@ -295,7 +294,6 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(18)
                     pdf.set_text_color(0, 0, 0)
                     
-                    # Ficha técnica destacada de entrada (Fondo Gris Claro)
                     pdf.set_fill_color(245, 245, 245)
                     pdf.set_draw_color(200, 200, 200)
                     pdf.rect(10, 44, 190, 20, "DF")
@@ -307,14 +305,12 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_x(12)
                     pdf.cell(0, 6, limpiar_texto(f"Diagnóstico Metabólico Inicial: {grasa_display}"), ln=True)
                     
-                    # Bloque de texto fluido original
                     pdf.set_xy(10, 72)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(190, 6, limpiar_texto(propuesta))
 
-                    # ---------------- HOJA 2: RUTINA BIOMECÁNICA (DISEÑO AUTODIDACTA EN RECUADROS) ----------------
+                    # ---------------- HOJA 2: RUTINA BIOMECÁNICA (DISEÑO EN RECUADROS) ----------------
                     pdf.add_page()
-                    # Banner Superior Naranja/Rojo Deportivo para distinguir Entrenamiento
                     pdf.set_fill_color(230, 81, 0) 
                     pdf.rect(0, 0, 210, 32, "F")
                     
@@ -327,12 +323,10 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
-                    # Recuadro de diseño armónico para la rutina
                     pdf.set_fill_color(250, 250, 250)
-                    pdf.set_draw_color(230, 81, 0) # Borde naranja elegante
-                    pdf.set_linewidth(0.5)
+                    pdf.set_draw_color(230, 81, 0) 
+                    pdf.set_line_width(0.5)  # Corregido con guiones bajos exactos
                     
-                    # Dibujamos un contenedor estilizado para la información de entrenamiento
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
                     
@@ -341,7 +335,6 @@ elif opcion == "📊 Dashboard Administrador":
 
                     # ---------------- HOJA 3: DIETA Y NUTRICIÓN (DISEÑO EN RECUADROS VERDES) ----------------
                     pdf.add_page()
-                    # Banner Superior Verde Salud para Nutrición
                     pdf.set_fill_color(46, 125, 50) 
                     pdf.rect(0, 0, 210, 32, "F")
                     
@@ -354,9 +347,9 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
-                    # Recuadro de diseño armónico para la nutrición
                     pdf.set_fill_color(248, 249, 248)
-                    pdf.set_draw_color(46, 125, 50) # Borde verde elegante
+                    pdf.set_draw_color(46, 125, 50) 
+                    pdf.set_line_width(0.5)  # Corregido con guiones bajos exactos
                     
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
@@ -364,7 +357,6 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10.5)
                     pdf.multi_cell(182, 6.5, limpiar_texto(balance))
                     
-                    # Descarga directa del archivo PDF
                     pdf_data = pdf.output(dest='S')
                     st.download_button(
                         label="⬇️ Descargar Reporte PDF Premium de 3 Hojas",
