@@ -9,12 +9,10 @@ st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 # URL directa de exportación en formato CSV de tu Google Sheet
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
 
-# Intentar lectura directa sin depender de Secrets
 try:
     df_existente = pd.read_csv(SHEET_URL)
     df_existente = df_existente.loc[:, ~df_existente.columns.str.contains('^Unnamed')]
 except Exception as e:
-    # Respaldo si hay microcortes de red
     df_existente = pd.DataFrame()
 
 # Estilos visuales de la interfaz
@@ -28,11 +26,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Menú lateral de navegación
 opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
 
 # =============================================================================
-# MÓDULO 1: CUESTIONARIO CON BOTÓN EXCLUSIVO AL FINAL
+# MÓDULO 1: CUESTIONARIO CON ENTRADAS MÉTRICAS EXACTAS
 # =============================================================================
 if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
@@ -50,29 +47,16 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
         ])
         
         with tab1:
-            st.markdown("<div class='section-header'>📊 Rango Demográfico y Antropometría</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>📊 Rango Demográfico y Antropometría Exacta</div>", unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
                 nombre = st.text_input("Nombre Completo del Alumno:")
-                rango_edad = st.selectbox("Rango de Edad (Segmento Poblacional):", [
-                    "Seleccione...",
-                    "Joven Adolescente (12 a 17 años)",
-                    "Adulto Joven (18 a 29 años)",
-                    "Adulto Contemporáneo (30 a 49 años)",
-                    "Adulto Mayor / Madurez (50 a 64 años)",
-                    "Tercera Edad / Longevidad Avanzada (65 años o más)"
-                ])
+                edad_exacta = st.number_input("Edad Exacta (Años):", min_value=10, max_value=100, value=25, step=1)
                 genero = st.selectbox("Género Biológico (Factor Metabólico):", ["Seleccione...", "Masculino", "Femenino"])
             with col2:
-                rango_peso = st.selectbox("Rango de Peso Corporal Actual:", [
-                    "Seleccione...", "Menos de 50 kg", "De 50 a 60 kg", "De 61 a 70 kg", "De 71 a 80 kg", "De 81 a 90 kg", "De 91 a 100 kg", "Más de 100 kg"
-                ])
-                rango_estatura = st.selectbox("Rango de Estatura / Altura:", [
-                    "Seleccione...", "Menos de 150 cm", "De 150 a 160 cm", "De 161 a 170 cm", "De 171 a 180 cm", "De 181 a 190 cm", "Más de 190 cm"
-                ])
-                porcentaje_grasa = st.selectbox("Estimación de Composición Corporal (Porcentaje Grasa):", [
-                    "Seleccione...", "Bajo / Definido (<12% H / <20% M)", "Normal / Saludable (12-18% H / 20-27% M)", "Moderado / Sobrepeso leve (19-24% H / 28-34% M)", "Alto / Exceso de Grasa (>25% H / >35% M)"
-                ])
+                peso_exacto = st.number_input("Peso Corporal Exacto (Kilogramos - kg):", min_value=30.0, max_value=250.0, value=70.0, step=0.1, help="Introduce tu peso actual medido en báscula.")
+                estatura_exacta = st.number_input("Estatura / Altura Exacta (Centímetros - cm):", min_value=100, max_value=250, value=170, step=1, help="Introduce tu estatura descalzo.")
+            
             meta_cliente = st.selectbox("🎯 Meta Estructural u Objetivo Clínico Principal:", [
                 "Seleccione...",
                 "Hipertrofia Muscular (Aumento de masa magra)",
@@ -173,25 +157,35 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             enviar_datos = st.form_submit_button("🚀 Registrar evaluación de máxima precisión MM247")
 
         if enviar_datos:
-            if (not nombre.strip() or rango_edad == "Seleccione..." or genero == "Seleccione..." or 
-                rango_peso == "Seleccione..." or rango_estatura == "Seleccione..." or porcentaje_grasa == "Seleccione..." or
-                meta_cliente == "Seleccione..." or lesiones == "Seleccione..." or patologias == "Seleccione..." or 
-                medicamentos == "Seleccione..." or analiticas == "Seleccione..." or alta_medica == "Seleccione..." or 
-                actividad_diaria == "Seleccione..." or cantidad_comidas == "Seleccione..." or consumo_agua == "Seleccione..." or 
-                horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or experiencia == "Seleccione..." or 
-                frecuencia == "Seleccione..." or tiempo_sesion == "Seleccione..." or entorno_entreno == "Seleccione..." or 
-                fuerza_actual == "Seleccione..." or cardio_actual == "Seleccione..."):
+            if not nombre.strip() or genero == "Seleccione..." or meta_cliente == "Seleccione..." or lesiones == "Seleccione..." or patologias == "Seleccione..." or medicamentos == "Seleccione..." or analiticas == "Seleccione..." or alta_medica == "Seleccione..." or actividad_diaria == "Seleccione..." or cantidad_comidas == "Seleccione..." or consumo_agua == "Seleccione..." or horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or experiencia == "Seleccione..." or frecuencia == "Seleccione..." or tiempo_sesion == "Seleccione..." or entorno_entreno == "Seleccione..." or fuerza_actual == "Seleccione..." or cardio_actual == "Seleccione...":
                 st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios. Por favor, revisa todas las pestañas.")
             else:
+                # Cálculo clínico automatizado de IMC
+                estatura_m = estatura_exacta / 100.0
+                imc_num = round(peso_exacto / (estatura_m ** 2), 1)
+                
+                if imc_num < 18.5:
+                    diagnostico_grasa = f"IMC: {imc_num} (Bajo Peso)"
+                elif 18.5 <= imc_num < 25.0:
+                    diagnostico_grasa = f"IMC: {imc_num} (Peso Saludable)"
+                elif 25.0 <= imc_num < 30.0:
+                    diagnostico_grasa = f"IMC: {imc_num} (Sobrepeso)"
+                else:
+                    diagnostico_grasa = f"IMC: {imc_num} (Obesidad Clínico)"
+
                 nueva_fila = pd.DataFrame([{
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Nombre": nombre.strip(), "Rango Edad": rango_edad, "Género": genero, "Rango Peso": rango_peso, 
-                    "Rango Estatura": rango_estatura, "Grasa": porcentaje_grasa, "Meta": meta_cliente, "Lesiones": lesiones, 
-                    "Patologías": patologias, "Medicamentos": medicamentos, "Analíticas": analiticas, "Alta Médica": alta_medica, 
-                    "Gasto NEAT": actividad_diaria, "Comidas": cantidad_comidas, "Agua": consumo_agua, "Sueño": horas_sueno, 
-                    "Estrés": nivel_estres, "Experiencia": experiencia, "Frecuencia": frecuencia, "Tiempo Sesión": tiempo_sesion, 
-                    "Entorno": entorno_entreno, "Fuerza": fuerza_actual, "Cardio": cardio_actual,
-                    "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
+                    "Nombre": nombre.strip(), 
+                    "Rango Edad": f"{edad_exacta} años", 
+                    "Género": genero, 
+                    "Rango Peso": f"{peso_exacto} kg", 
+                    "Rango Estatura": f"{estatura_exacta} cm", 
+                    "Grasa": diagnostico_grasa,  # Guarda el diagnóstico calculado en lugar de la estimación del alumno
+                    "Meta": meta_cliente, "Lesiones": lesiones, "Patologías": patologias, "Medicamentos": medicamentos, 
+                    "Analíticas": analiticas, "Alta Médica": alta_medica, "Gasto NEAT": actividad_diaria, "Comidas": cantidad_comidas, 
+                    "Agua": consumo_agua, "Sueño": horas_sueno, "Estrés": nivel_estres, "Experiencia": experiencia, 
+                    "Frecuencia": frecuencia, "Tiempo Sesión": tiempo_sesion, "Entorno": entorno_entreno, "Fuerza": fuerza_actual, 
+                    "Cardio": cardio_actual, "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
                 }])
                 
                 try:
@@ -200,10 +194,10 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     df_base = conn_sync.read(worksheet="Respuestas", ttl=0)
                     df_final = pd.concat([df_base, nueva_fila], ignore_index=True)
                     conn_sync.update(worksheet="Respuestas", data=df_final)
-                    st.success("✅ ¡Evaluación estandarizada inyectada en la base de datos con éxito!")
+                    st.success("✅ ¡Evaluación e IMC calculados inyectados con éxito!")
                     st.balloons()
                 except Exception as err:
-                    st.error(f"Error al escribir en la base de datos: {err}. Asegúrate de que los Secrets tengan las llaves correctas para escribir.")
+                    st.error(f"Error al escribir en la base de datos: {err}. Verifica tus credenciales.")
 
 # =============================================================================
 # MÓDULO 2: PANEL DE CONTROL ADMINISTRADOR
@@ -230,7 +224,8 @@ elif opcion == "📊 Dashboard Administrador":
             col_x, col_y = st.columns(2)
             with col_x:
                 st.markdown(f"**👤 Alumno:** {datos_alumno['Nombre']} ({datos_alumno.get('Rango Edad', 'N/A')})")
-                st.markdown(f"**📏 Antropometría:** Peso: {datos_alumno.get('Rango Peso', 'N/A')} | Estatura: {datos_alumno.get('Rango Estatura', 'N/A')} | Grasa: {datos_alumno.get('Grasa', 'N/A')}")
+                st.markdown(f"**📏 Antropometría:** Peso: {datos_alumno.get('Rango Peso', 'N/A')} | Estatura: {datos_alumno.get('Rango Estatura', 'N/A')}")
+                st.markdown(f"**📊 Diagnóstico de Composición:** {datos_alumno.get('Grasa', 'N/A')}")
                 st.markdown(f"**🩺 Diagnóstico Clínico:** Patología: {datos_alumno.get('Patologías', 'N/A')} | Lesión: {datos_alumno.get('Lesiones', 'N/A')}")
             with col_y:
                 st.markdown(f"**🎯 Objetivo Estructural:** {datos_alumno.get('Meta', 'N/A')}")
@@ -277,6 +272,9 @@ elif opcion == "📊 Dashboard Administrador":
                     
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, f"FICHA TÉCNICA CLÍNICA - ALUMNO: {str(datos_alumno['Nombre']).upper()}", ln=True)
+                    pdf.ln(3)
+                    pdf.set_font("Arial", "", 10)
+                    pdf.cell(0, 5, f"Diagnóstico Metabólico Inicial: {str(datos_alumno.get('Grasa', 'N/A'))}", ln=True)
                     pdf.ln(5)
                     
                     pdf.set_font("Arial", "B", 11)
