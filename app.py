@@ -30,268 +30,217 @@ st.markdown("""
 opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
 
 # =============================================================================
-# MÓDULO 1: CUESTIONARIO INTEGRAL COMPLETO (CAMPOS REQUERIDOS PARA DIETA Y RUTINA)
+# MÓDULO 1: CUESTIONARIO INTEGRAL AVANZADO (30 VARIABLES ANALÍTICAS)
 # =============================================================================
 if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>Evaluación Diagnóstica Avanzada - Ficha Clínica, Nutrición & Biomecánica</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle'>Evaluación Diagnóstica de Máxima Personalización - Ficha Clínica, Nutrición & Biomecánica</div>", unsafe_allow_html=True)
     
-    st.info("📌 Por favor, responde con la mayor honestidad posible. Todos los datos son obligatorios y esenciales para calcular tu balance calórico exacto y dosificar tus cargas de entrenamiento de forma segura.")
+    st.info("📌 Este cuestionario recopila métricas avanzadas para segmentar tu plan si eres principiante, avanzado, joven o adulto mayor. Responde con la mayor precisión posible.")
     
-    with st.form("cuestionario_avanzado_mm247", clear_on_submit=True):
+    with st.form("cuestionario_ultra_avanzado_mm247", clear_on_submit=True):
         
-        # --- BLOQUE 1: DATOS ANTROPOMÉTRICOS Y OBJETIVO ---
-        st.markdown("<div class='section-header'>📊 1. Datos Antropométricos Perfil General</div>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            nombre = st.text_input("Nombre Completo del Alumno:")
-            edad = st.number_input("Edad Actual (Años):", min_value=12, max_value=90, step=1, value=25)
-        with col2:
-            peso = st.number_input("Peso Corporal Actual (en kg):", min_value=30.0, max_value=250.0, step=0.1, value=70.0)
-            estatura = st.number_input("Estatura / Altura Exacta (en cm):", min_value=100, max_value=250, step=1, value=170)
-        with col3:
-            genero = st.selectbox("Género Biológico:", ["Seleccione...", "Masculino", "Femenino"])
-            meta_cliente = st.selectbox("Objetivo Estructural Principal (Meta):", [
-                "Seleccione...",
-                "Hipertrofia Muscular Eficiente (Ganar masa)",
-                "Pérdida de Tejido Graso / Definición Estética",
-                "Acondicionamiento Físico General y Salud",
-                "Recomposición Corporal Inteligente (Músculo/Grasa)"
-            ])
-            
-        # --- BLOQUE 2: HISTORIAL CLÍNICO Y BIOMECÁNICA DE LESIONES ---
-        st.markdown("<div class='section-header'>🩺 2. Historial Clínico, Lesiones y Limitaciones</div>", unsafe_allow_html=True)
-        col4, col5 = st.columns(2)
-        with col4:
-            lesiones = st.selectbox("¿Sufres o has sufrido de alguna lesión articular o muscular?", [
-                "Seleccione...",
-                "Ninguna (Completamente Sano/a)",
-                "Lesión en Hombros / Manguito Rotador",
-                "Lesión o dolor crónico en Rodillas",
-                "Hernia discal / Molestias en zona Lumbar",
-                "Lesión en Muñecas / Codos",
-                "Múltiples lesiones / Limitaciones combinadas"
-            ])
-            detalles_lesiones = st.text_area("Si seleccionaste alguna molestia, describe detalladamente qué movimientos o ejercicios te causan dolor mecánico:")
-        with col5:
-            patologias = st.selectbox("¿Cuentas con algún diagnóstico médico o patología clínica?", [
-                "Seleccione...",
-                "Ninguna patología",
-                "Hipertensión Arterial / Problemas cardiacos",
-                "Diabetes / Resistencia a la Insulina",
-                "Hipotiroidismo / Hipertiroidismo",
-                "Asma / Problemas respiratorios crónicos"
-            ])
-            medicamentos = st.text_input("¿Tomas actualmente algún medicamento prescrito? (Si no, escribe 'Ninguno'):")
+        # Uso de pestañas visuales para que no se vea kilométrico el formulario
+        tab1, tab2, tab3, tab4 = st.tabs(["👤 Perfil y Biotipo", "🩺 Historial Fisioclínico", "🥗 Nutrición y Estilo de Vida", "🏋️ Madurez Muscular y Entorno"])
+        
+        with tab1:
+            st.markdown("<div class='section-header'>📊 Datos Antropométricos y Grupo Poblacional</div>", unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                nombre = st.text_input("Nombre Completo:")
+                edad = st.number_input("Edad Actual (Años):", min_value=12, max_value=100, step=1, value=25)
+                genero = st.selectbox("Género Biológico:", ["Seleccione...", "Masculino", "Femenino"])
+                estatura = st.number_input("Estatura / Altura Exacta (en cm):", min_value=100, max_value=250, step=1, value=170)
+            with col2:
+                peso = st.number_input("Peso Corporal Actual (en kg):", min_value=30.0, max_value=250.0, step=0.1, value=70.0)
+                porcentaje_grasa = st.selectbox("Estimación visual de grasa corporal o rango actual:", [
+                    "Seleccione...", "Bajo / Delgado (Atleta)", "Normal / Promedio", "Moderado / Con sobrepeso", "Alto / Obesidad"
+                ])
+                perimetro_cintura = st.text_input("Perímetro de cintura en cm (Opcional - Escribe N/A si no lo sabes):", value="N/A")
+                meta_cliente = st.selectbox("Objetivo Principal del Plan:", [
+                    "Seleccione...", "Hipertrofia Muscular", "Pérdida de Tejido Graso", "Acondicionamiento Físico y Salud (Longevidad)", "Aumento de Fuerza / Rendimiento"
+                ])
 
-        # --- BLOQUE 3: HISTORIAL NUTRICIONAL Y HABITOS ---
-        st.markdown("<div class='section-header'>🥗 3. Perfil Nutricional e Historial Alimenticio</div>", unsafe_allow_html=True)
-        col6, col7 = st.columns(2)
-        with col6:
-            actividad_diaria = st.selectbox("Nivel de Actividad Diaria fuera del Gimnasio (Gasto NEAT):", [
-                "Seleccione...",
-                "Muy Bajo (Sedentario, trabajo de oficina/sentado)",
-                "Moderado (De pie gran parte del día, maestros, cajeros)",
-                "Alto (Movimiento constante, caminatas largas diarios)",
-                "Muy Alto (Trabajo físico pesado, construcción, mudanzas)"
-            ])
-            cantidad_comidas = st.selectbox("¿Cuántas comidas sólidas realizas normalmente al día?", [
-                "Seleccione...", "1 a 2 comidas", "3 comidas", "4 comidas", "5 o más comidas"
-            ])
-        with col7:
-            alergias_evitar = st.text_area("¿Tienes alguna alergia alimentaria o alimentos que te desagraden/prefieras evitar por completo?:")
-            consumo_agua = st.selectbox("¿Cuánta agua natural consumes aproximadamente al día?", [
-                "Seleccione...", "Menos de 1 Litro", "Entre 1 y 2 Litros", "Entre 2 y 3 Litros", "Más de 3 Litros"
-            ])
+        with tab2:
+            st.markdown("<div class='section-header'>🩺 Ficha Médica y Limitaciones de Carga</div>", unsafe_allow_html=True)
+            col3, col4 = st.columns(2)
+            with col3:
+                lesiones = st.selectbox("¿Sufres de alguna lesión o molestia articular/muscular?", [
+                    "Seleccione...", "Ninguna", "Hombros", "Rodillas", "Columna / Lumbar", "Muñecas / Codos", "Cadera / Tobillos"
+                ])
+                detalles_lesiones = st.text_area("Describe qué movimientos específicos te detonan dolor físico o limitan tu rango de movimiento:")
+                patologias = st.selectbox("Diagnóstico clínico preexistente (Metabólico / Cardiovascular):", [
+                    "Seleccione...", "Ninguna patología", "Hipertensión", "Diabetes / Resistencia a la Insulina", "Hipotiroidismo / Hipertiroidismo", "Artritis / Osteoporosis (Adulto Mayor)"
+                ])
+            with col4:
+                medicamentos = st.text_input("Medicamentos tomados habitualmente (Si no, escribe 'Ninguno'):")
+                analiticas = st.selectbox("¿Tienes alguna alteración en tus analíticas de sangre recientes?", [
+                    "Seleccione...", "Todo en rango saludable", "Colesterol / Triglicéridos altos", "Ácido úrico elevado", "Glucosa elevada", "No me he hecho estudios recientes"
+                ])
+                alta_medica = st.selectbox("¿Tienes autorización médica definitiva para cargar peso libre?", ["Seleccione...", "Sí, completamente autorizado", "No / En proceso de revisión"])
 
-        # --- BLOQUE 4: PLANIFICACIÓN DEL ENTRENAMIENTO ---
-        st.markdown("<div class='section-header'>🏋️ 4. Historial, Disponibilidad y Entorno de Entrenamiento</div>", unsafe_allow_html=True)
-        col8, col9 = st.columns(2)
-        with col8:
-            experiencia = st.selectbox("¿Cuánto tiempo llevas entrenando de forma continua en gimnasio?", [
-                "Seleccione...", "Ninguna experiencia / Absoluto principiante", "Menos de 1 año", "1 a 3 años", "Más de 3 años continuos"
-            ])
-            frecuencia = st.selectbox("¿De cuántos días dispones a la semana para ir al Gimnasio?", [
-                "Seleccione...", "3 Días", "4 Días", "5 Días", "6 Días"
-            ])
-        with col9:
-            entorno_entreno = st.selectbox("¿Dónde vas a realizar tus rutinas de ejercicio?", [
-                "Seleccione...",
-                "Gimnasio Comercial Completo (Máquinas, poleas, pesos libres)",
-                "Gimnasio de Unidad Habitacional / Básico (Mancuernas limitadas)",
-                "En casa (Solo peso corporal / Bandas elásticas)"
-            ])
-            tiempo_sesion = st.selectbox("¿Cuánto tiempo máximo le puedes dedicar a cada sesión?", [
-                "Seleccione...", "Menos de 45 minutos", "Entre 45 y 60 minutos", "Entre 60 y 90 minutos", "Más de 90 minutos"
-            ])
+        with tab3:
+            st.markdown("<div class='section-header'>🥗 Hábitos Alimenticios, Sueño y Estrés</div>", unsafe_allow_html=True)
+            col5, col6 = st.columns(2)
+            with col5:
+                actividad_diaria = st.selectbox("Nivel de Actividad Diaria fuera del Gym (Biotipo/NEAT):", [
+                    "Seleccione...", "Sedentario (Oficina / Sentado)", "Moderado (De pie / Caminatas moderadas)", "Muy Activo (Trabajo físico / Movimiento constante)"
+                ])
+                cantidad_comidas = st.selectbox("¿Cuántas comidas sólidas al día se adaptan a tu agenda actual?", [
+                    "Seleccione...", "1 a 2 comidas", "3 comidas", "4 comidas", "5 comidas"
+                ])
+                alergias_evitar = st.text_area("Alergias o alimentos que por presupuesto, gusto o digestión prefieras omitir:")
+            with col6:
+                consumo_agua = st.selectbox("Consumo diario de agua natural:", ["Seleccione...", "Menos de 1.5L", "Entre 1.5L y 3L", "Más de 3L"])
+                horas_sueno = st.selectbox("Calidad y promedio de sueño por noche:", ["Seleccione...", "Mala (Menos de 6 horas)", "Regular (6 a 7 horas)", "Excelente (7 a 9 horas)"])
+                nivel_estres = st.selectbox("Nivel de estrés psicológico o laboral diario:", ["Seleccione...", "Bajo / Controlado", "Moderado", "Muy Alto (Afecta mi energía)"])
 
-        enviar_datos = st.form_submit_button("🚀 Registrar Evaluación Completa en MINDMUSCLE247")
+        with tab4:
+            st.markdown("<div class='section-header'>🏋️ Madurez Muscular y Disponibilidad Logística</div>", unsafe_allow_html=True)
+            col7, col8 = st.columns(2)
+            with col7:
+                experiencia = st.selectbox("Nivel de experiencia real en entrenamientos de fuerza:", [
+                    "Seleccione...", "Principiante Absoluto (Nunca he entrenado)", "Principiante (Menos de 1 año conociendo la técnica)", "Intermedio (1 a 3 años de entrenamiento constante)", "Avanzado (Más de 3 años entrenando pesado e intenso)"
+                ])
+                frecuencia = st.selectbox("Días por semana que puedes entrenar:", ["Seleccione...", "3 Días", "4 Días", "5 Días", "6 Días"])
+                tiempo_sesion = st.selectbox("Tiempo máximo por sesión de gimnasio:", ["Seleccione...", "Menos de 45 min", "45 a 70 min", "Más de 70 min"])
+            with col8:
+                entorno_entreno = st.selectbox("¿Dónde entrenarás?", ["Seleccione...", "Gym Comercial completo", "Gym Básico", "En Casa / Calistenia"])
+                fuerza_actual = st.selectbox("¿Conoces tu nivel de fuerza actual en ejercicios básicos (Sentadilla, Prensa, etc.)?", [
+                    "Seleccione...", "No lo conozco (Manejo pesos muy ligeros)", "Intermedio (Conozco mis límites de peso)", "Alto (Entreno cerca del fallo muscular / RPE alto)"
+                ])
+                cardio_actual = st.selectbox("¿Realizas alguna actividad cardiovascular actualmente?", ["Seleccione...", "No realizo cardio", "Caminata ligera / Trote", "Ciclismo / Natación / Hit de alta intensidad"])
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        enviar_datos = st.form_submit_button("🚀 Registrar Evaluación Diagnóstica Completa en MINDMUSCLE247")
         
         if enviar_datos:
-            # Control estricto del Frontend para campos tipo selectbox obligatorios
+            # Validación estricta en el Frontend
             if (not nombre.strip() or genero == "Seleccione..." or meta_cliente == "Seleccione..." or 
                 lesiones == "Seleccione..." or patologias == "Seleccione..." or actividad_diaria == "Seleccione..." or 
                 cantidad_comidas == "Seleccione..." or consumo_agua == "Seleccione..." or experiencia == "Seleccione..." or 
-                frecuencia == "Seleccione..." or entorno_entreno == "Seleccione..." or tiempo_sesion == "Seleccione..."):
-                st.error("❌ Error en el envío: Para poder diseñar tu estrategia biomecánica y calórica, todos los menús desplegables son obligatorios.")
+                frecuencia == "Seleccione..." or entorno_entreno == "Seleccione..." or tiempo_sesion == "Seleccione..." or
+                porcentaje_grasa == "Seleccione..." or analiticas == "Seleccione..." or alta_medica == "Seleccione..." or
+                horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or fuerza_actual == "Seleccione..." or
+                cardio_actual == "Seleccione..."):
+                st.error("❌ Error en el envío: Todas las preguntas desplegables son obligatorias para poder armar la estrategia avanzada.")
             else:
-                # Estructura idéntica y expandida para evitar rechazos en el Google Sheet
                 nueva_fila = pd.DataFrame([{
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Nombre": nombre.strip(),
-                    "Edad": int(edad),
-                    "Peso (kg)": float(peso),
-                    "Estatura (cm)": int(estatura),
-                    "Género": genero,
-                    "Meta": meta_cliente,
-                    "Lesiones": lesiones,
-                    "Detalles Lesión": detalles_lesiones.strip(),
-                    "Patologías": patologias,
-                    "Medicamentos": medicamentos.strip(),
-                    "Gasto NEAT": actividad_diaria,
-                    "Comidas por Día": cantidad_comidas,
-                    "Alimentos Evitar": allergies_evitar.strip(),
-                    "Consumo Agua": consumo_agua,
-                    "Experiencia": experiencia,
-                    "Frecuencia Semanal": frecuencia,
-                    "Entorno": entorno_entreno,
-                    "Tiempo Sesión": tiempo_sesion,
-                    "Propuesta General": "",      # Espacios reservados para las respuestas del Administrador
-                    "Balance Energético": "",
-                    "Rutina Biomecánica": ""
+                    "Nombre": nombre.strip(), "Edad": int(edad), "Peso (kg)": float(peso), "Estatura (cm)": int(estatura),
+                    "Género": genero, "Porcentaje Grasa": porcentaje_grasa, "Cintura (cm)": perimetro_cintura.strip(), "Meta": meta_cliente,
+                    "Lesiones": lesiones, "Detalles Lesión": detalles_lesiones.strip(), "Patologías": patologias, "Medicamentos": medicamentos.strip(),
+                    "Analíticas": analiticas, "Alta Médica": alta_medica, "Gasto NEAT": actividad_diaria, "Comidas por Día": cantidad_comidas,
+                    "Alimentos Evitar": allergies_evitar.strip(), "Consumo Agua": consumo_agua, "Horas Sueño": horas_sueno, "Nivel Estrés": nivel_estres,
+                    "Experiencia": experiencia, "Frecuencia Semanal": frecuencia, "Tiempo Sesión": tiempo_sesion, "Entorno": entorno_entreno,
+                    "Fuerza Actual": fuerza_actual, "Cardio Actual": cardio_actual,
+                    "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
                 }])
                 
                 try:
                     df_final = pd.concat([df_existente, nueva_fila], ignore_index=True)
                     conn.update(worksheet="Respuestas", data=df_final)
-                    st.success("✅ ¡Evaluación de 22 variables procesada con éxito! Tu información ya se encuentra disponible para análisis biomecánico.")
+                    st.success("✅ ¡Evaluación de 30 variables guardada con éxito!")
                     st.balloons()
                 except Exception as err:
-                    st.error(f"Error crítico de base de datos: {err}. Reporta este problema.")
+                    st.error(f"Error crítico de base de datos: {err}")
 
 # =============================================================================
-# MÓDULO 2: PANEL DE ADMINISTRACIÓN COMPLETO Y EXPORTADOR
+# MÓDULO 2: PANEL DE ADMINISTRACIÓN Y EXPORTADOR AVANZADO
 # =============================================================================
 elif opcion == "📊 Dashboard Administrador":
     st.markdown("<div class='main-title'>🔐 Panel Administrador MM247</div>", unsafe_allow_html=True)
-    
     password = st.text_input("Introduzca la clave de acceso de Administrador:", type="password")
     
     if password == "MM247_Admin":
         st.success("Acceso seguro autorizado.")
-        
         if df_existente.empty or len(df_existente) == 0:
             st.warning("Aún no existen registros clínicos completados en la base de datos.")
         else:
-            st.subheader("📋 Métrica y Base de Datos Completa de Alumnos")
+            st.subheader("📋 Base de Datos Completa de Alumnos")
             st.dataframe(df_existente, use_container_width=True)
             
             st.markdown("---")
-            st.subheader("🛠️ Prescripción de Planes Basada en Evidencia y Variables")
-            
             lista_alumnos = df_existente["Nombre"].unique()
             alumno_sel = st.selectbox("Seleccione el alumno a evaluar en esta sesión:", lista_alumnos)
             
             idx_alumno = df_existente[df_existente["Nombre"] == alumno_sel].index[0]
             datos_alumno = df_existente.loc[idx_alumno]
             
-            # Desglose de información analítica capturada para la toma de decisiones del Coach
+            # Desglose Metodológico Completo para el Entrenador
             col_a, col_b = st.columns(2)
             with col_a:
-                st.markdown(f"**⚖️ Peso:** {datos_alumno['Peso (kg)']} kg | **📏 Estatura:** {datos_alumno['Estatura (cm)']} cm")
-                st.markdown(f"**🎯 Meta:** {datos_alumno['Meta']}")
-                st.markdown(f"**🏃 Gasto Diario Fuera del Gym:** {datos_alumno['Gasto NEAT']}")
-                st.markdown(f"**🩺 Lesiones Reportadas:** {datos_alumno['Lesiones']} ({datos_alumno.get('Detalles Lesión', 'Sin detalles')})")
+                st.markdown(f"**👤 Perfil:** {datos_alumno['Nombre']} ({datos_alumno['Edad']} años) | **Biotipo:** {datos_alumno['Porcentaje Grasa']}")
+                st.markdown(f"**⚖️ Métricas:** {datos_alumno['Peso (kg)']} kg | {datos_alumno['Estatura (cm)']} cm | Cintura: {datos_alumno.get('Cintura (cm)', 'N/A')}")
+                st.markdown(f"**🩺 Salud Clínico:** Patologías: {datos_alumno['Patologías']} | Lesión: {datos_alumno['Lesiones']} ({datos_alumno.get('Detalles Lesión','')})")
+                st.markdown(f"**💊 Analíticas / Medicinas:** {datos_alumno.get('Analíticas','')} | {datos_alumno.get('Medicamentos','')}")
             with col_b:
-                st.markdown(f"**⏱️ Disponibilidad:** {datos_alumno['Frecuencia Semanal']} | **⏰ Duración:** {datos_alumno['Tiempo Sesión']}")
-                st.markdown(f"**🏢 Entorno de Trabajo:** {datos_alumno['Entorno']}")
-                st.markdown(f"**🥗 Hábitos:** {datos_alumno['Comidas por Día']} comidas | Evita: {datos_alumno.get('Alimentos Evitar', 'Ninguno')}")
+                st.markdown(f"**🏋️ Nivel Muscular:** Experiencia: {datos_alumno['Experiencia']} | Percepción de Fuerza: {datos_alumno.get('Fuerza Actual','')}")
+                st.markdown(f"**⏱️ Logística:** {datos_alumno['Frecuencia Semanal']} por semana | {datos_alumno['Tiempo Sesión']} por sesión en {datos_alumno['Entorno']}")
+                st.markdown(f"**🥗 Recuperación:** Sueño: {datos_alumno.get('Horas Sueño','')} | Estrés: {datos_alumno.get('Nivel Estrés','')} | Cardio: {datos_alumno.get('Cardio Actual','')}")
             
-            # Formulario técnico para rellenar observaciones del Coach
-            with st.form("planificacion_coach_avanzada"):
-                st.markdown("### 📋 1. Propuesta General de Mejora y Saludable")
-                propuesta = st.text_area("Establecer la estrategia general del plan:", 
-                                         value=str(datos_alumno.get("Propuesta General", "")))
+            with st.form("planificacion_coach_ultra_avanzada"):
+                propuesta = st.text_area("1. Propuesta General de Mejora y Saludable:", value=str(datos_alumno.get("Propuesta General", "")))
+                balance = st.text_area("2. Balance Energético Inicial y Ajuste Dieta Diaria:", value=str(datos_alumno.get("Balance Energético", "")))
+                rutina = st.text_area("3. Planificación Semanal de Gym (Fundamentos Biomecánicos e Hipertrofia):", value=str(datos_alumno.get("Rutina Biomecánica", "")))
                 
-                st.markdown("### 🥗 2. Balance Energético Inicial y Ajuste Dieta Diaria")
-                balance = st.text_area("Pauta alimenticia basada en macronutrientes, calorías meta y distribución diaria:", 
-                                       value=str(datos_alumno.get("Balance Energético", "")))
-                
-                st.markdown("### 🏋️ 3. Planificación Semanal de Gym (Fundamentos Biomecánicos e Hipertrofia)")
-                rutina = st.text_area("Dosificación de la rutina, selección de ejercicios adaptados a sus lesiones y volumen de series:", 
-                                      value=str(datos_alumno.get("Rutina Biomecánica", "")))
-                
-                guardar_cambios = st.form_submit_button("💾 Guardar y Vincular Cambios con Google Sheets")
-                
+                guardar_cambios = st.form_submit_button("💾 Guardar e Inyectar Planificación en la Nube")
                 if guardar_cambios:
                     try:
                         df_existente.at[idx_alumno, "Propuesta General"] = propuesta
                         df_existente.at[idx_alumno, "Balance Energético"] = balance
                         df_existente.at[idx_alumno, "Rutina Biomecánica"] = rutina
-                        
                         conn.update(worksheet="Respuestas", data=df_existente)
-                        st.success(f"Ficha de {alumno_sel} actualizada correctamente en la nube.")
+                        st.success("Ficha actualizada correctamente.")
                         st.rerun()
                     except Exception as e_save:
                         st.error(f"Fallo de sincronización: {e_save}")
             
-            # GENERACIÓN COMPLETA DEL DOCUMENTO EN PDF
-            st.markdown("---")
-            st.subheader("📄 Exportación de Ficha PDF Oficial")
-            
+            # EXPORTACIÓN PDF EN LATIN-1 CON PARSEO SEGURO
             if st.button("🖨️ Compilar Reporte PDF Avanzado"):
                 try:
                     pdf = FPDF()
                     pdf.add_page()
-                    
-                    pdf.set_font("Arial", "B", 18)
+                    pdf.set_font("Arial", "B", 16)
                     pdf.cell(0, 10, "MINDMUSCLE247", ln=True, align="C")
-                    pdf.set_font("Arial", "B", 12)
+                    pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 8, "PLANIFICACIÓN INTEGRAL DE RENDIMIENTO Y SALUD", ln=True, align="C")
-                    pdf.set_font("Arial", "I", 9)
-                    pdf.cell(0, 6, f"Fecha de Emisión: {datetime.date.today().strftime('%d/%m/%Y')}", ln=True, align="C")
-                    pdf.line(10, 36, 200, 36)
-                    pdf.ln(12)
+                    pdf.ln(5)
                     
-                    # Datos Clínicos
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 8, f"1. DIAGNÓSTICO METABÓLICO Y ARTICULAR DEL ALUMNO: {datos_alumno['Nombre']}", ln=True)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 6, f"FICHA TÉCNICA DEL ALUMNO: {datos_alumno['Nombre']}", ln=True)
                     pdf.set_font("Arial", "", 10)
-                    pdf.cell(0, 6, f"Edad: {datos_alumno['Edad']} anos  |  Peso: {datos_alumno['Peso (kg)']} kg  |  Estatura: {datos_alumno['Estatura (cm)']} cm", ln=True)
-                    pdf.cell(0, 6, f"Objetivo: {datos_alumno['Meta']}  |  Nivel NEAT: {datos_alumno['Gasto NEAT']}", ln=True)
-                    pdf.cell(0, 6, f"Patologias/Medicamentos: {datos_alumno['Patologías']} / {datos_alumno.get('Medicamentos', 'Ninguno')}", ln=True)
-                    pdf.cell(0, 6, f"Limitacion Articular: {datos_alumno['Lesiones']} - {datos_alumno.get('Detalles Lesión', '')}", ln=True)
-                    pdf.ln(6)
+                    pdf.cell(0, 5, f"Edad: {datos_alumno['Edad']} anos | Peso: {datos_alumno['Peso (kg)']} kg | Estatura: {datos_alumno['Estatura (cm)']} cm | Grasa: {datos_alumno['Porcentaje Grasa']}", ln=True)
+                    pdf.cell(0, 5, f"Experiencia: {datos_alumno['Experiencia']} | Frecuencia: {datos_alumno['Frecuencia Semanal']} | Entorno: {datos_alumno['Entorno']}", ln=True)
+                    pdf.cell(0, 5, f"Salud/Lesiones: {datos_alumno['Patologías']} / {datos_alumno['Lesiones']} ({datos_alumno.get('Detalles Lesión','')})", ln=True)
+                    pdf.ln(5)
                     
-                    # Propuesta General
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 8, "2. ENFOQUE METODOLÓGICO Y PROPUESTA GENERAL DE MEJORA", ln=True)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 6, "1. ENFOQUE METODOLÓGICO Y PROPUESTA GENERAL DE MEJORA", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Propuesta General"]))
-                    pdf.ln(6)
+                    pdf.ln(5)
                     
-                    # Balance Energético
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 8, "3. BALANCE ENERGÉTICO INICIAL Y DISEÑO DE PLAN ALIMENTICIO", ln=True)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 6, "2. BALANCE ENERGÉTICO INICIAL Y DISEÑO DE PLAN ALIMENTICIO", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Balance Energético"]))
-                    pdf.ln(6)
+                    pdf.ln(5)
                     
-                    # Rutina Semanal
-                    pdf.set_font("Arial", "B", 12)
-                    pdf.cell(0, 8, "4. PROGRAMACIÓN SEMANAL DE GYM (AJUSTE BIOMECÁNICO E HIPERTROFIA)", ln=True)
+                    pdf.set_font("Arial", "B", 11)
+                    pdf.cell(0, 6, "3. PROGRAMACIÓN SEMANAL DE GYM (AJUSTE BIOMECÁNICO)", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Rutina Biomecánica"]))
                     
                     pdf_data = pdf.output(dest='S').encode('latin-1', errors='ignore')
                     st.download_button(
-                        label="⬇️ Descargar Ficha PDF Completa",
+                        label="⬇️ Descargar Ficha PDF",
                         data=pdf_data,
-                        file_name=f"Ficha_Avanzada_MM247_{alumno_sel.replace(' ', '_')}.pdf",
+                        file_name=f"Ficha_MINDMUSCLE247_{alumno_sel.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
                 except Exception as err_pdf:
                     st.error(f"Error técnico al construir el PDF: {err_pdf}")
                     
     elif password != "":
-        st.error("🔑 Contraseña incorrecta. Acceso restringido al sistema MINDMUSCLE247.")
+        st.error("🔑 Contraseña incorrecta.")
