@@ -1,18 +1,20 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 from fpdf import FPDF
 import datetime
 
 # 1. CONFIGURACIÓN DE PÁGINA (BRANDING MM247)
 st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 
-# 2. CONEXIÓN DIRECTA Y SEGURA A GOOGLE SHEETS
+# URL directa de exportación en formato CSV de tu Google Sheet
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
+
+# Intentar lectura directa sin depender de Secrets
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df_existente = conn.read(worksheet="Respuestas", ttl=0)
+    df_existente = pd.read_csv(SHEET_URL)
+    df_existente = df_existente.loc[:, ~df_existente.columns.str.contains('^Unnamed')]
 except Exception as e:
-    st.error("Error de conexión con la base de datos. Verifica la configuración de Secrets.")
+    # Respaldo si hay microcortes de red
     df_existente = pd.DataFrame()
 
 # Estilos visuales de la interfaz
@@ -167,12 +169,10 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     "Seleccione...", "Nulo / Sin trabajo cardiovascular", "Cardio LISS (Caminata / Elíptica suave)", "Cardio HIIT / Deportes de alta intensidad"
                 ])
             
-            # EL BOTÓN AHORA VIVE EXCLUSIVAMENTE AL FINAL DE LA CUARTA PESTAÑA
             st.markdown("<br><hr>", unsafe_allow_html=True)
             enviar_datos = st.form_submit_button("🚀 Registrar evaluación de máxima precisión MM247")
 
         if enviar_datos:
-            # Validación estricta: No se permite enviar si algún campo se quedó en "Seleccione..." o vacío
             if (not nombre.strip() or rango_edad == "Seleccione..." or genero == "Seleccione..." or 
                 rango_peso == "Seleccione..." or rango_estatura == "Seleccione..." or porcentaje_grasa == "Seleccione..." or
                 meta_cliente == "Seleccione..." or lesiones == "Seleccione..." or patologias == "Seleccione..." or 
@@ -181,7 +181,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or experiencia == "Seleccione..." or 
                 frecuencia == "Seleccione..." or tiempo_sesion == "Seleccione..." or entorno_entreno == "Seleccione..." or 
                 fuerza_actual == "Seleccione..." or cardio_actual == "Seleccione..."):
-                st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios y deben contener una selección válida. Por favor, revisa todas las pestañas.")
+                st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios. Por favor, revisa todas las pestañas.")
             else:
                 nueva_fila = pd.DataFrame([{
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -195,12 +195,15 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 }])
                 
                 try:
-                    df_final = pd.concat([df_existente, nueva_fila], ignore_index=True)
-                    conn.update(worksheet="Respuestas", data=df_final)
+                    from streamlit_gsheets import GSheetsConnection
+                    conn_sync = st.connection("gsheets", type=GSheetsConnection)
+                    df_base = conn_sync.read(worksheet="Respuestas", ttl=0)
+                    df_final = pd.concat([df_base, nueva_fila], ignore_index=True)
+                    conn_sync.update(worksheet="Respuestas", data=df_final)
                     st.success("✅ ¡Evaluación estandarizada inyectada en la base de datos con éxito!")
                     st.balloons()
                 except Exception as err:
-                    st.error(f"Error de base de datos al guardar: {err}")
+                    st.error(f"Error al escribir en la base de datos: {err}. Asegúrate de que los Secrets tengan las llaves correctas para escribir.")
 
 # =============================================================================
 # MÓDULO 2: PANEL DE CONTROL ADMINISTRADOR
@@ -212,13 +215,13 @@ elif opcion == "📊 Dashboard Administrador":
     if password == "MM247_Admin":
         st.success("Acceso autorizado.")
         if df_existente.empty or len(df_existente) == 0:
-            st.warning("No hay registros en la base de datos.")
+            st.warning("No hay registros en la base de datos o el formato de lectura falló.")
         else:
             st.subheader("📋 Métrica Cerrada de Alumnos")
             st.dataframe(df_existente, use_container_width=True)
             
             st.markdown("---")
-            lista_alumnos = df_existente["Nombre"].unique()
+            lista_alumnos = df_existente["Nombre"].dropna().unique()
             alumno_sel = st.selectbox("Seleccione el alumno a prescribir:", lista_alumnos)
             
             idx_alumno = df_existente[df_existente["Nombre"] == alumno_sel].index[0]
@@ -226,15 +229,13 @@ elif opcion == "📊 Dashboard Administrador":
             
             col_x, col_y = st.columns(2)
             with col_x:
-                st.markdown(f"**👤 Alumno:** {datos_alumno['Nombre']} ({datos_alumno['Rango Edad']}) | **Género:** {datos_alumno['Género']}")
-                st.markdown(f"**📏 Antropometría:** Peso: {datos_alumno['Rango Peso']} | Estatura: {datos_alumno['Rango Estatura']} | Grasa: {datos_alumno['Grasa']}")
-                st.markdown(f"**🩺 Diagnóstico Clínico:** Patología: {datos_alumno['Patologías']} | Lesión: {datos_alumno['Lesiones']}")
-                st.markdown(f"**💊 Control Médico:** Medicación: {datos_alumno['Medicamentos']} | Autorización: {datos_alumno['Alta Médica']}")
+                st.markdown(f"**👤 Alumno:** {datos_alumno['Nombre']} ({datos_alumno.get('Rango Edad', 'N/A')})")
+                st.markdown(f"**📏 Antropometría:** Peso: {datos_alumno.get('Rango Peso', 'N/A')} | Estatura: {datos_alumno.get('Rango Estatura', 'N/A')} | Grasa: {datos_alumno.get('Grasa', 'N/A')}")
+                st.markdown(f"**🩺 Diagnóstico Clínico:** Patología: {datos_alumno.get('Patologías', 'N/A')} | Lesión: {datos_alumno.get('Lesiones', 'N/A')}")
             with col_y:
-                st.markdown(f"**🎯 Objetivo Estructural:** {datos_alumno['Meta']}")
-                st.markdown(f"**🥗 Metabolismo y Desgaste:** Gasto Diario (NEAT): {datos_alumno['Gasto NEAT']} | Comidas: {datos_alumno['Comidas']}")
-                st.markdown(f"**🏋️ Perfil de Fuerza:** Nivel: {datos_alumno['Experiencia']} | Disponibilidad: {datos_alumno['Frecuencia']} | Tiempo: {datos_alumno['Tiempo Sesión']}")
-                st.markdown(f"**🧠 Entorno Nervioso:** Estrés: {datos_alumno['Estrés']} | Descanso: {datos_alumno['Sueño']} | Entorno: {datos_alumno['Entorno']}")
+                st.markdown(f"**🎯 Objetivo Estructural:** {datos_alumno.get('Meta', 'N/A')}")
+                st.markdown(f"**🥗 Metabolismo:** Gasto Diario (NEAT): {datos_alumno.get('Gasto NEAT', 'N/A')}")
+                st.markdown(f"**🏋️ Perfil de Fuerza:** Nivel: {datos_alumno.get('Experiencia', 'N/A')} | Disponibilidad: {datos_alumno.get('Frecuencia', 'N/A')}")
             
             st.markdown("---")
             with st.form("prescripcion_exacta_form"):
@@ -250,10 +251,13 @@ elif opcion == "📊 Dashboard Administrador":
                 guardar_changes = st.form_submit_button("💾 Guardar Cambios en Base de Datos Nube")
                 if guardar_changes:
                     try:
-                        df_existente.at[idx_alumno, "Propuesta General"] = propuesta
-                        df_existente.at[idx_alumno, "Balance Energético"] = balance
-                        df_existente.at[idx_alumno, "Rutina Biomecánica"] = rutina
-                        conn.update(worksheet="Respuestas", data=df_existente)
+                        from streamlit_gsheets import GSheetsConnection
+                        conn_sync = st.connection("gsheets", type=GSheetsConnection)
+                        df_base = conn_sync.read(worksheet="Respuestas", ttl=0)
+                        df_base.at[idx_alumno, "Propuesta General"] = propuesta
+                        df_base.at[idx_alumno, "Balance Energético"] = balance
+                        df_base.at[idx_alumno, "Rutina Biomecánica"] = rutina
+                        conn_sync.update(worksheet="Respuestas", data=df_base)
                         st.success("Plan guardado con éxito. Listo para compilar en PDF.")
                         st.rerun()
                     except Exception as e_save:
@@ -272,37 +276,31 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(8)
                     
                     pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, f"FICHA TÉCNICA CLÍNICA - ALUMNO: {datos_alumno['Nombre'].upper()}", ln=True)
-                    pdf.set_font("Arial", "", 10)
-                    pdf.cell(0, 5, f"Grupo de Edad: {datos_alumno['Rango Edad']}  |  Genero: {datos_alumno['Género']}", ln=True)
-                    pdf.cell(0, 5, f"Segmento de Peso: {datos_alumno['Rango Peso']}  |  Estatura: {datos_alumno['Rango Estatura']}  |  Grasa: {datos_alumno['Grasa']}", ln=True)
-                    pdf.cell(0, 5, f"Madurez en Fuerza: {datos_alumno['Experiencia']}  |  Disponibilidad: {datos_alumno['Frecuencia']} en {datos_alumno['Entorno']}", ln=True)
-                    pdf.cell(0, 5, f"Gasto Diario Fuera del Gym (NEAT): {datos_alumno['Gasto NEAT']}", ln=True)
-                    pdf.cell(0, 5, f"Meta Establecida: {datos_alumno['Meta']}", ln=True)
+                    pdf.cell(0, 6, f"FICHA TÉCNICA CLÍNICA - ALUMNO: {str(datos_alumno['Nombre']).upper()}", ln=True)
                     pdf.ln(5)
                     
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES", ln=True)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Propuesta General"]))
+                    pdf.multi_cell(0, 5, str(propuesta))
                     pdf.ln(5)
                     
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "2. PLAN ALIMENTICIO Y BALANCE ENERGÉTICO AJUSTADO AL DESGASTE DIARIO", ln=True)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Balance Energético"]))
+                    pdf.multi_cell(0, 5, str(balance))
                     pdf.ln(5)
                     
                     pdf.set_font("Arial", "B", 11)
                     pdf.cell(0, 6, "3. RUTINA SEMANAL COMPLETA (DOSIFICACIÓN Y BIOMECÁNICA)", ln=True)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 5, str(df_existente.loc[idx_alumno, "Rutina Biomecánica"]))
+                    pdf.multi_cell(0, 5, str(rutina))
                     
                     pdf_data = pdf.output(dest='S').encode('latin-1', errors='ignore')
                     st.download_button(
                         label="⬇️ Descargar Reporte PDF Oficial MM247",
                         data=pdf_data,
-                        file_name=f"Reporte_Oficial_MM247_{alumno_sel.replace(' ', '_')}.pdf",
+                        file_name=f"Reporte_Oficial_MM247_{str(alumno_sel).replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
                 except Exception as err_pdf:
