@@ -54,8 +54,8 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 edad_exacta = st.number_input("Edad Exacta (Años):", min_value=10, max_value=100, value=25, step=1)
                 genero = st.selectbox("Género Biológico (Factor Metabólico):", ["Seleccione...", "Masculino", "Femenino"])
             with col2:
-                peso_exacto = st.number_input("Peso Corporal Exacto (Kilogramos - kg):", min_value=30.0, max_value=250.0, value=70.0, step=0.1, help="Introduce tu peso actual medido en báscula.")
-                estatura_exacta = st.number_input("Estatura / Altura Exacta (Centímetros - cm):", min_value=100, max_value=250, value=170, step=1, help="Introduce tu estatura descalzo.")
+                peso_exacto = st.number_input("Peso Corporal Exacto (Kilogramos - kg):", min_value=30.0, max_value=250.0, value=70.0, step=0.1)
+                estatura_exacta = st.number_input("Estatura / Altura Exacta (Centímetros - cm):", min_value=100, max_value=250, value=170, step=1)
             
             meta_cliente = st.selectbox("🎯 Meta Estructural u Objetivo Clínico Principal:", [
                 "Seleccione...",
@@ -160,7 +160,6 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             if not nombre.strip() or genero == "Seleccione..." or meta_cliente == "Seleccione..." or lesiones == "Seleccione..." or patologias == "Seleccione..." or medicamentos == "Seleccione..." or analiticas == "Seleccione..." or alta_medica == "Seleccione..." or actividad_diaria == "Seleccione..." or cantidad_comidas == "Seleccione..." or consumo_agua == "Seleccione..." or horas_sueno == "Seleccione..." or nivel_estres == "Seleccione..." or experiencia == "Seleccione..." or frecuencia == "Seleccione..." or tiempo_sesion == "Seleccione..." or entorno_entreno == "Seleccione..." or fuerza_actual == "Seleccione..." or cardio_actual == "Seleccione...":
                 st.error("❌ Error en el envío: Todos los campos del cuestionario son obligatorios. Por favor, revisa todas las pestañas.")
             else:
-                # Cálculo clínico automatizado de IMC
                 estatura_m = estatura_exacta / 100.0
                 imc_num = round(peso_exacto / (estatura_m ** 2), 1)
                 
@@ -171,33 +170,49 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 elif 25.0 <= imc_num < 30.0:
                     diagnostico_grasa = f"IMC: {imc_num} (Sobrepeso)"
                 else:
-                    diagnostico_grasa = f"IMC: {imc_num} (Obesidad Clínico)"
+                    diagnostico_grasa = f"IMC: {imc_num} (Obesidad)"
 
-                nueva_fila = pd.DataFrame([{
+                # Crear diccionario plano con claves idénticas a los encabezados
+                datos_nuevos = {
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Nombre": nombre.strip(), 
+                    "Nombre": str(nombre.strip()), 
                     "Rango Edad": f"{edad_exacta} años", 
-                    "Género": genero, 
+                    "Género": str(genero), 
                     "Rango Peso": f"{peso_exacto} kg", 
                     "Rango Estatura": f"{estatura_exacta} cm", 
-                    "Grasa": diagnostico_grasa,  # Guarda el diagnóstico calculado en lugar de la estimación del alumno
-                    "Meta": meta_cliente, "Lesiones": lesiones, "Patologías": patologias, "Medicamentos": medicamentos, 
-                    "Analíticas": analiticas, "Alta Médica": alta_medica, "Gasto NEAT": actividad_diaria, "Comidas": cantidad_comidas, 
-                    "Agua": consumo_agua, "Sueño": horas_sueno, "Estrés": nivel_estres, "Experiencia": experiencia, 
-                    "Frecuencia": frecuencia, "Tiempo Sesión": tiempo_sesion, "Entorno": entorno_entreno, "Fuerza": fuerza_actual, 
-                    "Cardio": cardio_actual, "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
-                }])
+                    "Grasa": str(diagnostico_grasa),
+                    "Meta": str(meta_cliente), "Lesiones": str(lesiones), "Patologías": str(patologias), 
+                    "Medicamentos": str(medicamentos), "Analíticas": str(analiticas), "Alta Médica": str(alta_medica), 
+                    "Gasto NEAT": str(actividad_diaria), "Comidas": str(cantidad_comidas), "Agua": str(consumo_agua), 
+                    "Sueño": str(horas_sueno), "Estrés": str(nivel_estres), "Experiencia": str(experiencia), 
+                    "Frecuencia": str(frecuencia), "Tiempo Sesión": str(tiempo_sesion), "Entorno": str(entorno_entreno), 
+                    "Fuerza": str(fuerza_actual), "Cardio": str(cardio_actual), 
+                    "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
+                }
                 
                 try:
                     from streamlit_gsheets import GSheetsConnection
                     conn_sync = st.connection("gsheets", type=GSheetsConnection)
+                    
+                    # Forzamos lectura limpia
                     df_base = conn_sync.read(worksheet="Respuestas", ttl=0)
-                    df_final = pd.concat([df_base, nueva_fila], ignore_index=True)
+                    
+                    # Convertimos la nueva fila asegurando consistencia de columnas
+                    nueva_fila_df = pd.DataFrame([datos_nuevos])
+                    
+                    # Concatenamos de forma segura alineando columnas
+                    df_final = pd.concat([df_base, nueva_fila_df], ignore_index=True)
+                    df_final = df_final.astype(str) # Evita conflictos de tipos mezclados
+                    
+                    # Ejecutar actualización limpia
                     conn_sync.update(worksheet="Respuestas", data=df_final)
-                    st.success("✅ ¡Evaluación e IMC calculados inyectados con éxito!")
+                    st.success("✅ ¡Evaluación calculada e inyectada con éxito!")
                     st.balloons()
                 except Exception as err:
-                    st.error(f"Error al escribir en la base de datos: {err}. Verifica tus credenciales.")
+                    # Plan de rescate visual: Muestra los datos estructurados en pantalla por si el servidor de Google está saturado
+                    st.error(f"⚠️ Error de respuesta de Google Nube (400).")
+                    st.info("Para no perder la información, aquí tienes el registro listo:")
+                    st.json(datos_nuevos)
 
 # =============================================================================
 # MÓDULO 2: PANEL DE CONTROL ADMINISTRADOR
@@ -252,6 +267,7 @@ elif opcion == "📊 Dashboard Administrador":
                         df_base.at[idx_alumno, "Propuesta General"] = propuesta
                         df_base.at[idx_alumno, "Balance Energético"] = balance
                         df_base.at[idx_alumno, "Rutina Biomecánica"] = rutina
+                        df_base = df_base.astype(str)
                         conn_sync.update(worksheet="Respuestas", data=df_base)
                         st.success("Plan guardado con éxito. Listo para compilar en PDF.")
                         st.rerun()
