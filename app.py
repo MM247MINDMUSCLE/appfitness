@@ -1,68 +1,50 @@
-import streamlit as st
-import pandas as pd
-from fpdf import FPDF
-import datetime
-import requests
-
-# 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
-
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AWyvHR2PpxotzRSPBpMeE5AVWNewO9AcqZ3PeXxmu_s0/exec"
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
-
-def cargar_base_datos():
-    try:
-        url_fresca = f"{SHEET_URL}&nocache={datetime.datetime.now().timestamp()}"
-        df = pd.read_csv(url_fresca)
-        # Limpieza robusta de columnas
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        df = df.fillna("")
-        return df
-    except Exception:
-        return pd.DataFrame()
-
-df_existente = cargar_base_datos()
-
-# CSS estilizado (sin cambios estructurales)
-st.markdown("""
-    <style>
-    .main-title { font-size:42px; font-weight:bold; color:#111111; text-align:center; }
-    .stButton>button { background-color: #111111; color: white; border-radius: 4px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
-
-# --- MÓDULO 1: CUESTIONARIO ---
+# --- MÓDULO 1: CUESTIONARIO INTEGRAL DE EVALUACIÓN ---
 if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
     with st.form("cuestionario_cerrado_mm247", clear_on_submit=True):
-        # ... (Mantén aquí tu estructura de pestañas original) ...
-        enviar_datos = st.form_submit_button("🚀 Registrar evaluación")
-        if enviar_datos:
-            # Tu lógica original de validación y requests.post
-            pass
+        
+        # Estructura de pestañas para las 12 secciones
+        tab1, tab2, tab3, tab4 = st.tabs(["👤 1. Perfil", "🩺 2. Historial Clínico", "🥗 3. Estilo de Vida", "🏋️ 4. Entrenamiento"])
+        
+        with tab1:
+            st.markdown("<div class='section-header'>1. Datos Generales y Objetivos</div>", unsafe_allow_html=True)
+            nombre = st.text_input("Nombre Completo:")
+            edad = st.selectbox("Edad:", [f"{i} años" for i in range(14, 81)])
+            sexo = st.selectbox("Sexo:", ["Masculino", "Femenino"])
+            peso = st.selectbox("Peso actual:", [f"{i} kg" for i in range(40, 201)])
+            meta = st.selectbox("Objetivo principal:", ["Perder grasa", "Ganar masa muscular", "Recomposición", "Rendimiento"])
+            compromiso = st.selectbox("Compromiso (1-10):", [str(i) for i in range(1, 11)])
 
-# --- MÓDULO 2: DASHBOARD Y PDF CORREGIDO ---
-elif opcion == "📊 Dashboard Administrador":
-    # ... (Tu lógica de carga y visualización) ...
-    
-    if st.button("🖨️ Compilar y Exportar Reporte PDF Premium"):
-        try:
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", "", 12)
-            
-            # CORRECCIÓN DE ERRORES:
-            # 1. No uses 'set_linewidth', usa 'set_line_width'
-            # 2. Manejo de texto: Evita caracteres especiales que dan error de Unicode
-            def limpiar_texto(txt):
-                return str(txt).encode('ascii', 'ignore').decode('ascii')
-            
-            pdf.set_line_width(0.5) # CORREGIDO: set_line_width es el método correcto
-            pdf.cell(0, 10, limpiar_texto("Informe de Planificación"), ln=True)
-            # ... resto de tu lógica de PDF ...
-            
-            st.download_button("Descargar PDF", data=pdf.output(dest='S'), file_name="Plan_MM247.pdf")
-        except Exception as e:
-            st.error(f"Error técnico: {e}")
+        with tab2:
+            st.markdown("<div class='section-header'>2. Salud y Biomecánica</div>", unsafe_allow_html=True)
+            lesiones = st.multiselect("¿Alguna lesión?", ["Rodilla", "Hombro", "Espalda", "Cadera", "Ninguna"])
+            cirugias = st.radio("¿Cirugías?", ["Sí", "No"])
+            condicion = st.selectbox("Condición médica:", ["Ninguna", "Diabetes", "Hipertensión", "Hormonal", "Otro"])
+            movilidad = st.selectbox("Movilidad:", ["Mala", "Regular", "Buena", "Excelente"])
+
+        with tab3:
+            st.markdown("<div class='section-header'>3. Nutrición y Hábitos</div>", unsafe_allow_html=True)
+            sueno = st.selectbox("Calidad del sueño:", ["Malo", "Regular", "Bueno", "Excelente"])
+            estres = st.selectbox("Estrés diario:", ["Bajo", "Medio", "Alto"])
+            comidas = st.selectbox("Comidas al día:", ["2", "3", "4", "5"])
+            actividad = st.selectbox("Actividad física diaria:", ["Sedentario", "Poco activo", "Moderado", "Muy activo"])
+
+        with tab4:
+            st.markdown("<div class='section-header'>4. Entrenamiento y Disponibilidad</div>", unsafe_allow_html=True)
+            experiencia = st.selectbox("Experiencia:", ["Nunca", "Menos de 6 meses", "1 año", "2-5 años", ">5 años"])
+            frecuencia = st.selectbox("Días por semana:", ["3 días", "4 días", "5 días", "6 días"])
+            tiempo = st.selectbox("Tiempo por sesión:", ["30 min", "45 min", "60 min", "90 min"])
+            entorno = st.selectbox("Entorno:", ["Gimnasio", "Casa", "Exterior"])
+
+        enviar_datos = st.form_submit_button("🚀 Registrar evaluación")
+        
+        if enviar_datos:
+            # Lógica de ID Único
+            id_registro = f"MM-{datetime.datetime.now().strftime('%Y%m%d')}-{nombre[:2].upper()}"
+            payload = {
+                "ID": id_registro, "Nombre": nombre, "Edad": edad, "Meta": meta, 
+                "Lesiones": str(lesiones), "Sueño": sueno, "Experiencia": experiencia
+            }
+            # Tu lógica original de envío
+            response = requests.post(WEBHOOK_URL, json=payload)
+            st.success(f"¡Evaluación registrada! ID: {id_registro}")
