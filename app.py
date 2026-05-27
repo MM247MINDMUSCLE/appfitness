@@ -116,7 +116,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                 experiencia = st.selectbox("Nivel de Experiencia Práctica en Gimnasio (Madurez Muscular):", ["Seleccione...", "Principiante Absoluto (Nunca he entrenado con pesas)", "Principiante Intermedio (Menos de 1 año, conozco los nombres de máquinas)", "Intermedio Avanzado (1 a 3 años de comodidad/consistencia)", "Avanzado Competitivo (Más de 3 años aplicando sobrecarga progresiva)"])
                 frecuencia = st.selectbox("Días Disponibles a la semana para Entrenar:", ["Seleccione...", "3 Días por semana", "4 Días por semana", "5 Días por semana", "6 Días por semana"])
             with col8:
-                tiempo_sesion = st.selectbox("Ventana de Tiempo Máxima disponible por entrenamiento:", ["Seleccione...", "Sesión Express (Menos de 45 minutos)", "Sesión Estándar (De 45 a 75 minutos)", "Sesión Extensa (Más de 75 minutos)"])
+                tiempo_sesion = st.selectbox("Ventana de Tiempo Máxima disponible por entrenamiento:", ["Seleccione...", "Sesión Express (Menos de 45 minutes)", "Sesión Estándar (De 45 a 75 minutos)", "Sesión Extensa (Más de 75 minutos)"])
                 entorno_entreno = st.selectbox("Entorno Logístico y Equipamiento disponible:", ["Seleccione...", "Gimnasio Comercial Completo (Poleas, cargas guiadas, pesos libres)", "Gimnasio de Condominio u Hotel (Mancuernas ligeras y polea básica)", "Entrenamiento en Casa (Peso corporal, ligas de resistencia)"])
                 fuerza_actual = st.selectbox("Percepción de Intensidad / Proximidad al Fallo (RPE):", ["Seleccione...", "Pesos ligeros sin llegar al esfuerzo máximo", "Manejo pesos moderados controlando la fase excéntrica", "Entreno al fallo muscular o muy cerca de él (RIR 0-2)"])
                 cardio_actual = st.selectbox("Actividad Cardiovascular complementaria actual:", ["Seleccione...", "Nulo / Sin trabajo cardiovascular", "Cardio LISS (Caminata / Elíptica suave)", "Cardio HIIT / Deportes de alta intensidad"])
@@ -207,40 +207,64 @@ elif opcion == "📊 Dashboard Administrador":
             v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
             v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
             
-            # --- TEXTO POR DEFECTO SI ESTÁ VACÍO ---
+            # --- HOJA 1: RESUMEN GENERAL (INTEGRAL TODO EN UNO) ---
             if v_propuesta in ["", "nan"]:
                 v_propuesta = (
                     f"1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES\n"
                     f"ALUMNO: {nombre_display}\n"
-                    f"Punto de partida metabólico determinado mediante {grasa_display}. Presenta una condición de limitaciones catalogada como: {lesion_display}. Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos."
+                    f"Punto de partida metabólico determinado mediante {grasa_display}. Presenta una condición de limitaciones catalogada como: {lesion_display}. Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos.\n\n"
+                    f"2. RESUMEN DEL BALANCE ENERGÉGICO AJUSTADO\n"
+                    f"Fase asignada: {meta_display}. Déficit o superávit calculado según gasto diario ({neat_display}).\n\n"
+                    f"3. RESUMEN DE DOSIFICACIÓN SEMANAL\n"
+                    f"Frecuencia óptima establecida de: {frecuencia_display} con sesiones de {tiempo_display} adaptada a madurez muscular: {experiencia_display}."
                 )
             
+            # --- HOJA 2: PLANTILLA DETALLADA POR MÚSCULO, EJERCICIO Y SERIES ---
             if v_rutina in ["", "nan"]:
                 v_rutina = (
-                    f"3. RUTINA SEMANAL COMPLETA (DOSIFICACIÓN Y BIOMECÁNICA)\n"
-                    f"Planificación Semanal: {frecuencia_display}\n"
-                    f"Enfoque de Carga: Manejo de pesos moderados controlando la fase excéntrica adaptado a nivel {experiencia_display}.\n"
-                    f"Estructura Biomecánica Recomendada:\n"
-                    f"- Priorizar ejercicios multiarticulares estables en máquinas o poleas libres de tensión axial peligrosa.\n"
-                    f"- Cardio complementario obligatorio asignado: Nulo / Sin trabajo cardiovascular post-entrenamiento."
+                    f"SISTEMA DE ENTRENAMIENTO BIOMECÁNICO DETALLADO\n"
+                    f"Restricciones de Carga aplicadas por Seguridad: {lesion_display}\n\n"
+                    f"LUNES [Empuje - Pecho/Hombro/Tríceps]:\n"
+                    f"- Press Inclinado con mancuernas: 4 Series x 8-10 reps (RPE 9)\n"
+                    f"- Fondos en paralelas guiados: 3 Series x 10 reps\n"
+                    f"- Laterales con polea baja: 4 Series x 12 reps\n\n"
+                    f"MARTES [Tracción - Espalda/Bíceps]:\n"
+                    f"- Jalón al pecho con agarre prono: 4 Series x 10 reps\n"
+                    f"- Remo con soporte en pecho (Machine): 3 Series x 8-12 reps\n"
+                    f"- Curl de bíceps inclinado: 3 Series x 12 reps\n\n"
+                    f"MIÉRCOLES [Pierna Completa - Enfoque Estabilidad]:\n"
+                    f"- Prensa de piernas inclinada: 4 Series x 10-12 reps\n"
+                    f"- Extensión de rodillas en máquina: 3 Series x 15 reps\n"
+                    f"- Curl femoral acostado: 4 Series x 10 reps\n\n"
+                    f"JUEVES / VIERNES / SÁBADO:\n"
+                    f"[Añadir aquí las siguientes rotaciones adaptadas al alumno]"
                 )
 
+            # --- HOJA 3: PLANTILLA DE DIETA DIARIA Y MACROS ESTABLECIDOS ---
             if v_balance in ["", "nan"]:
                 v_balance = (
-                    f"2. PLAN ALIMENTICIO Y BALANCE ENERGÉTICO AJUSTADO\n"
-                    f"Fase: Excedente Calórico (Volumen Limpio) [+300 kcal sobre mantenimiento]\n"
-                    f"- Proteína: 2.0g por kg de peso corporal diario.\n"
-                    f"- Carbohidratos: Enfocados en ventanas pre y post entreno para maximizar glucógeno.\n"
-                    f"- Distribución: Adaptada a 2 comidas grandes al día al día garantizando síntesis proteica óptima."
+                    f"ESTRATEGIA NUTRICIONAL Y DIETA DIARIA PERSONALIZADA\n"
+                    f"Meta: {meta_display} | Gasto Energético Base: {neat_display}\n\n"
+                    f"MACRONUTRIENTES OBJETIVO DIARIOS:\n"
+                    f"Calorías Totales: 2,400 kcal | Proteína: 160g | Carbohidratos: 250g | Grasas: 65g\n\n"
+                    f"DISTRIBUCIÓN DIARIA ESTABLECIDA:\n"
+                    f"• COMIDA 1 (Desayuno / Pre-Entreno):\n"
+                    f"  - 4 claras de huevo + 2 huevos enteros + 60g de avena en hojuelas.\n"
+                    f"• COMIDA 2 (Post-Entreno):\n"
+                    f"  - 150g de pechuga de pollo asada + 200g de arroz blanco cocido + vegetales.\n"
+                    f"• COMIDA 3 (Tarde / Snack):\n"
+                    f"  - 30g de proteína en polvo (Whey) + 1 manzana mediana + 30g de almendras.\n"
+                    f"• COMIDA 4 (Cena / Control de Ansiedad):\n"
+                    f"  - 150g de filete de pescado o res magra + 150g de camote al horno + ensalada verde libre."
                 )
 
             st.markdown("---")
             st.markdown("### 🛠️ Prescripción y Planificación de Sistemas MM247")
             
             with st.form("prescripcion_exacta_form"):
-                propuesta = st.text_area("🩺 Bloque Diagnóstico Clínico:", value=v_propuesta, height=140)
-                balance = st.text_area("🥗 Bloque Plan Alimenticio:", value=v_balance, height=160)
-                rutina = st.text_area("🏋️ Bloque Rutina Semanal Biomecánica:", value=v_rutina, height=160)
+                propuesta = st.text_area("🩺 HOJA 1: Resumen Integral (Ficha, Dieta y Rutina juntas):", value=v_propuesta, height=140)
+                rutina = st.text_area("🏋️ HOJA 2: Rutina Semanal Detallada (Músculo, Ejercicio y Series):", value=v_rutina, height=200)
+                balance = st.text_area("🥗 HOJA 3: Dieta Diaria Establecida (Comidas y Balance Energético):", value=v_balance, height=200)
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
                 if guardar_changes:
@@ -277,10 +301,9 @@ elif opcion == "📊 Dashboard Administrador":
                         return t.encode('latin-1', 'ignore').decode('latin-1')
 
                     # =========================================================================
-                    # HOJA 1: RESUMEN INTEGRAL (TODO EN UNO) COMO SE MUESTRA EN IMAGE_100.PNG
+                    # HOJA 1: INFOME DE PLANIFICACIÓN INTEGRAL (TODO EN UNA HOJA)
                     # =========================================================================
                     pdf.add_page()
-                    # Encabezado Negro Corporativo
                     pdf.set_fill_color(26, 26, 26) 
                     pdf.rect(0, 0, 210, 38, "F")
                     
@@ -305,32 +328,28 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_x(12)
                     pdf.cell(0, 6, limpiar_texto(f"Diagnóstico Metabólico Inicial: {grasa_display}"), ln=True)
                     
-                    # Espacio para el flujo completo en la Hoja 1 (Diagnóstico, Dieta y Rutina juntos)
+                    # Todo lo escrito en las 3 secciones se concatena armónicamente en la Hoja 1
                     pdf.set_xy(10, 72)
                     pdf.set_font("Arial", "", 10)
-                    
-                    # Unimos los tres bloques de texto seguidos en la Hoja 1 tal cual estaba originalmente
-                    texto_completo_hoja1 = f"{propuesta}\n\n{balance}\n\n{rutina}"
-                    pdf.multi_cell(190, 6, limpiar_texto(texto_completo_hoja1))
+                    pdf.multi_cell(190, 6, limpiar_texto(propuesta))
 
                     # =========================================================================
-                    # HOJA 2: RUTINA SEMANAL EXTENDIDA BIEN DEFINIDA (DISEÑO RECUADRO NARANJA)
+                    # HOJA 2: RUTINA SEMANAL DETALLADA POR MÚSCULO, EJERCICIO Y SERIES
                     # =========================================================================
                     pdf.add_page()
-                    # Banner Naranja Deportivo
-                    pdf.set_fill_color(230, 81, 0) 
+                    pdf.set_fill_color(230, 81, 0) # Naranja Deportivo
                     pdf.rect(0, 0, 210, 32, "F")
                     
                     pdf.set_text_color(255, 255, 255)
                     pdf.set_font("Arial", "B", 20)
                     pdf.cell(0, 10, limpiar_texto("MINDMUSCLE247"), ln=True, align="C")
                     pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 4, limpiar_texto("SISTEMA DE ENTRENAMIENTO BIOMECÁNICO ADAPTADO"), ln=True, align="C")
+                    pdf.cell(0, 4, limpiar_texto("DOSIFICACIÓN DE CARGA Y RUTINA SEMANAL DETALLADA"), ln=True, align="C")
                     
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
-                    # Contenedor Armónico para la Rutina
+                    # Recuadro contenedor de Entrenamiento
                     pdf.set_fill_color(250, 250, 250)
                     pdf.set_draw_color(230, 81, 0) 
                     pdf.set_line_width(0.5)
@@ -338,27 +357,26 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
                     
-                    pdf.set_font("Arial", "", 10.5)
-                    pdf.multi_cell(182, 6.5, limpiar_texto(rutina))
+                    pdf.set_font("Arial", "", 10)
+                    pdf.multi_cell(182, 6, limpiar_texto(rutina))
 
                     # =========================================================================
-                    # HOJA 3: DIETA DIARIA BIEN DEFINIDA (DISEÑO RECUADRO VERDE)
+                    # HOJA 3: DIETA DIARIA ESTABLECIDA PARA BALANCE ENERGÉTICO IDEAL
                     # =========================================================================
                     pdf.add_page()
-                    # Banner Verde Salud
-                    pdf.set_fill_color(46, 125, 50) 
+                    pdf.set_fill_color(46, 125, 50) # Verde Salud
                     pdf.rect(0, 0, 210, 32, "F")
                     
                     pdf.set_text_color(255, 255, 255)
                     pdf.set_font("Arial", "B", 20)
                     pdf.cell(0, 10, limpiar_texto("MINDMUSCLE247"), ln=True, align="C")
                     pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 4, limpiar_texto("ESTRATEGIA NUTRICIONAL Y BALANCE ENERGÉTICO"), ln=True, align="C")
+                    pdf.cell(0, 4, limpiar_texto("PLAN ALIMENTICIO Y AJUSTE DE BALANCE ENERGÉGICO DIARIO"), ln=True, align="C")
                     
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
-                    # Contenedor Armónico para la Dieta
+                    # Recuadro contenedor de Dieta
                     pdf.set_fill_color(248, 249, 248)
                     pdf.set_draw_color(46, 125, 50) 
                     pdf.set_line_width(0.5)
@@ -366,10 +384,10 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
                     
-                    pdf.set_font("Arial", "", 10.5)
-                    pdf.multi_cell(182, 6.5, limpiar_texto(balance))
+                    pdf.set_font("Arial", "", 10)
+                    pdf.multi_cell(182, 6, limpiar_texto(balance))
                     
-                    # Generar la descarga
+                    # Descargar PDF
                     pdf_data = pdf.output(dest='S')
                     st.download_button(
                         label="⬇️ Descargar Reporte PDF Premium de 3 Hojas",
