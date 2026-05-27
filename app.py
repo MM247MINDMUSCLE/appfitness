@@ -198,7 +198,7 @@ elif opcion == "📊 Dashboard Administrador":
             lesion_display = str(datos_alumno.get('Lesiones', 'Ninguna'))
             experiencia_display = str(datos_alumno.get('Experiencia', 'No especificado'))
             frecuencia_display = str(datos_alumno.get('Frecuencia', '3 Días por semana'))
-            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutes'))
+            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutos'))
             grasa_display = str(datos_alumno.get('Grasa', ''))
 
             st.markdown(f"### 👤 Expediente Actualizado: {nombre_display}")
@@ -207,17 +207,14 @@ elif opcion == "📊 Dashboard Administrador":
             v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
             v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
             
-            # --- HOJA 1 ORIGINAL RESTAURADA ---
+            # --- TEXTO POR DEFECTO SI ESTÁ VACÍO ---
             if v_propuesta in ["", "nan"]:
                 v_propuesta = (
-                    f"ALUMNO: {nombre_display}\n"
-                    f"Diagnóstico Metabólico Inicial: {grasa_display}\n\n"
                     f"1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES\n"
                     f"ALUMNO: {nombre_display}\n"
                     f"Punto de partida metabólico determinado mediante {grasa_display}. Presenta una condición de limitaciones catalogada como: {lesion_display}. Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos."
                 )
             
-            # --- HOJA 2 ORIGINAL ---
             if v_rutina in ["", "nan"]:
                 v_rutina = (
                     f"3. RUTINA SEMANAL COMPLETA (DOSIFICACIÓN Y BIOMECÁNICA)\n"
@@ -225,26 +222,25 @@ elif opcion == "📊 Dashboard Administrador":
                     f"Enfoque de Carga: Manejo de pesos moderados controlando la fase excéntrica adaptado a nivel {experiencia_display}.\n"
                     f"Estructura Biomecánica Recomendada:\n"
                     f"- Priorizar ejercicios multiarticulares estables en máquinas o poleas libres de tensión axial peligrosa.\n"
-                    f"- Cardio complementario obligatorio asignado: Moderado LISS post-entrenamiento para control lipídico activo."
+                    f"- Cardio complementario obligatorio asignado: Nulo / Sin trabajo cardiovascular post-entrenamiento."
                 )
 
-            # --- HOJA 3 ORIGINAL ---
             if v_balance in ["", "nan"]:
                 v_balance = (
                     f"2. PLAN ALIMENTICIO Y BALANCE ENERGÉTICO AJUSTADO\n"
-                    f"Fase: Ajuste calórico limpio enfocado en {meta_display}.\n"
+                    f"Fase: Excedente Calórico (Volumen Limpio) [+300 kcal sobre mantenimiento]\n"
                     f"- Proteína: 2.0g por kg de peso corporal diario.\n"
                     f"- Carbohidratos: Enfocados en ventanas pre y post entreno para maximizar glucógeno.\n"
-                    f"- Distribución: Adaptada de manera inteligente para garantizar síntesis proteica óptima sin picos de ansiedad."
+                    f"- Distribución: Adaptada a 2 comidas grandes al día al día garantizando síntesis proteica óptima."
                 )
 
             st.markdown("---")
             st.markdown("### 🛠️ Prescripción y Planificación de Sistemas MM247")
             
             with st.form("prescripcion_exacta_form"):
-                propuesta = st.text_area("🩺 HOJA 1: Diagnóstico Clínico (Original):", value=v_propuesta, height=140)
-                balance = st.text_area("🥗 HOJA 3: Plan Alimenticio:", value=v_balance, height=160)
-                rutina = st.text_area("🏋️ HOJA 2: Rutina Semanal Biomecánica:", value=v_rutina, height=160)
+                propuesta = st.text_area("🩺 Bloque Diagnóstico Clínico:", value=v_propuesta, height=140)
+                balance = st.text_area("🥗 Bloque Plan Alimenticio:", value=v_balance, height=160)
+                rutina = st.text_area("🏋️ Bloque Rutina Semanal Biomecánica:", value=v_rutina, height=160)
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
                 if guardar_changes:
@@ -271,7 +267,7 @@ elif opcion == "📊 Dashboard Administrador":
                             st.rerun()
                         except Exception as e_save: st.error(f"Fallo de sincronización: {e_save}")
             
-            # --- COMPILADOR PDF CORREGIDO (set_line_width SUSTITUIDO) ---
+            # --- COMPILADOR PDF DE ALTA ARMONÍA ---
             if st.button("🖨️ Compilar y Exportar Reporte PDF Premium"):
                 try:
                     pdf = FPDF()
@@ -280,8 +276,11 @@ elif opcion == "📊 Dashboard Administrador":
                         t = str(txt).replace("•", "-").replace("–", "-").replace("—", "-")
                         return t.encode('latin-1', 'ignore').decode('latin-1')
 
-                    # ---------------- HOJA 1: FORMATO ORIGINAL CON BRANDING ELEVADO ----------------
+                    # =========================================================================
+                    # HOJA 1: RESUMEN INTEGRAL (TODO EN UNO) COMO SE MUESTRA EN IMAGE_100.PNG
+                    # =========================================================================
                     pdf.add_page()
+                    # Encabezado Negro Corporativo
                     pdf.set_fill_color(26, 26, 26) 
                     pdf.rect(0, 0, 210, 38, "F")
                     
@@ -294,6 +293,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(18)
                     pdf.set_text_color(0, 0, 0)
                     
+                    # Ficha técnica destacada (Fondo Gris)
                     pdf.set_fill_color(245, 245, 245)
                     pdf.set_draw_color(200, 200, 200)
                     pdf.rect(10, 44, 190, 20, "DF")
@@ -305,12 +305,19 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_x(12)
                     pdf.cell(0, 6, limpiar_texto(f"Diagnóstico Metabólico Inicial: {grasa_display}"), ln=True)
                     
+                    # Espacio para el flujo completo en la Hoja 1 (Diagnóstico, Dieta y Rutina juntos)
                     pdf.set_xy(10, 72)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(190, 6, limpiar_texto(propuesta))
+                    
+                    # Unimos los tres bloques de texto seguidos en la Hoja 1 tal cual estaba originalmente
+                    texto_completo_hoja1 = f"{propuesta}\n\n{balance}\n\n{rutina}"
+                    pdf.multi_cell(190, 6, limpiar_texto(texto_completo_hoja1))
 
-                    # ---------------- HOJA 2: RUTINA BIOMECÁNICA (DISEÑO EN RECUADROS) ----------------
+                    # =========================================================================
+                    # HOJA 2: RUTINA SEMANAL EXTENDIDA BIEN DEFINIDA (DISEÑO RECUADRO NARANJA)
+                    # =========================================================================
                     pdf.add_page()
+                    # Banner Naranja Deportivo
                     pdf.set_fill_color(230, 81, 0) 
                     pdf.rect(0, 0, 210, 32, "F")
                     
@@ -323,9 +330,10 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
+                    # Contenedor Armónico para la Rutina
                     pdf.set_fill_color(250, 250, 250)
                     pdf.set_draw_color(230, 81, 0) 
-                    pdf.set_line_width(0.5)  # Corregido con guiones bajos exactos
+                    pdf.set_line_width(0.5)
                     
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
@@ -333,8 +341,11 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10.5)
                     pdf.multi_cell(182, 6.5, limpiar_texto(rutina))
 
-                    # ---------------- HOJA 3: DIETA Y NUTRICIÓN (DISEÑO EN RECUADROS VERDES) ----------------
+                    # =========================================================================
+                    # HOJA 3: DIETA DIARIA BIEN DEFINIDA (DISEÑO RECUADRO VERDE)
+                    # =========================================================================
                     pdf.add_page()
+                    # Banner Verde Salud
                     pdf.set_fill_color(46, 125, 50) 
                     pdf.rect(0, 0, 210, 32, "F")
                     
@@ -347,9 +358,10 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
                     
+                    # Contenedor Armónico para la Dieta
                     pdf.set_fill_color(248, 249, 248)
                     pdf.set_draw_color(46, 125, 50) 
-                    pdf.set_line_width(0.5)  # Corregido con guiones bajos exactos
+                    pdf.set_line_width(0.5)
                     
                     pdf.rect(10, 42, 190, 235, "DF")
                     pdf.set_xy(14, 46)
@@ -357,6 +369,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10.5)
                     pdf.multi_cell(182, 6.5, limpiar_texto(balance))
                     
+                    # Generar la descarga
                     pdf_data = pdf.output(dest='S')
                     st.download_button(
                         label="⬇️ Descargar Reporte PDF Premium de 3 Hojas",
