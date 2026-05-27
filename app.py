@@ -19,7 +19,6 @@ def cargar_base_datos():
         url_fresca = f"{SHEET_URL}&nocache={datetime.datetime.now().timestamp()}"
         df = pd.read_csv(url_fresca)
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        # Limpiar los NaN globales de la base de datos para visualización limpia
         df = df.fillna("")
         return df
     except Exception as e:
@@ -60,7 +59,7 @@ opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integra
 
 # Opciones fijas de números en listas para evitar edición manual de texto
 OPCIONES_EDAD = [f"{i} años" for i in range(14, 81)]
-OPCIONES_PESO = [f"{round(i * 0.5, 1)} kg" for i in range(80, 401)] # Rango de 40kg a 200kg
+OPCIONES_PESO = [f"{round(i * 0.5, 1)} kg" for i in range(80, 401)] 
 OPCIONES_ESTATURA = [f"{i} cm" for i in range(120, 221)]
 
 # =============================================================================
@@ -110,7 +109,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             st.markdown("<div class='section-header'>🥗 Desgaste Diario y Entorno Nutricional</div>", unsafe_allow_html=True)
             col5, col6 = st.columns(2)
             with col5:
-                actividad_diaria = st.selectbox("Desgaste del Día a Día fuera del Gimnasio (Gasto NEAT):", ["Seleccione...", "Sedentario Pasivo (Trabajo sentado, computadora, mínimo movement)", "Moderado Activo (Trabajo de pie, caminatas intermitentes, comercio)", "Intensidad Alta (Movimiento constante, carga de objetos, construcción)"])
+                actividad_diaria = st.selectbox("Desgaste del Día a Día fuera del Gimnasio (Gasto NEAT):", ["Seleccione...", "Sedentario Pasivo (Trabajo sentado, computadora, mínimo movimiento)", "Moderado Activo (Trabajo de pie, caminatas intermitentes, comercio)", "Intensidad Alta (Movimiento constante, carga de objetos, construcción)"])
                 cantidad_comidas = st.selectbox("Disponibilidad logística para distribución de comidas:", ["Seleccione...", "2 comidas grandes al día", "3 comidas estándar al día", "4 comidas distribuidas", "5 comidas o más"])
             with col6:
                 consumo_agua = st.selectbox("Consumo diario promedio de agua natural:", ["Seleccione...", "Insuficiente (Menos de 1.5 Litros)", "Adecuado (Entre 1.5 y 3 Litros)", "Óptimo (Más de 3 Litros)"])
@@ -206,60 +205,147 @@ elif opcion == "📊 Dashboard Administrador":
             neat_display = str(datos_alumno.get('Gasto NEAT', 'No especificado'))
             lesion_display = str(datos_alumno.get('Lesiones', 'Ninguna'))
             experiencia_display = str(datos_alumno.get('Experiencia', 'No especificado'))
-            
+            frecuencia_display = str(datos_alumno.get('Frecuencia', '3 Días por semana'))
+            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutos'))
+            grasa_display = str(datos_alumno.get('Grasa', ''))
+
             st.markdown(f"### 👤 Expediente Actualizado: {nombre_display}")
             c_info1, c_info2 = st.columns(2)
             with c_info1:
                 st.markdown(f"**📏 Antropometría:** Peso: {peso_display} | Estatura: {estatura_display} | Edad: {edad_display}")
-                st.markdown(f"**📊 Composición Corporal:** {datos_alumno.get('Grasa', 'Sin datos')}")
+                st.markdown(f"**📊 Composición Corporal:** {grasa_display}")
                 st.markdown(f"**🩺 Limitaciones Clínicas:** {lesion_display}")
             with c_info2:
                 st.markdown(f"**🎯 Objetivo Estructural:** {meta_display}")
                 st.markdown(f"**🥗 Gasto Diario NEAT:** {neat_display}")
-                st.markdown(f"**🏋️ Madurez Muscular:** {experiencia_display}")
+                st.markdown(f"**🏋️ Disponibilidad:** {frecuencia_display} | {tiempo_display}")
             
             v_propuesta = str(datos_alumno.get("Propuesta General", "")).strip()
             v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
             v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
             
+            # --- GENERACIÓN INTELIGENTE AUTOMÁTICA HOJA 1: DIAGNÓSTICO ---
             if v_propuesta in ["", "nan"]:
                 v_propuesta = (
-                    f"ALUMNO: {nombre_display}\n"
-                    f"Punto de partida metabólico determinado mediante {datos_alumno.get('Grasa', 'antropometría')}. "
-                    f"Presenta una condición de limitaciones catalogada como: {lesion_display}. "
-                    f"Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos."
+                    f"ALUMNO: {nombre_display}\n\n"
+                    f"• ANÁLISIS DE PARTIDA: Diagnóstico metabólico calculado mediante {grasa_display}. Objetivo: {meta_display}.\n"
+                    f"• HISTORIAL DE RIESGO: Presenta vulnerabilidad catalogada en: '{lesion_display}'.\n"
+                    f"• DIRECTRIZ DE CARGA: Se restringen cargas axiales directas. Todo ejercicio se ejecutará bajo condiciones de total estabilidad mecánica en poleas y máquinas guiadas para eliminar el perfil de riesgo lesivo y optimizar el estímulo del tejido contráctil."
                 )
             
-            if v_balance in ["", "nan"]:
-                if "Hipertrofia" in meta_display:
-                    v_balance = "Fase: Excedente Calórico (Volumen Limpio) [+300 kcal sobre mantenimiento]\n" \
-                                "- Proteína: 2.0g por kg de peso corporal diario.\n" \
-                                "- Carbohidratos: Enfocados en ventanas pre y post entreno para maximizar glucógeno.\n" \
-                                f"- Distribución: Adaptada a {datos_alumno.get('Comidas', '3 comidas')} al día garantizando síntesis proteica óptima."
-                elif "Pérdida" in meta_display or "Obesidad" in str(datos_alumno.get('Grasa', '')):
-                    v_balance = "Fase: Déficit Calórico Controlado [-500 kcal para oxidación de grasa]\n" \
-                                "- Proteína: Alta (2.2g por kg) para blindar y retener la masa muscular magra.\n" \
-                                f"- Hidratación: Crítica. Ajustada a requerimiento de {datos_alumno.get('Agua', 'Agua óptima')}.\n" \
-                                f"- Control de ansiedad: Organizado en {datos_alumno.get('Comidas', 'comidas pautadas')} cargadas de fibra vegetal."
-                else:
-                    v_balance = "Fase: Recomposición Corporal / Normocalórica [Mantenimiento Energético]\n" \
-                                "- Nutrición balanceada enfocada en recomposición de tejido adiposo a tejido contráctil magro."
-            
+            # --- GENERACIÓN INTELIGENTE AUTOMÁTICA HOJA 2: RUTINA BIOMECÁNICA ---
             if v_rutina in ["", "nan"]:
-                v_rutina = f"Planificación Semanal: {datos_alumno.get('Frecuencia', 'Días variables')} ({datos_alumno.get('Tiempo Sesión', 'Tiempo estándar')})\n" \
-                           f"Enfoque de Carga: {datos_alumno.get('Fuerza', 'RPE moderado')} adaptado a nivel {experiencia_display}.\n" \
-                           "Estructura Biomecánica Recomendada:\n" \
-                           "- Priorizar ejercicios multiarticulares estables en máquinas o poleas libres de tensión axial peligrosa.\n" \
-                           f"- Cardio complementario obligatorio asignado: {datos_alumno.get('Cardio', 'Cardio moderado LISS')} post-entrenamiento."
+                # Ajuste biomecánico según lesiones
+                filtro_maquinas = "Evitar Sentadillas libres o Prensa profunda. Usar Extensión de Rodillas en máquina (perfil de fuerza acortado) y Curl Femoral sentado." if "Rodillas" in lesion_display else \
+                                  "Evitar Press Militar con barra o cargas sobre la cabeza. Usar Cruces en Polea Media y elevaciones laterales en máquina/polea." if "Hombros" in lesion_display else \
+                                  "Evitar Peso Muerto convencional y Sentadilla libre. Priorizar Prensa de Piernas inclinada con espalda fija y remo en máquina apoyado en el pecho." if "Columna" in lesion_display else \
+                                  "Priorizar ejercicios multiarticulares estables en máquinas guiadas y sistemas de poleas libres de vectores de torque destructivo."
+                
+                # Distribución según días disponibles
+                if "3 Días" in frecuencia_display:
+                    distribucion_dias = (
+                        "• DÍA 1: Torso Completo (Énfasis empujes estables y tracciones en máquina) - Tiempo: " + tiempo_display + "\n"
+                        "  - Press en Máquina Guiada (Pectoral): 3 series x 8-12 reps\n"
+                        "  - Remo en Máquina con Soporte al Pecho (Dorsal): 3 series x 10-12 reps\n"
+                        "  - Elevaciones Laterales en Polea (Deltoides): 3 series x 12-15 reps\n\n"
+                        "• DÍA 2: Pierna Completa (Enfoque en estabilidad biomecánica) - Tiempo: " + tiempo_display + "\n"
+                        "  - " + filtro_maquinas + "\n"
+                        "  - Curl Femoral Tumbado o Sentado: 3 series x 10-12 reps\n"
+                        "  - Prensa de Piernas (Rango seguro sin flexión lumbar): 3 series x 10-12 reps\n\n"
+                        "• DÍA 3: Full Body de Estímulo Metabólico Continuo - Tiempo: " + tiempo_display + "\n"
+                        "  - Jalón al Pecho en Polea Alta: 3 series x 10 reps\n"
+                        "  - Extensión de Tríceps + Curl de Bíceps en Polea: 3 series x 12 reps"
+                    )
+                elif "4 Días" in frecuencia_display:
+                    distribucion_dias = (
+                        "• DÍA 1: Torso - Empujes y Deltoides (Estabilidad Controlada) - Tiempo: " + tiempo_display + "\n"
+                        "  - Press de Pecho en Máquina Convergente: 4 series x 8-11 reps\n"
+                        "  - Aperturas en Polea Alta (Pectoral Bajo): 3 series x 12 reps\n"
+                        "  - Elevaciones Laterales en Máquina o Polea: 4 series x 12-15 reps\n\n"
+                        "• DÍA 2: Tren Inferior - Cadera Anterior/Posterior - Tiempo: " + tiempo_display + "\n"
+                        "  - " + filtro_maquinas + "\n"
+                        "  - Prensa de Pierna (Pies altos y separados): 4 series x 10-12 reps\n\n"
+                        "• DÍA 3: Torso - Tracciones y Brazos - Tiempo: " + tiempo_display + "\n"
+                        "  - Jalón al Pecho en Polea Neutra: 4 series x 10 reps\n"
+                        "  - Remo con Cable en Polea Baja: 3 series x 10-12 reps\n\n"
+                        "• DÍA 4: Tren Inferior Especializado (Estímulo Isquiotibial/Glúteo) - Tiempo: " + tiempo_display + "\n"
+                        "  - Curl Femoral Sentado (Máxima tensión en estiramiento): 4 series x 10-12 reps\n"
+                        "  - Extensión de Cuádriceps (Fase excéntrica de 3 segundos): 3 series x 12 reps"
+                    )
+                else: # 5 o 6 Días (Como el caso de José Luis Novelo)
+                    distribucion_dias = (
+                        "• DÍA 1: Pectoral y Deltoides Anterior (Líneas de Fuerza Convergentes)\n"
+                        "  - Press en Máquina Plana (Alineado con fibras medias): 4 series x 8-10 reps\n"
+                        "  - Cruces en Polea Media (Máxima contracción): 3 series x 12 reps\n"
+                        "  - Elevaciones Laterales en Polea Baja: 4 series x 12-15 reps\n\n"
+                        "• DÍA 2: Dorsal y Deltoides Posterior (Tracciones Planas y Verticales)\n"
+                        "  - Remo con Soporte en Pecho (Enfoque en Dorsal Ancho): 4 series x 10 reps\n"
+                        "  - Jalón al Pecho Agarre Abierto en Polea: 3 series x 10-12 reps\n"
+                        "  - Face Pulls en Polea con Cuerda: 4 series x 15 reps\n\n"
+                        "• DÍA 3: Tren Inferior (Enfoque de Protección Articular Estricta)\n"
+                        "  - " + filtro_maquinas + "\n"
+                        "  - Prensa Inclinada Mecánicamente Estable: 4 series x 10-12 reps\n"
+                        "  - Extensión de Pantorrilla en Máquina Costal: 4 series x 15 reps\n\n"
+                        "• DÍA 4: Brazos Completos (Bíceps y Tríceps en Polea Continua)\n"
+                        "  - Extensión de Tríceps con Cuerda sobre la cabeza: 4 series x 12 reps\n"
+                        "  - Curl de Bíceps en Polea Baja con Barra Recta: 4 series x 10-12 reps\n\n"
+                        "• DÍA 5: Estímulo Específico de Eslabones Débiles\n"
+                        "  - Remo Gironda en Polea Baja: 3 series x 12 reps\n"
+                        "  - Aperturas de Pectoral en Peck Deck: 3 series x 12 reps"
+                    )
+
+                # Cardio distribuido según la meta y perfil metabólico
+                if "Obesidad" in grasa_display or "Pérdida" in meta_display:
+                    cardio_estrategia = "• DOSIFICACIÓN CARDIOVASCULAR COMPLEMENTARIA MANDATORIA:\n  - Tipo: LISS (Caminata a Paso Firme / Inclinación Controlada sin impacto activo).\n  - Volumen: 35 a 45 minutos continuos al terminar cada entrenamiento de fuerza.\n  - Razón Biomecánica: Proteger cartílago de rodillas evitando el trote, maximizando oxidación lipídica por vía aeróbica limpia."
+                else:
+                    cardio_estrategia = "• DOSIFICACIÓN CARDIOVASCULAR COMPLEMENTARIA REGENERATIVA:\n  - Tipo: Cardio LISS Ligero (Caminata o Bicicleta Estática de baja resistencia).\n  - Volumen: 15 a 20 minutos post-entrenamiento.\n  - Razón Biomecánica: Optimizar retorno venoso, remoción de lactato y acelerar la recuperación mitocondrial."
+
+                v_rutina = (
+                    f"PLANIFICACIÓN DE CARGA ESTABLECIDA: {frecuencia_display} | Ventana por Sesión: {tiempo_display}\n"
+                    f"SISTEMA DE ENTRENAMIENTO BASADO EN PRINCIPIOS DE BIOMECÁNICA APLICADA\n\n"
+                    f"{distribucion_dias}\n\n"
+                    f"{cardio_estrategia}"
+                )
+
+            # --- GENERACIÓN INTELIGENTE AUTOMÁTICA HOJA 3: DIETA NO VIOLENTA ---
+            if v_balance in ["", "nan"]:
+                if "Obesidad" in grasa_display or "Pérdida" in meta_display or "Recomposición" in meta_display:
+                    v_balance = (
+                        "ESTRATEGIA NUTRICIONAL: DÉFICIT CALÓRICO MODERADO NO VIOLENTO\n"
+                        "Diseñado con base en tu gasto energético estimado para ver avances constantes sin inducir ansiedad severa ni frenar el metabolismo basal.\n\n"
+                        "• CONSTANTES MACRONUTRICIONALES DIARIAS:\n"
+                        "  - Proteína Base: 2.0g a 2.2g por kilogramo de peso corporal (Blindaje de masa muscular magra).\n"
+                        "  - Carbohidratos Complejos: Moderados, concentrados estratégicamente en torno al entrenamiento.\n"
+                        "  - Grasas Saludables: Esenciales para mantener balance hormonal óptimo.\n\n"
+                        "• MENÚ DIARIO PROPUESTO (Ejemplo Flexible de Distribución):\n"
+                        "  - DESAYUNO: 3 a 4 claras de huevo + 1 huevo entero revuelto con espinacas y verduras libres. 1 porción de avena integral en hojuelas cocida en agua con canela.\n"
+                        "  - COMIDA: 150g a 180g de pechuga de pollo o filete de pescado blanco a la plancha. 100g de arroz blanco o integral cocido. Ensalada verde grande aliñada con 1 cucharadita de aceite de oliva virgen.\n"
+                        "  - MERIENDA (Pre/Post Entreno): 1 scoop de proteína de suero aislada (Whey) mezclada con agua + 1 manzana mediana o 100g de fresas fresqueras.\n"
+                        "  - CENA: 150g de filete de res magro o atún en agua. Taza de brócoli o calabacitas al vapor. 1/3 de pieza de aguacate mediano para aporte lipídico limpio.\n\n"
+                        "• LÍQUIDOS: Mínimo 3 litros de agua natural distribuidos a lo largo del día para mantener la tasa de filtración y mitigar el hambre artificial."
+                    )
+                else: # Hipertrofia o Fuerza
+                    v_balance = (
+                        "ESTRATEGIA NUTRICIONAL: SUPERÁVIT CALÓRICO LIMPIO CONTROLADO\n"
+                        "Enfoque en crear un balance energético positivo controlado no violento, maximizando síntesis proteica sin acumulación masiva de tejido graso.\n\n"
+                        "• CONSTANTES MACRONUTRICIONALES DIARIAS:\n"
+                        "  - Proteína Base: 2.0g por kilogramo para reparación fibrilar.\n"
+                        "  - Carbohidratos: Altos para mantener repletos los depósitos de glucógeno muscular.\n\n"
+                        "• MENÚ DIARIO PROPUESTO (Ejemplo Estructurado):\n"
+                        "  - DESAYUNO: 3 huevos enteros con tortilla de maíz o pan integral. 1 plátano maduro.\n"
+                        "  - COMIDA: 200g de carne de res magra o pechuga de pollo. 150g de arroz pesado ya cocido + taza de frijoles enteros.\n"
+                        "  - MERIENDA: Licuado de 1 scoop de proteína + 50g de avena molida + 1 cucharada de crema de cacahuate natural.\n"
+                        "  - CENA: 150g de pollo o pescado a la plancha + 150g de papa o camote al horno + vegetales libres al gusto."
+                    )
 
             st.markdown("---")
             st.markdown("### 🛠️ Prescripción y Planificación de Sistemas MM247")
             st.caption("💡 Los campos de abajo se han autogenerado inteligentemente basados en los datos del alumno. Puedes editarlos libremente si deseas personalizar algún detalle antes de guardar.")
             
             with st.form("prescripcion_exacta_form"):
-                propuesta = st.text_area("🩺 1. Diagnóstico Clínico de Punto de Partida:", value=v_propuesta, height=120)
-                balance = st.text_area("🥗 2. Plan Alimenticio Calculado (Balance Energético Preciso):", value=v_balance, height=150)
-                rutina = st.text_area("🏋️ 3. Rutina Semanal Completa (Enfoque Biomecánico Adaptado):", value=v_rutina, height=180)
+                propuesta = st.text_area("🩺 HOJA 1: Diagnóstico Clínico de Punto de Partida y Limitaciones:", value=v_propuesta, height=140)
+                rutina = st.text_area("🏋️ HOJA 2: Rutina Semanal Completa, Máquinas y Cardio (Biomecánica):", value=v_rutina, height=220)
+                balance = st.text_area("🥗 HOJA 3: Plan Alimenticio Calculado (Dieta Diaria No Violenta):", value=v_balance, height=220)
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
                 if guardar_changes:
@@ -288,51 +374,70 @@ elif opcion == "📊 Dashboard Administrador":
                         except Exception as e_save:
                             st.error(f"Fallo de sincronización: {e_save}")
             
-            if st.button("🖨️ Compilar y Exportar Reporte PDF Oficial"):
+            if st.button("🖨️ Compilar y Exportar Reporte PDF Oficial de 3 Hojas"):
                 try:
                     pdf = FPDF()
+                    
+                    # ---------------- PAGE 1: DIAGNÓSTICO ----------------
                     pdf.add_page()
-                    pdf.set_font("Arial", "B", 18)
+                    pdf.set_font("Arial", "B", 20)
                     pdf.cell(0, 10, "MINDMUSCLE247", ln=True, align="C")
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, "INFORME DE PLANIFICACIÓN INTEGRAL DE RENDIMIENTO", ln=True, align="C")
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 6, "INFORME DE EVALUACIÓN Y PRESCIPCIÓN DE RENDIMIENTO", ln=True, align="C")
                     pdf.line(10, 28, 200, 28)
+                    pdf.ln(10)
+                    
+                    pdf.set_font("Arial", "B", 13)
+                    pdf.cell(0, 6, f"HOJA 1: DIAGNÓSTICO DE INGRESO - ALUMNO: {nombre_display.upper()}", ln=True)
+                    pdf.line(10, 39, 110, 39)
+                    pdf.ln(5)
+                    
+                    pdf.set_font("Arial", "B", 10)
+                    pdf.cell(0, 5, f"• Edad: {edad_display}  |  Peso: {peso_display}  |  Estatura: {estatura_display}", ln=True)
+                    pdf.cell(0, 5, f"• Condición Inicial: {grasa_display}", ln=True)
+                    pdf.cell(0, 5, f"• Meta Declarada: {meta_display}", ln=True)
+                    pdf.cell(0, 5, f"• Historial Articular/Riesgo: {lesion_display}", ln=True)
                     pdf.ln(8)
                     
                     pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, f"FICHA TÉCNICA CLÍNICA - ALUMNO: {nombre_display.upper()}", ln=True)
-                    pdf.ln(3)
-                    pdf.set_font("Arial", "", 10)
-                    pdf.cell(0, 5, f"Diagnóstico Metabólico Inicial: {str(datos_alumno.get('Grasa', 'N/A'))}", ln=True)
-                    pdf.ln(5)
-                    
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, "1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES", ln=True)
+                    pdf.cell(0, 6, "ANÁLISIS CLÍNICO E INTEGRAL DE INICIO:", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(propuesta))
-                    pdf.ln(5)
                     
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, "2. PLAN ALIMENTICIO Y BALANCE ENERGÉTICO AJUSTADO", ln=True)
-                    pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(0, 5, str(balance))
-                    pdf.ln(5)
+                    # ---------------- PAGE 2: ENTRENAMIENTO BIOMECÁNICO ----------------
+                    pdf.add_page()
+                    pdf.set_font("Arial", "B", 16)
+                    pdf.cell(0, 10, "MINDMUSCLE247", ln=True, align="C")
+                    pdf.set_font("Arial", "B", 13)
+                    pdf.cell(0, 6, "HOJA 2: PLANIFICACIÓN SEMANAL Y DOSIFICACIÓN BIOMECÁNICA", ln=True, align="C")
+                    pdf.line(10, 28, 200, 28)
+                    pdf.ln(8)
                     
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.cell(0, 6, "3. RUTINA SEMANAL COMPLETA (DOSIFICACIÓN Y BIOMECÁNICA)", ln=True)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(0, 5, str(rutina))
                     
-                    # RETORNO ARREGLADO: Sin método .encode(), directo a bytes estructurados
+                    # ---------------- PAGE 3: NUTRICIÓN NO VIOLENTA ----------------
+                    pdf.add_page()
+                    pdf.set_font("Arial", "B", 16)
+                    pdf.cell(0, 10, "MINDMUSCLE247", ln=True, align="C")
+                    pdf.set_font("Arial", "B", 13)
+                    pdf.cell(0, 6, "HOJA 3: INTERVENCIÓN NUTRICIONAL Y DIETA DIARIA", ln=True, align="C")
+                    pdf.line(10, 28, 200, 28)
+                    pdf.ln(8)
+                    
+                    pdf.set_font("Arial", "", 10)
+                    pdf.multi_cell(0, 5, str(balance))
+                    
+                    # Descarga directa y limpia libre de codificaciones obsoletas
                     pdf_data = pdf.output(dest='S')
                     st.download_button(
-                        label="⬇️ Descargar Reporte PDF Oficial MM247",
+                        label="⬇️ Descargar Reporte PDF de 3 Hojas Oficinales",
                         data=bytes(pdf_data),
-                        file_name=f"Reporte_MM247_{nombre_display.replace(' ', '_')}.pdf",
+                        file_name=f"Plan_MM247_3Hojas_{nombre_display.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
                 except Exception as err_pdf:
-                    st.error(f"Error al compilar PDF: {err_pdf}")
+                    st.error(f"Error al compilar el reporte de 3 hojas: {err_pdf}")
                     
     elif password != "":
         st.error("🔑 Clave inválida.")
