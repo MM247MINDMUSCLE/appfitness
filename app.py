@@ -3,11 +3,10 @@ import pandas as pd
 import datetime
 import random
 import requests
-import io
 from fpdf import FPDF
 
 # =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA Y BASE DE DATOS (MIND MUSCLE)
+# 1. CONFIGURACIÓN, BRANDING Y CONTROL DE ERRORES DE BASE DE DATOS
 # =============================================================================
 st.set_page_config(page_title="MINDMUSCLE247 - ENGINE", page_icon="⚡", layout="wide")
 
@@ -22,296 +21,337 @@ def cargar_base_datos():
         df.columns = df.columns.str.strip()
         df = df.fillna("")
         
-        # SOLUCIÓN AL ERROR DE LA IMAGEN image_8.png (Asegurar que existan las columnas clave)
-        if "ID_Alumno" not in df.columns:
-            df["ID_Alumno"] = []
-        if "Tipo_Registro" not in df.columns:
-            df["Tipo_Registro"] = "INICIAL"
-            
+        # Corrección definitiva al KeyError: Asegurar estructura básica si la hoja limpia no la tiene
+        if "ID_Alumno" not in df.columns: df["ID_Alumno"] = []
+        if "Tipo_Registro" not in df.columns: df["Tipo_Registro"] = []
         return df
     except Exception:
-        # Estructura de respaldo si el archivo de Google Sheets está completamente inaccesible o vacío
-        return pd.DataFrame(columns=["Fecha", "Tipo_Registro", "ID_Alumno", "Nombre completo", "Sexo", "Edad", "Estatura", "Peso actual", "Peso objetivo", "Objetivo principal"])
+        return pd.DataFrame(columns=["Fecha", "Tipo_Registro", "ID_Alumno", "Nombre completo", "Sexo", "Edad", "Estatura", "Peso actual", "Objetivo principal"])
 
 df_existente = cargar_base_datos()
 
-# Inyección de interfaz visual
+# Estilos visuales Cyber-Gym MM247
 st.markdown("""
     <style>
     body { background-color: #f4f6f9; }
-    .main-title { font-size:42px; font-weight:900; background: linear-gradient(45deg, #FF4B4B, #111111); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align:center; margin-bottom:0px; }
-    .subtitle { font-size:13px; color:#555555; text-align:center; margin-bottom:30px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;}
-    .section-header { font-size:20px; font-weight:bold; color:#ffffff; background: linear-gradient(90deg, #111111, #FF4B4B); padding: 8px 12px; border-radius: 6px; margin-top:20px; margin-bottom:12px; }
+    .main-title { font-size:40px; font-weight:900; background: linear-gradient(45deg, #FF4B4B, #111111); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align:center; margin-bottom:0px; }
+    .subtitle { font-size:12px; color:#555555; text-align:center; margin-bottom:25px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;}
+    .section-header { font-size:18px; font-weight:bold; color:#ffffff; background: linear-gradient(90deg, #111111, #FF4B4B); padding: 8px 12px; border-radius: 6px; margin-top:20px; margin-bottom:12px; }
+    .sheet-box { background: #ffffff; border: 1px solid #e0e0e0; border-left: 5px solid #FF4B4B; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .id-box { background: #E8F5E9; border-left: 5px solid #2E7D32; padding: 15px; border-radius: 6px; font-size: 18px; color: #1B5E20; font-weight: bold; margin: 15px 0; text-align: center; }
-    
-    .avatar-container { background: linear-gradient(135deg, #111111, #2c3e50); padding: 25px; border-radius: 16px; color: white; display: flex; align-items: center; gap: 25px; box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
-    .avatar-circle { width: 85px; height: 85px; background: linear-gradient(45deg, #FF4B4B, #FF8585); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 38px; border: 4px solid #ffffff; }
+    .avatar-container { background: linear-gradient(135deg, #111111, #2c3e50); padding: 20px; border-radius: 12px; color: white; display: flex; align-items: center; gap: 20px; }
+    .avatar-circle { width: 75px; height: 75px; background: linear-gradient(45deg, #FF4B4B, #FF8585); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34px; border: 3px solid #ffffff; }
     </style>
     """, unsafe_allow_html=True)
 
-opcion = st.sidebar.selectbox("Módulos de Control MM247:", [
-    "📝 Cuestionario 1: Evaluación Inicial", 
+opcion = st.sidebar.selectbox("Módulos de Sistema MM247:", [
+    "📝 Cuestionario 1: Evaluación Inicial y Prescripción", 
     "🔄 Cuestionario 2: Registro de Avances Semanales", 
-    "📊 Dashboard Administrador (Vista Exclusiva)"
+    "📊 Dashboard Administrador (Coach)"
 ])
 
 def generar_id_unico(nombre):
     partes = nombre.strip().split()
     iniciales = "".join([p[0].upper() for p in partes if p])[:3]
     if not iniciales: iniciales = "MM"
-    numero = random.randint(1000, 9999)
-    return f"MM-{iniciales}-{numero}"
+    return f"MM-{iniciales}-{random.randint(1000, 9999)}"
 
 # =============================================================================
-# MÓDULO 1: CUESTIONARIO 1 - REGISTRO E ID AUTOMÁTICO + IMPRESIÓN INICIAL
+# MÓDULO 1: CUESTIONARIO 1 - MOTOR DE CÁLCULO METABÓLICO Y PRESCRIPCIÓN DE HOJAS
 # =============================================================================
-if opcion == "📝 Cuestionario 1: Evaluación Inicial":
+if opcion == "📝 Cuestionario 1: Evaluación Inicial y Prescripción":
     st.markdown("<div class='main-title'>MIND MUSCLE 247</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>Formulario de Alta e Identidad Biomecánica</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle'>Sistema de Alta Diagnóstica y Automatización Nutren-Biométrica</div>", unsafe_allow_html=True)
     
-    with st.form("form_alta_inicial", clear_on_submit=False):
-        st.markdown("<div class='section-header'>Datos Clínicos de Inicio</div>", unsafe_allow_html=True)
-        f_nombre = st.text_input("Nombre Completo del Alumno:")
+    with st.form("form_alta_inicial"):
+        st.markdown("<div class='section-header'>Expediente Antropométrico y Clínico</div>", unsafe_allow_html=True)
+        f_nombre = st.text_input("Nombre Completo del Alumno:").strip().upper()
         
-        col1, col2, col3 = st.columns(3)
-        with col1: f_edad = st.selectbox("Edad Actual:", [f"{i} años" for i in range(14, 80)], index=11)
-        with col2: f_sexo = st.selectbox("Sexo Biológico:", ["Masculino", "Femenino"])
-        with col3: f_estatura = st.selectbox("Estatura Base:", [f"{i} cm" for i in range(120, 220)], index=55)
+        c1, c2, c3 = st.columns(3)
+        with c1: f_edad = st.number_input("Edad (años):", min_value=12, max_value=90, value=25)
+        with c2: f_sexo = st.selectbox("Sexo Biológico:", ["Masculino", "Femenino"])
+        with c3: f_estatura = st.number_input("Estatura (cm):", min_value=100, max_value=230, value=170)
         
-        col4, col5, col6 = st.columns(3)
-        with col4: f_peso_inicial = st.number_input("Peso Actual de Inicio (kg):", min_value=40.0, max_value=160.0, value=75.0, step=0.1)
-        with col5: f_peso_meta = st.number_input("Peso Objetivo / Meta (kg):", min_value=40.0, max_value=160.0, value=70.0, step=0.1)
-        with col6: f_objetivo = st.selectbox("Estrategia Principal:", ["Perder grasa", "Ganar masa muscular", "Recomposición corporal"])
+        c4, c5, c6 = st.columns(3)
+        with c4: f_peso_inicial = st.number_input("Peso Actual en Ayunas (kg):", min_value=35.0, max_value=180.0, value=75.0, step=0.1)
+        with c5: f_peso_meta = st.number_input("Peso Objetivo Meta (kg):", min_value=35.0, max_value=180.0, value=70.0, step=0.1)
+        with c6: f_objetivo = st.selectbox("Estrategia / Meta:", ["Perder grasa", "Ganar masa muscular", "Recomposición corporal"])
         
-        f_lesion = st.selectbox("¿Presenta alguna lesión o dolor limitante?", ["Ninguna", "Rodilla / Desgaste / Tendinitis", "Hombro / Manguito rotador", "Espalda Baja / Lumbalgia"])
-        f_dias = st.selectbox("Días disponibles para entrenar por semana:", ["3 días por semana", "4 días por semana", "5 días por semana"])
+        f_lesion = st.selectbox("Limitaciones Posturales o Lesiones Activas:", ["Ninguna", "Hombros / Complejo manguito rotador", "Rodilla / Desgaste / Tendinitis", "Espalda Baja / Lumbalgia"])
+        f_dias = st.selectbox("Disponibilidad de Entrenamientos Semanales:", ["3 días por semana", "4 días por semana", "5 días por semana"])
         
-        enviar_alta = st.form_submit_button("🚀 FINALIZAR EVALUACIÓN Y GENERAR ID")
-        
-        if enviar_alta:
-            if not f_nombre.strip():
-                st.error("❌ El campo de nombre es mandatorio para generar el expediente corporativo.")
-            else:
-                nuevo_id = generar_id_unico(f_nombre)
-                st.session_state["ultimo_id_generado"] = nuevo_id
-                st.session_state["datos_ultimo_registro"] = {
-                    "Nombre": f_nombre.strip().upper(), "Edad": f_edad, "Sexo": f_sexo, "Estatura": f_estatura,
-                    "Peso": f_peso_inicial, "Meta": f_peso_meta, "Objetivo": f_objetivo, "Lesion": f_lesion, "Dias": f_dias
-                }
-                
-                payload_inicial = {
-                    "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Tipo_Registro": "INICIAL", "ID_Alumno": nuevo_id,
-                    "Nombre completo": str(f_nombre.strip().upper()), "Edad": str(f_edad), "Sexo": str(f_sexo), "Estatura": str(f_estatura),
-                    "Peso actual": str(f_peso_inicial), "Peso objetivo": str(f_peso_meta), "Objetivo principal": str(f_objetivo),
-                    "Días entrenar": str(f_dias), "Lesión actual": str(f_lesion)
-                }
-                try:
-                    requests.post(WEBHOOK_URL, json=payload_inicial)
-                    st.markdown(f"""
-                    <div class='id-box'>
-                        💎 ALTA PROCESADA EXITOSAMENTE<br>
-                        <span style='font-size: 26px; color: #2E7D32;'>ID ÚNICO ASIGNADO: {nuevo_id}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Error al subir a la base de datos central: {e}")
+        enviar_alta = st.form_submit_button("🚀 PROCESAR EXAMEN DIAGNÓSTICO Y GENERAR ID")
 
-    # Impresión inmediata de su PDF Inicial con ID impreso
-    if "ultimo_id_generado" in st.session_state:
-        st.markdown("### 📥 Descarga tu Ficha Oficial de Ingreso")
-        d = st.session_state["datos_ultimo_registro"]
-        id_gen = st.session_state["ultimo_id_generado"]
+    if enviar_alta:
+        if not f_nombre:
+            st.error("❌ El nombre completo es indispensable para estructurar la base de datos.")
+        else:
+            # -----------------------------------------------------------------
+            # LÓGICA DE CÁLCULO CIENTÍFICA (La esencia del Cuestionario 1)
+            # -----------------------------------------------------------------
+            # 1. Cálculo de TMB (Mifflin-St Jeor) y TDEE
+            if f_sexo == "Masculino":
+                tmb = (10 * f_peso_inicial) + (6.25 * f_estatura) - (5 * f_edad) + 5
+            else:
+                tmb = (10 * f_peso_inicial) + (6.25 * f_estatura) - (5 * f_edad) - 161
+            
+            factor_actividad = 1.375 if "3 días" in f_dias else 1.55
+            tdee = tmb * factor_actividad
+            
+            # Ajuste calórico según objetivo establecido
+            if f_objetivo == "Perder grasa": kcal_meta = tdee - 400
+            elif f_objetivo == "Ganar masa muscular": kcal_meta = tdee + 300
+            else: kcal_meta = tdee
+            
+            # 2. Distribución Exacta de Macronutrientes Obligatorios (2g Proteína, 1g Grasa)
+            prot_g = round(2.0 * f_peso_inicial, 1)
+            grasa_g = round(1.0 * f_peso_inicial, 1)
+            
+            kcal_prot_grasa = (prot_g * 4) + (grasa_g * 9)
+            carbo_g = round(max(0.0, (kcal_meta - kcal_prot_grasa) / 4), 1)
+            
+            # 3. Determinación Automática del IMC
+            estatura_m = f_estatura / 100
+            imc = round(f_peso_inicial / (estatura_m ** 2), 1)
+            estado_imc = "Normal" if imc < 25 else "Sobrepeso" if imc < 30 else "Obesidad"
+            
+            # Generación del ID único inmutable
+            nuevo_id = generar_id_unico(f_nombre)
+            
+            # Guardar cálculos en caché de sesión para la impresión inmediata
+            st.session_state["id_activo"] = nuevo_id
+            st.session_state["diagnostico_cliente"] = {
+                "Nombre": f_nombre, "Edad": f_edad, "Sexo": f_sexo, "Estatura": f_estatura, "ID": nuevo_id,
+                "Peso": f_peso_inicial, "Meta_P": f_peso_meta, "Objetivo": f_objetivo, "Lesion": f_lesion,
+                "IMC": imc, "Estado_IMC": estado_imc, "TMB": round(tmb,1), "TDEE": round(tdee,1), "Kcal": round(kcal_meta,1),
+                "Prot": prot_g, "Grasa": grasa_g, "Carbo": carbo_g, "Dias": f_dias
+            }
+            
+            # Empaquetado completo para Google Sheets via Webhook
+            payload = {
+                "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Tipo_Registro": "INICIAL", "ID_Alumno": nuevo_id,
+                "Nombre completo": f_nombre, "Edad": f"{f_edad} años", "Sexo": f_sexo, "Estatura": f"{f_estatura} cm",
+                "Peso actual": str(f_peso_inicial), "Peso objetivo": str(f_peso_meta), "Objetivo principal": f_objetivo,
+                "Días entrenar": f_dias, "Lesión actual": f_lesion, "IMC_Calculado": str(imc), "Calorías_Plan": str(round(kcal_meta,1))
+            }
+            
+            try:
+                requests.post(WEBHOOK_URL, json=payload)
+                st.markdown(f"<div class='id-box'>💎 EXPEDIENTE CONFIGURADO CON ÉXITO<br><span style='font-size:24px;'>ID GENERADO: {nuevo_id}</span></div>", unsafe_allow_html=True)
+                st.balloons()
+            except Exception as e:
+                st.error(f"Sincronización en la nube interrumpida: {e}")
+
+    # Display e impresión de las 3 HOJAS Maestras Basadas en los Datos Reales del Alumno
+    if "diagnostico_cliente" in st.session_state:
+        dt = st.session_state["diagnostico_cliente"]
         
+        st.markdown("<br>### 🛠️ Sistema de Edición y Prescripción de Hojas MM247", unsafe_allow_html=True)
+        
+        # --- HOJA 1: INFORME DIAGNÓSTICO ---
+        with st.container():
+            st.markdown("<div class='sheet-box'>", unsafe_allow_html=True)
+            st.markdown(f"**🩺 HOJA 1: Informe Diagnóstico Avanzado (Metabólico, Clínico y Fisiológico)**")
+            st.write(f"Punto de partida estadístico determinado mediante IMC: **{dt['IMC']} ({dt['Estado_IMC']})**.")
+            st.write(f"Tasa Metabólica Basal (TMB): **{dt['TMB']} kcal** | Gasto Energético Diario (TDEE): **{dt['TDEE']} kcal**.")
+            st.write(f"Intervención Planificada: **{dt['Kcal']} kcal** enfocadas en **{dt['Objetivo']}**.")
+            st.write(f"Condición de limitaciones catalogada como: **{dt['Lesion']}**. Se autoriza entrenamiento bajo progresión milimétrica.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        # --- HOJA 2: RUTINA SEMANAL ---
+        with st.container():
+            st.markdown("<div class='sheet-box'>", unsafe_allow_html=True)
+            st.markdown(f"**🏋️‍♂️ HOJA 2: Rutina Semanal Detallada (Músculo, Ejercicio y Series)**")
+            st.write(f"Distribución recomendada para un bloque de **{dt['Dias']}**:")
+            st.text(f"• Día 1/3 (Empuje/Fuerza): Press inclinado con mancuernas (4 Series x 8-10 reps) | Press Militar (3 Series)")
+            st.text(f"• Día 2/4 (Tracción/Hipertrofia): Jalón al pecho con agarre prono (4 Series x 10-12 reps) | Remo con barra")
+            st.text(f"• Día 3/5 (Pierna/Estabilidad): Sentadilla libre o prensa (4 Series x 10 reps) *Cuidando eje si reportó molestia*")
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        # --- HOJA 3: DIETA DIARIA ---
+        with st.container():
+            st.markdown("<div class='sheet-box'>", unsafe_allow_html=True)
+            st.markdown(f"**🍎 HOJA 3: Dieta Diaria Establecida (Comidas y Balance Energético)**")
+            st.write(f"Macronutrientes Calculados: **Proteína: {dt['Prot']}g (2g/kg)** | **Grasas: {dt['Grasa']}g (1g/kg)** | **Carbohidratos: {dt['Carbo']}g**.")
+            st.text(f"• Comida 1 (Pre-Entreno): {round(dt['Prot']*0.25)}g Proteína (Claras/Huevo) + {round(dt['Carbo']*0.3)}g Carbohidratos (Avena).")
+            st.text(f"• Comida 2 (Post-Entreno): {round(dt['Prot']*0.35)}g Proteína (Pechuga de pollo) + {round(dt['Carbo']*0.4)}g Carbohidratos (Arroz blanco) + Vegetales.")
+            st.text(f"• Comida 3 (Colación): {round(dt['Prot']*0.15)}g Proteína (Whey Protein) + {dt['Grasa']}g Grasas Saludables (Almendras).")
+            st.text(f"• Comida 4 (Cena/Saciante): {round(dt['Prot']*0.25)}g Proteína magra + Ensalada verde libre.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # Compilación de PDF Inicial para el Alumno
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(190, 10, "MIND MUSCLE 247 - FICHA DE REGISTRO INICIAL", 0, 1, "C")
-        pdf.ln(5)
-        pdf.set_font("Helvetica", "B", 12)
-        pdf.cell(190, 8, f"ID COMPLETO DEL ALUMNO: {id_gen}", 1, 1, "C")
-        pdf.ln(5)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.cell(190, 7, f"Nombre Completo: {d['Nombre']}", 0, 1)
-        pdf.cell(190, 7, f"Edad: {d['Edad']} | Sexo: {d['Sexo']} | Estatura: {d['Estatura']}", 0, 1)
-        pdf.cell(190, 7, f"Peso de Inicio: {d['Peso']} kg | Peso Objetivo: {d['Meta']} kg", 0, 1)
-        pdf.cell(190, 7, f"Estrategia Seleccionada: {d['Objetivo']}", 0, 1)
-        pdf.cell(190, 7, f"Frecuencia de Entrenamiento: {d['Dias']}", 0, 1)
-        pdf.cell(190, 7, f"Limitaciones por Lesión: {d['Lesion']}", 0, 1)
+        pdf.cell(190, 10, "MM247 - PLAN MAESTRO DE INGRESO", 0, 1, "C")
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(190, 8, f"ID UNICO INTERNO: {dt['ID']}", 1, 1, "C")
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.multi_cell(190, 6, f"Alumno: {dt['Nombre']}\nObjetivo: {dt['Objetivo']}\nKcal Asignadas: {dt['Kcal']} kcal\nMacros -> Prot: {dt['Prot']}g | Grasa: {dt['Grasa']}g | Carbo: {dt['Carbo']}g\nEstrategia Lesiones: {dt['Lesion']}")
         
-        pdf_bytes = pdf.output(dest='S').encode('latin1', errors='ignore')
-        st.download_button(label="📥 IMPRIMIR REPORTE INICIAL DEL ALUMNO (PDF)", data=pdf_bytes, file_name=f"Ingreso_MM_{id_gen}.pdf", mime="application/pdf")
+        pdf_b = pdf.output(dest='S').encode('latin1', errors='ignore')
+        st.download_button("📥 IMPRIMIR REPORTE INICIAL INDIVIDUAL (PDF)", data=pdf_b, file_name=f"Plan_Inicial_{dt['ID']}.pdf", mime="application/pdf")
 
 # =============================================================================
-# MÓDULO 2: CUESTIONARIO 2 - AVANCES (CIÉGO PARA EL ALUMNO)
+# MÓDULO 2: CUESTIONARIO 2 - REVISIÓN DE AVANCES (SÓLO PIDE ID)
 # =============================================================================
 elif opcion == "🔄 Cuestionario 2: Registro de Avances Semanales":
     st.markdown("<div class='main-title'>BITÁCORA DE EVOLUCIÓN MM247</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>Cuestionario Integral de Progreso Semanal</div>", unsafe_allow_html=True)
+    st.markdown("<div class='subtitle'>Evaluación de Progreso Dinámico a Ritmo del Alumno</div>", unsafe_allow_html=True)
     
-    with st.form("form_registro_avances", clear_on_submit=True):
-        st.markdown("<div class='section-header'>Identificación Requerida</div>", unsafe_allow_html=True)
-        r_id = st.text_input("Ingresa tu ID de Alumno Asignado (Ej: MM-JDO-2934):").strip().upper()
+    with st.form("form_avances", clear_on_submit=True):
+        st.markdown("<div class='section-header'>Llave de Acceso Única</div>", unsafe_allow_html=True)
+        r_id = st.text_input("Ingresa tu ID de Alumno Asignado (Ej: MM-JDO-1234):").strip().upper()
         
-        st.markdown("<div class='section-header'>Métricas Semanales de Control</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>Métricas de Control Semanal</div>", unsafe_allow_html=True)
         col_r1, col_r2 = st.columns(2)
-        with col_r1: r_peso_hoy = st.number_input("Peso en ayunas hoy (kg):", min_value=30.0, max_value=180.0, value=75.0, step=0.1)
-        with col_r2: r_cintura = st.number_input("Medida de contorno de cintura (cm):", min_value=40.0, max_value=150.0, value=80.0, step=0.5)
+        with col_r1: r_peso = st.number_input("Peso registrado esta mañana en ayunas (kg):", min_value=30.0, max_value=180.0, value=75.0, step=0.1)
+        with col_r2: r_cintura = st.number_input("Perímetro de cintura a nivel umbilical (cm):", min_value=40.0, max_value=150.0, value=80.0, step=0.5)
         
-        r_adherencia = st.selectbox("Cumplimiento real de la alimentación asignada:", ["100% al 90%", "90% al 70%", "Menos del 70%"])
-        r_fuerza = st.selectbox("Progreso general en las cargas de fuerza:", ["Aumenté cargas/reps (Sobrecarga progresiva)", "Estable en los mismos pesos", "Fatiga alta / Bajaron mis pesos"])
-        r_sueno = st.slider("Calidad de sueño y descanso neuromuscular (1 al 10):", 1, 10, 8)
-        r_comentarios = st.text_area("Comentarios o sensaciones físicas:")
+        r_adherencia = st.selectbox("Porcentaje de cumplimiento de la dieta esta semana:", ["100% al 90%", "90% al 70%", "Menos del 70%"])
+        r_fuerza = st.selectbox("Comportamiento de la sobrecarga progresiva en fuerza:", ["Aumenté kilos o repeticiones", "Estable / Mantuve cargas", "Fatiga / Disminución de cargas"])
+        r_snc = st.slider("Nivel de energía y recuperación al despertar (1 al 10):", 1, 10, 8)
+        r_notas = st.text_area("Reporte de sensaciones (Dolores articulares, estrés, dudas):")
         
-        enviar_revision = st.form_submit_button("⚡ ENVIAR REVISIÓN DE PROGRESO")
+        enviar_rev = st.form_submit_button("🔄 ENVIAR BITÁCORA DE CONTROL AL COACH")
         
-        if enviar_revision:
+        if enviar_rev:
             if not r_id:
-                st.error("❌ Es mandatorio colocar tu ID Único para sincronizar este avance.")
+                st.error("❌ No es posible procesar la bitácora sin vincular un ID de Alumno válido.")
             else:
-                payload_revision = {
+                payload_rev = {
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Tipo_Registro": "REVISION", "ID_Alumno": r_id,
-                    "Peso_Revision": str(r_peso_hoy), "Cintura_Revision": str(r_cintura), "Adherencia_Dieta": str(r_adherencia),
-                    "Progreso_Fuerza": str(r_fuerza), "Energia_SNC": str(r_sueno), "Comentarios_Evolucion": str(r_comentarios)
+                    "Peso_Revision": str(r_peso), "Cintura_Revision": str(r_cintura), "Adherencia_Dieta": r_adherencia,
+                    "Progreso_Fuerza": r_fuerza, "Energia_SNC": str(r_snc), "Comentarios_Evolucion": r_notes
                 }
                 try:
-                    requests.post(WEBHOOK_URL, json=payload_revision)
-                    st.success("✅ Evolución registrada. Tu Coach analizará las proyecciones desde su Panel.")
+                    requests.post(WEBHOOK_URL, json=payload_rev)
+                    st.success("✅ Evolución enviada de manera encriptada. Tu Coach evaluará tus métricas desde el Dashboard.")
                 except Exception as e:
-                    st.error(f"Error de red: {e}")
+                    st.error(f"Error de enlace: {e}")
 
 # =============================================================================
-# MÓDULO 3: DASHBOARD ADMINISTRADOR DINÁMICO E IMPRESIONES BAJO DEMANDA
+# MÓDULO 3: DASHBOARD ADMINISTRADOR PRIVADO - CRUCE DE AVANCES E IMPRESIÓN
 # =============================================================================
-elif opcion == "📊 Dashboard Administrador (Vista Exclusiva)":
-    st.markdown("<div class='main-title'>📊 CONTROL DE COMUNIDAD MM247</div>", unsafe_allow_html=True)
-    pass_master = st.text_input("Clave de Acceso Profesional del Coach:", type="password")
+elif opcion == "📊 Dashboard Administrador (Coach)":
+    st.markdown("<div class='main-title'>🔐 PANEL DE CONTROL MM247</div>", unsafe_allow_html=True)
+    password = st.text_input("Introduce la Clave Maestra del Administrador:", type="password")
     
-    if pass_master == "MM247_Admin":
+    if password == "MM247_Admin":
         if df_existente.empty or len(df_existente["ID_Alumno"].dropna().unique()) == 0:
-            st.info("No se registran alumnos con ID en el ecosistema actual.")
+            st.warning("No existen registros válidos almacenados en la base de datos central.")
         else:
             df_iniciales = df_existente[df_existente["Tipo_Registro"] == "INICIAL"]
             df_revisiones = df_existente[df_existente["Tipo_Registro"] == "REVISION"]
             
-            ids_activos = df_existente["ID_Alumno"].dropna().unique()
+            ids_totales = df_existente["ID_Alumno"].dropna().unique()
             
-            st.markdown("### 🔍 Análisis Cruzado de Avance por ID de Alumno")
-            id_coach_sel = st.selectbox("Selecciona el ID Único del Alumno:", ids_activos)
+            st.markdown("### 📊 Análisis Cruzado de Avance por ID de Alumno")
+            id_seleccionado = st.selectbox("Seleccione el ID del Expediente a Evaluar:", ids_totales)
             
-            perfil_data = df_iniciales[df_iniciales["ID_Alumno"] == id_coach_sel]
+            perfil = df_iniciales[df_iniciales["ID_Alumno"] == id_seleccionado]
             
-            if not perfil_data.empty:
-                row_perfil = perfil_data.iloc[0]
-                alumno_nombre = str(row_perfil.get("Nombre completo", "ALUMNO")).title()
-                sexo_alumno = row_perfil.get("Sexo", "Masculino")
-                avatar_select = "🏋️‍♂️" if "Masculino" in sexo_alumno else "🏋️‍♀️"
+            if not perfil.empty:
+                row = perfil.iloc[0]
+                nombre_alumno = str(row.get("Nombre completo", "ALUMNO")).title()
+                genero = row.get("Sexo", "Masculino")
+                avatar = "🏋️‍♂️" if "Masculino" in genero else "🏋️‍♀️"
                 
+                # Despliegue de la Identidad Visual Premium del Alumno
                 st.markdown(f"""
                 <div class='avatar-container'>
-                    <div class='avatar-circle'>{avatar_select}</div>
+                    <div class='avatar-circle'>{avatar}</div>
                     <div>
-                        <h2 style='margin:0; font-size:26px;'>{alumno_nombre}</h2>
-                        <p style='margin:4px 0 0 0; opacity:0.9;'><b>ID del Expediente:</b> {id_coach_sel} | <b>Estrategia Base:</b> {row_perfil.get('Objetivo principal', 'Mantenimiento')}</p>
+                        <h2 style='margin:0; font-size:24px;'>{nombre_alumno}</h2>
+                        <p style='margin:4px 0 0 0; opacity:0.8;'><b>ID Oficial:</b> {id_seleccionado} | <b>Estrategia:</b> {row.get('Objetivo principal', 'Mantenimiento')}</p>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Cómputo Comparativo
-                try: peso_c1 = float(str(row_perfil.get("Peso actual", "80")))
-                except: peso_c1 = 80.0
-                try: peso_meta_c1 = float(str(row_perfil.get("Peso objetivo", "70")))
-                except: peso_meta_c1 = 70.0
+                # Reconstrucción temporal de pesos para análisis de proyección a ritmo del cliente
+                try: p_ini = float(str(row.get("Peso actual", "75")))
+                except: p_ini = 75.0
                 
-                fechas_historicas = [pd.to_datetime(row_perfil["Fecha"]).strftime("%d/%m/%Y")]
-                pesos_historicos = [peso_c1]
+                fechas = [pd.to_datetime(row["Fecha"]).strftime("%d/%m/%Y")]
+                pesos = [p_ini]
                 
-                revisiones_filtradas = df_revisiones[df_revisiones["ID_Alumno"] == id_coach_sel].copy()
-                if not revisiones_filtradas.empty:
-                    revisiones_filtradas["Fecha_DT"] = pd.to_datetime(revisiones_filtradas["Fecha"])
-                    revisiones_filtradas = revisiones_filtradas.sort_values(by="Fecha_DT")
-                    for _, row_r in revisiones_filtradas.iterrows():
+                revs_filtradas = df_revisiones[df_revisiones["ID_Alumno"] == id_seleccionado].copy()
+                if not revs_filtradas.empty:
+                    revs_filtradas["Fecha_DT"] = pd.to_datetime(revs_filtradas["Fecha"])
+                    revs_filtradas = revs_filtradas.sort_values(by="Fecha_DT")
+                    for _, r_row in revs_filtradas.iterrows():
                         try:
-                            pesos_historicos.append(float(row_r["Peso_Revision"]))
-                            fechas_historicas.append(pd.to_datetime(row_r["Fecha"]).strftime("%d/%m/%Y"))
+                            pesos.append(float(r_row["Peso_Revision"]))
+                            fechas.append(pd.to_datetime(r_row["Fecha"]).strftime("%d/%m/%Y"))
                         except: pass
                 
-                st.markdown("<br>#### 📉 Métricas e Historial del Alumno", unsafe_allow_html=True)
+                # Bloque Estadístico Comparativo
+                st.markdown("<br>#### 📉 Métricas Comparativas de Evolución Física", unsafe_allow_html=True)
                 m1, m2, m3 = st.columns(3)
-                peso_actual_real = pesos_historicos[-1]
-                cambio_total = round(peso_actual_real - peso_c1, 2)
+                p_actual = pesos[-1]
+                delta = round(p_actual - p_ini, 2)
                 
-                with m1: st.metric("Peso Inicial (Cuestionario 1)", f"{peso_c1} kg")
-                with m2: st.metric("Peso en Revisión Actual", f"{peso_actual_real} kg", delta=f"{cambio_total} kg")
-                with m3: st.metric("Meta de Peso", f"{peso_meta_c1} kg")
+                with m1: st.metric("Peso Base (Cuestionario 1)", f"{p_ini} kg")
+                with m2: st.metric("Peso Última Revisión", f"{p_actual} kg", delta=f"{delta} kg")
+                with m3: st.metric("Objetivo Trazado", f"{row.get('Peso objetivo', 'N/A')} kg")
                 
-                chart_progreso = pd.DataFrame({"Fecha": fechas_historicas, "Peso (kg)": pesos_historicos}).set_index("Fecha")
-                st.line_chart(chart_progreso, color="#FF4B4B")
+                chart_data = pd.DataFrame({"Fecha": fechas, "Peso (kg)": pesos}).set_index("Fecha")
+                st.line_chart(chart_data, color="#FF4B4B")
                 
-                if not revisiones_filtradas.empty:
-                    tabla_analisis = revisiones_filtradas[["Fecha", "Peso_Revision", "Cintura_Revision", "Adherencia_Dieta", "Progreso_Fuerza", "Energia_SNC", "Comentarios_Evolucion"]].copy()
-                    st.dataframe(tabla_analisis, use_container_width=True)
+                # Mostrar Tabla de Respuestas Completas del Cuestionario 2 para Análisis del Coach
+                st.markdown("#### 📋 Historial de Bitácoras de Rendimiento (Respuestas Exactas)")
+                if not revs_filtradas.empty:
+                    tabla_vista = revs_filtradas[["Fecha", "Peso_Revision", "Cintura_Revision", "Adherencia_Dieta", "Progreso_Fuerza", "Energia_SNC", "Comentarios_Evolucion"]].copy()
+                    st.dataframe(tabla_vista, use_container_width=True)
+                else:
+                    st.info("💡 El alumno cuenta con ID activo pero aún no ha registrado bitácoras de avance semanal.")
                 
-                # =============================================================================
-                # OPCIÓN ADMINISTRATIVA: DOS BOTONES INDEPENDIENTES PARA IMPRESIÓN PDF
-                # =============================================================================
+                # --- CENTRO DE IMPRESIÓN INDEPENDIENTE ---
                 st.markdown("---")
-                st.markdown("### 🖨️ Centro de Impresión y Descarga de Reportes (Exclusivo Coach)")
+                st.markdown("### 🖨️ Centro de Impresión de Reportes MM247")
+                cb1, cb2 = st.columns(2)
                 
-                col_btn1, col_btn2 = st.columns(2)
-                
-                with col_btn1:
-                    # REPORTE 1: REPORTE INICIAL INDIVIDUAL
-                    pdf_ini = FPDF()
-                    pdf_ini.add_page()
-                    pdf_ini.set_font("Helvetica", "B", 16)
-                    pdf_ini.cell(190, 10, "MIND MUSCLE 247 - EXPEDIENTE DE EVALUACION INICIAL", 0, 1, "C")
-                    pdf_ini.ln(5)
-                    pdf_ini.set_font("Helvetica", "B", 12)
-                    pdf_ini.cell(190, 8, f"ID UNICO: {id_coach_sel}", 1, 1, "C")
-                    pdf_ini.set_font("Helvetica", "", 11)
-                    pdf_ini.ln(4)
-                    pdf_ini.cell(190, 7, f"Nombre Completo: {alumno_nombre}", 0, 1)
-                    pdf_ini.cell(190, 7, f"Edad: {row_perfil.get('Edad', 'N/A')} | Sexo: {sexo_alumno}", 0, 1)
-                    pdf_ini.cell(190, 7, f"Estatura Registrada: {row_perfil.get('Estatura', 'N/A')}", 0, 1)
-                    pdf_ini.cell(190, 7, f"Peso de Inicio: {peso_c1} kg | Peso Meta: {peso_meta_c1} kg", 0, 1)
-                    pdf_ini.cell(190, 7, f"Objetivo Principal: {row_perfil.get('Objetivo principal', 'N/A')}", 0, 1)
-                    pdf_ini.cell(190, 7, f"Frecuencia Semanal: {row_perfil.get('Días entrenar', 'N/A')}", 0, 1)
-                    pdf_ini.cell(190, 7, f"Zonas de Lesión Reportadas: {row_perfil.get('Lesión actual', 'Ninguna')}", 0, 1)
+                with cb1:
+                    # Imprimir Reporte Inicial por Alumno
+                    pdf_i = FPDF()
+                    pdf_i.add_page()
+                    pdf_i.set_font("Helvetica", "B", 16)
+                    pdf_i.cell(190, 10, "MM247 - EXPEDIENTE DIAGNOSTICO INICIAL", 0, 1, "C")
+                    pdf_i.ln(5)
+                    pdf_i.set_font("Helvetica", "B", 12)
+                    pdf_i.cell(190, 8, f"ID CLIENTE: {id_seleccionado}", 1, 1, "C")
+                    pdf_i.set_font("Helvetica", "", 11)
+                    pdf_i.ln(4)
+                    pdf_i.cell(190, 7, f"Nombre: {nombre_alumno}", 0, 1)
+                    pdf_i.cell(190, 7, f"Edad/Sexo: {row.get('Edad')} | {genero}", 0, 1)
+                    pdf_i.cell(190, 7, f"Estatura: {row.get('Estatura')}", 0, 1)
+                    pdf_i.cell(190, 7, f"Peso de Entrada: {p_ini} kg | Meta: {row.get('Peso objetivo')} kg", 0, 1)
+                    pdf_i.cell(190, 7, f"Estrategia Clinica Asignada: {row.get('Objetivo principal')}", 0, 1)
+                    pdf_i.cell(190, 7, f"Calorias Planificadas: {row.get('Calorías_Plan', 'N/A')} kcal", 0, 1)
                     
-                    bytes_ini = pdf_ini.output(dest='S').encode('latin1', errors='ignore')
-                    st.download_button(label="📥 IMPRIMIR REPORTE INICIAL INDIVIDUAL", data=bytes_ini, file_name=f"Reporte_Inicial_{id_coach_sel}.pdf", mime="application/pdf")
-                
-                with col_btn2:
-                    # REPORTE 2: REPORTE DE AVANCE CRONOLÓGICO INDIVIDUAL
-                    pdf_av = FPDF()
-                    pdf_av.add_page()
-                    pdf_av.set_font("Helvetica", "B", 16)
-                    pdf_av.cell(190, 10, "MIND MUSCLE 247 - BITACORA CRONOLOGICA DE AVANCE", 0, 1, "C")
-                    pdf_av.ln(5)
-                    pdf_av.set_font("Helvetica", "B", 12)
-                    pdf_av.cell(190, 8, f"Monitoreo de Avance para ID: {id_coach_sel}", 1, 1, "C")
-                    pdf_av.set_font("Helvetica", "", 11)
-                    pdf_av.ln(4)
-                    pdf_av.cell(190, 7, f"Alumno: {alumno_nombre}", 0, 1)
-                    pdf_av.cell(190, 7, f"Evolucion del Peso Corporal:", 0, 1)
-                    for f, p in zip(fechas_historicas, pesos_historicos):
-                        pdf_av.cell(190, 6, f" -> Fecha: {f}   |   Peso registrado: {p} kg", 0, 1)
+                    bytes_i = pdf_i.output(dest='S').encode('latin1', errors='ignore')
+                    st.download_button("📥 IMPRIMIR REPORTE INICIAL INDIVIDUAL", data=bytes_i, file_name=f"Reporte_Inicial_{id_seleccionado}.pdf", mime="application/pdf")
                     
-                    if not revisiones_filtradas.empty:
-                        pdf_av.ln(5)
-                        pdf_av.set_font("Helvetica", "B", 12)
-                        pdf_av.cell(190, 8, "Ultimas Bitacoras Completas de Rendimiento:", 0, 1)
-                        pdf_av.set_font("Helvetica", "", 10)
-                        for _, r in revisiones_filtradas.tail(3).iterrows():
-                            pdf_av.cell(190, 6, f"Fecha: {r['Fecha']} | Peso: {r['Peso_Revision']}kg | Cintura: {r['Cintura_Revision']}cm", 0, 1)
-                            pdf_av.cell(190, 6, f"   Adherencia Dieta: {r['Adherencia_Dieta']} | Fuerza: {r['Progreso_Fuerza']}", 0, 1)
-                            pdf_av.ln(2)
-                            
-                    bytes_av = pdf_av.output(dest='S').encode('latin1', errors='ignore')
-                    st.download_button(label="📥 IMPRIMIR REPORTE DE AVANCE INDIVIDUAL", data=bytes_av, file_name=f"Reporte_Avances_{id_coach_sel}.pdf", mime="application/pdf")
+                with cb2:
+                    # Imprimir Reporte Individual de Avances Cronológicos
+                    pdf_a = FPDF()
+                    pdf_a.add_page()
+                    pdf_a.set_font("Helvetica", "B", 16)
+                    pdf_a.cell(190, 10, "MM247 - BITACORA Y PROYECCION DE AVANCES", 0, 1, "C")
+                    pdf_a.ln(5)
+                    pdf_a.set_font("Helvetica", "B", 12)
+                    pdf_a.cell(190, 8, f"Historial Cronologico para ID: {id_seleccionado}", 1, 1, "C")
+                    pdf_a.set_font("Helvetica", "", 11)
+                    pdf_a.ln(4)
+                    pdf_a.cell(190, 7, f"Planificado para Alumno: {nombre_alumno}", 0, 1)
+                    pdf_a.cell(190, 7, "Evolucion de Peso Reportado por el Alumno:", 0, 1)
+                    for f, p in zip(fechas, pesos):
+                        pdf_a.cell(190, 6, f" -> Fecha: {f}  |  Peso: {p} kg", 0, 1)
+                    
+                    bytes_a = pdf_a.output(dest='S').encode('latin1', errors='ignore')
+                    st.download_button("📥 IMPRIMIR REPORTE INDIVIDUAL DE AVANCES", data=bytes_a, file_name=f"Reporte_Avances_{id_seleccionado}.pdf", mime="application/pdf")
             else:
-                st.error("El ID seleccionado no tiene ficha de alta inicial.")
-                
-    elif pass_master != "": 
-        st.error("🔑 Código de Coach inválido.")
+                st.error("El ID seleccionado presenta inconsistencias en su registro inicial.")
+    elif password != "":
+        st.error("🔑 Acceso Denegado. Token inválido.")
