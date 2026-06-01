@@ -5,19 +5,22 @@ import datetime
 import requests
 
 # =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA (BRANDING AUTOMATIZADO MM247)
+# 1. CONFIGURACIÓN DE PÁGINA Y BRANDING (SISTEMA MM247)
 # =============================================================================
 st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 
+# Configuración de URLs de sincronización de datos
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AWyvHR2PpxotzRSPBpMeE5AVWNewO9AcqZ3PeXxmu_s0/exec"
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
 
 def cargar_base_datos():
+    """Carga y limpia de forma segura los datos de Google Sheets evitando KeyErrors"""
     try:
         url_fresca = f"{SHEET_URL}&nocache={datetime.datetime.now().timestamp()}"
         df = pd.read_csv(url_fresca)
+        # Eliminar columnas fantasma o sin nombre
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        # Limpieza estricta de espacios en los nombres de las columnas para evitar KeyErrors
+        # Limpieza absoluta de espacios en blanco en los nombres de las columnas
         df.columns = df.columns.str.strip()
         df = df.fillna("")
         return df
@@ -26,7 +29,7 @@ def cargar_base_datos():
 
 df_existente = cargar_base_datos()
 
-# Inyección de Estilos CSS Personalizados
+# Estilos visuales de la interfaz minimalista de MM247
 st.markdown("""
     <style>
     .main-title { font-size:44px; font-weight:900; color:#111111; text-align:center; letter-spacing: -1px; margin-bottom:0px; }
@@ -40,378 +43,421 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# =============================================================================
-# MENU DE NAVEGACIÓN
-# =============================================================================
-opcion = st.sidebar.selectbox(
-    "Navegación del Sistema MM247:",
-    ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"]
-)
+opcion = st.sidebar.selectbox("Navegación MM247:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
 
 # =============================================================================
-# 2. MOTOR DE INTELIGENCIA CLÍNICA, BIOMECÁNICA Y METABÓLICA
+# 2. MOTORES INTERNOS DE CÁLCULO CIENTÍFICO Y FISIOLÓGICO
 # =============================================================================
 def procesar_metricas_base(datos):
-    """Extrae de forma segura los valores numéricos de peso, estatura y edad."""
-    try:
-        peso = float(str(datos.get('Peso actual', '80')).replace(" kg", "").split()[0])
+    try: peso = float(str(datos.get('Peso actual', '80')).replace(" kg", "").split()[0])
     except Exception: peso = 80.0
-    try:
-        estatura = float(str(datos.get('Estatura', '175')).replace(" cm", "").split()[0])
+    try: estatura = float(str(datos.get('Estatura', '175')).replace(" cm", "").split()[0])
     except Exception: estatura = 175.0
-    try:
-        edad = float(str(datos.get('Edad', '25')).replace(" años", "").split()[0])
+    try: edad = float(str(datos.get('Edad', '25')).replace(" años", "").split()[0])
     except Exception: edad = 25.0
-    
     genero = str(datos.get('Sexo', 'Masculino'))
     return peso, estatura, edad, genero
 
 def calcular_motores_automatizados(datos):
     peso, estatura, edad, genero = procesar_metricas_base(datos)
     
-    # METABOLISMO BASE (Harris-Benedict)
+    # Ecuación de Harris-Benedict revisada para Tasa Metabólica Basal
     if "Masculino" in genero:
         tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
     else:
         tmb = 655.095 + (9.5634 * peso) + (1.8496 * estatura) - (4.6756 * edad)
         
-    # Factor NEAT
     neat_str = str(datos.get('Nivel de actividad', 'Moderadamente activo'))
     factores = {"Sedentario": 1.2, "Poco activo": 1.375, "Moderadamente activo": 1.55, "Muy activo": 1.725}
     factor = factores.get(neat_str.split()[0], 1.55)
     tdee = tmb * factor
     
-    # Balance Objetivo según Meta
     meta = str(datos.get('Objetivo principal', 'Recomposición corporal'))
-    if "Perder" in meta or "Bajar" in meta or "Déficit" in meta:
-        cals_obj = tdee - 500
-        balance_str = "Déficit Calórico Restrictivo Controlado (-500 kcal)"
-    elif "Ganar" in meta or "Subir" in meta or "Volumen" in meta:
-        cals_obj = tdee + 350
-        balance_str = "Superávit Calórico Limpio Progresivo (+350 kcal)"
+    condicion = str(datos.get('Condición médica', 'Ninguna'))
+    
+    # Ajustes calóricos inteligentes adaptados a la salud
+    if "Perder" in meta or "Bajar" in meta or "Déficit" in meta or "grasa" in meta:
+        cals_obj = tdee - 450 if edad < 45 else tdee - 350
+        balance_str = f"Déficit Calórico Estructurado ({round(cals_obj)} kcal)"
+    elif "Ganar" in meta or "Subir" in meta or "Volumen" in meta or "muscular" in meta:
+        cals_obj = tdee + 300 if "Diabetes" not in condicion else tdee + 150
+        balance_str = f"Superávit Calórico Limpio ({round(cals_obj)} kcal)"
     else:
         cals_obj = tdee
-        balance_str = "Normocalórico Estandarizado Normorregulado"
+        balance_str = f"Normocalórico de Consolidación ({round(cals_obj)} kcal)"
         
-    # Macronutrientes Estrictos de Precisión MM247
+    # Leyes nutricionales fijas del entrenador: 2g Proteína y 1g Grasa por kg de peso
     prot = peso * 2.0  
     grasa = peso * 1.0 
     cals_restantes = cals_obj - ((prot * 4) + (grasa * 9))
     carbs = max(cals_restantes / 4, 50.0)
     
-    # CAPACIDAD DE RECUPERACIÓN Y VOLUMEN TOLERABLE
-    try:
-        estres = float(str(datos.get('P_Estres', '5')))
-        sueno = float(str(datos.get('P_Sueno', '5')))
-        
-        score_recup = (11 - estres) + sueno
-        if "Sí" in str(datos.get('Dolores constantes', 'No')) or score_recup < 8:
-            cap_recup = "Baja Tolerancia / Sistema Nervioso Estresado"
-            vol_por_musculo = "10-12 Series efectivas semanales"
-            rir_sugerido = "RIR 2 fijo (Evitar fallo sistémico)"
-        elif score_recup > 14:
-            cap_recup = "Alta Capacidad de Adaptación / Recuperación Rápida"
-            vol_por_musculo = "16-20 Series efectivas semanales"
-            rir_sugerido = "RIR 0-1 (Alta intensidad e impacto)"
-        else:
-            cap_recup = "Media Estandarizada"
-            vol_por_musculo = "12-16 Series efectivas semanales"
-            rir_sugerido = "RIR 1-2 (Progresión estándar)"
-    except Exception:
-        cap_recup, vol_por_musculo, rir_sugerido = "Media Estandarizada", "12-16 Series", "RIR 1-2"
-
-    # RIESGO BIOMECÁNICO Y RESTRICCIONES ARTICULARES
-    lesion = str(datos.get('Lesión actual', 'Ninguna'))
-    molestias_mov = str(datos.get('Molestias movimientos', ''))
-    
-    riesgo = "Bajo"
-    restricciones = "Ninguna"
-    if "Rodilla" in lesion or "Sentadilla" in molestias_mov:
-        riesgo = "Alto en Tren Inferior"
-        restricciones = "Prohibido extensiones pesadas a rangos máximos y cargas axiales compresivas en rodilla."
-    if "Hombro" in lesion or "Press de pecho" in molestias_mov or "Press militar" in molestias_mov:
-        riesgo = "Moderado/Alto en Tren Superior"
-        restricciones = "Modificar presses planos con barra por mancuernas en ángulos neutros o poleas."
-
     return {
-        "imc": round(peso / ((estatura/100)**2), 1),
-        "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals_obj, 0),
-        "prot": round(prot, 1), "grasa": round(grasa, 1), "carbs": round(carbs, 1),
-        "balance_str": balance_str, "cap_recup": cap_recup, "volumen": vol_por_musculo,
-        "rir": rir_sugerido, "riesgo": riesgo, "restricciones": restricciones
+        "imc": round(peso / ((estatura/100)**2), 1), "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals_obj, 0),
+        "prot": round(prot, 1), "grasa": round(grasa, 1), "carbs": round(carbs, 1), "balance_str": balance_str,
+        "edad": edad, "genero": genero, "condicion": condicion, "peso": peso
     }
 
+# =============================================================================
+# 3. NUEVO MOTOR DE TEXTO DINÁMICO (SISTEMA DE CORRECCIÓN DE AMBIGÜEDAD)
+# =============================================================================
 def generar_propuesta_integral_mm247(datos):
     m = calcular_motores_automatizados(datos)
     nombre = str(datos.get('Nombre completo', 'Alumno')).title()
     experiencia = str(datos.get('Tiempo entrenando', 'Menos de 6 meses'))
-    tiempo_sesion = str(datos.get('Tiempo por sesión', '45 a 75 minutos'))
     prioridad = str(datos.get('Prioridad', 'Salud'))
+    lesion = str(datos.get('Lesión actual', 'Ninguna'))
+    cirugias = str(datos.get('Cirugías', 'No'))
     
+    # Análisis dinámico de postura y estilo de vida laboral
+    horas_sentado = str(datos.get('Horas sentado', 'No'))
+    postura = str(datos.get('Mala postura', 'No'))
+    
+    analisis_postural = ""
+    if "más de 6 horas" in horas_sentado:
+        analisis_postural += "• Alerta Postural: Jornada laboral sedentaria (más de 6 horas sentado). Riesgo latente de amnesia glútea y acortamiento del psoas ilíaco. Obligatorio realizar aproximaciones dinámicas.\n"
+    if "hombros adelantados" in postura:
+        analisis_postural += "• Desbalance Biomecánico Superior: Rotación interna de hombros detectada (cifosis). Se limita el volumen de empujes planos en barra; priorizar trabajo de deltoides posterior y tracciones.\n"
+    elif "hiperlordosis" in postura:
+        analisis_postural += "• Inestabilidad Lumbar: Anteversión pélvica marcada. Limitar cargas axiales libres e incorporar ejercicios estabilizadores de core.\n"
+    else:
+        analisis_postural += "• Estabilidad Ósea: Sin desviaciones posturales graves evidentes. Alineación articular óptima.\n"
+
+    # Diagnóstico clínico cruzado con dolores y antecedentes
+    dolor = str(datos.get('Dolor frecuente', 'No'))
+    prohibido = str(datos.get('Prohibido ejercicio', 'No'))
+    
+    analisis_clinico = ""
+    if lesion != "Ninguna" or cirugias != "No" or m['condicion'] != "Ninguna":
+        analisis_clinico += f"🚨 RESTRICCIONES CLÍNICAS ACTIVADAS:\n"
+        analisis_clinico += f"  - Patología Base: {m['condicion']} | Región estructural afectada: {lesion}\n"
+        if "Diabetes" in m['condicion']:
+            analisis_clinico += "  - Ajuste Endocrino: Plan nutricional adaptado con carbohidratos de bajo índice glucémico y alto aporte de fibra para mitigar picos de insulina.\n"
+        if "Hipertensión" in m['condicion']:
+            analisis_clinico += "  - Seguridad Hemodinámica: Prohibido trabajar a intensidades máximas prolongadas que requieran bloqueo respiratorio extremo (Valsalva).\n"
+        if "Rodilla" in lesion or "sentadillas" in dolor:
+            analisis_clinico += "  - Modificación de Tren Inferior: Sustituir sentadillas libres profundas por variantes controladas en poleas o prensa inclinada con rango seguro.\n"
+        if "Espalda" in lesion or "lumbar" in dolor or "columna" in prohibido:
+            analisis_clinico += "  - Protección de Columna: Restricción estricta de cargas verticales o compresivas. Trabajo de fuerza enfocado en vectores horizontales.\n"
+    else:
+        analisis_clinico += "• Diagnóstico de Salud: Sin limitaciones patológicas ni óseas declaradas. Apto para protocolos estándar de fuerza.\n"
+
+    # Medición psicométrica de fatiga del Sistema Nervioso Central (SNC)
+    estres_mental = int(datos.get('P_Estres', 5))
+    sueno_eficiencia = int(datos.get('P_Sueno', 8))
+    horas_sueno = str(datos.get('Horas sueño', '7-8 horas'))
+    
+    if estres_mental >= 8 or sueno_eficiencia <= 5 or "4-5 horas" in horas_sueno:
+        capacidad_snc = "CRÍTICA / RESTRIGIDA (Carga laboral o insomnio severo)"
+        volumen_recomendado = "8 a 10 Series Efectivas semanales por grupo muscular (Rutina optimizada para evitar fatiga crónica)"
+        pauta_recup = "Evitar entrenamientos extenuantes al fallo muscular absoluto. Priorizar la consistencia sobre la intensidad."
+    elif estres_mental <= 4 and sueno_eficiencia >= 8:
+        capacidad_snc = "MÁXIMA / ÓPTIMA (Excelente entorno anabólico)"
+        volumen_recomendado = "14 a 18 Series Efectivas semanales por grupo muscular"
+        pauta_recup = "Sistemas energéticos listos para soportar alta densidad de entrenamiento y sobrecarga progresiva lineal."
+    else:
+        capacidad_snc = "ESTÁNDAR EFICIENTE"
+        volumen_recomendado = "11 a 13 Series Efectivas semanales por grupo muscular"
+        pauta_recup = "Tolerancia de carga regular. Mantener progresión convencional."
+
     res = f"========================================================================\n"
-    res += f"         MM247 FICHA DE EVALUACIÓN CLÍNICA, BIOMECÁNICA Y METABÓLICA\n"
+    res += f"        MM247 INFORME DIAGNÓSTICO MAESTRO AVANZADO (100% PERSONALIZADO)\n"
     res += f"========================================================================\n\n"
-    res += f"👤 ALUMNO VALORADO: {nombre}\n"
-    res += f"📊 ÍNDICE DE MASA CORPORAL (IMC): {m['imc']} | NIVEL OPERATIVO: {experiencia}\n"
-    res += f"🛡️ ENFOQUE DE PRIORIDAD ASIGNADO: {prioridad.upper()}\n\n"
-    res += f"1. CLASIFICACIÓN FÍSICA, METABÓLICA Y CONSUMO DE ENERGÍA:\n"
+    res += f"👤 ALUMNO EVALUADO: {nombre} | EDAD: {int(m['edad'])} años | SEXO: {m['genero']}\n"
+    res += f"📊 ANÁLISIS METABÓLICO BASE:\n"
     res += f"   - Tasa Metabólica Basal (TMB): {m['tmb']} kcal\n"
-    res += f"   - Gasto Energético Total Diario (TDEE): {m['tdee']} kcal\n"
-    res += f"   - Intervención Planificada: {m['balance_str']}\n\n"
-    res += f"2. CLASIFICACIÓN BIOMECÁNICA Y EVALUACIÓN DE RIESGOS:\n"
-    res += f"   - Diagnóstico de Riesgo de Lesión: {m['riesgo']}\n"
-    res += f"   - Limitaciones y Restricciones Estrictas: {m['restricciones']}\n\n"
-    res += f"3. CAPACIDAD DE RECUPERACIÓN SISTÉMICA Y VOLUMEN DE CARGA:\n"
-    res += f"   - Capacidad Nerviosa: {m['cap_recup']}\n"
-    res += f"   - Volumen de Trabajo Semanal Recomendado: {m['volumen']}\n"
-    res += f"   - Intensidad de Esfuerzo Target: {m['rir']} (Escala RPE correlativa)\n"
-    res += f"   - Ventana de Tiempo Límite Ejecutable por Sesión: {tiempo_sesion} por disponibilidad."
+    res += f"   - Gasto Diario Total (TDEE): {m['tdee']} kcal\n"
+    res += f"   - Ajuste Prescrito MM247: {m['balance_str']}\n\n"
+    res += f"⚠️ CLASIFICACIÓN BIOMECÁNICA Y RIESGOS POSTURALES:\n{analisis_postural}\n"
+    res += f"📋 SINTOMATOLOGÍA CLÍNICA Y ANTECEDENTES RELEVANTES:\n{analisis_clinico}\n"
+    res += f"🧠 CAPACIDAD DEL SISTEMA NERVIOSO Y RECOVIERY:\n"
+    res += f"   - Tolerancia SNC: {capacidad_snc}\n"
+    res += f"   - Volumen de Trabajo Semanal Aconsejado: {volumen_recomendado}\n"
+    res += f"   - Estrategia de Control de Fatiga: {pauta_recup}\n\n"
+    res += f"🎯 OBJETIVO ESTÉTICO LOCALIZADO:\n"
+    res += f"   - Zona prioritaria elegida: {datos.get('Partes mejorar', 'General')}\n"
+    res += f"   - Dominancia genética reportada: {datos.get('Músculo desarrollado', 'Ninguno')}\n"
+    res += f"========================================================================\n"
     return res
 
 def generar_rutina_detallada_mm247(datos):
     m = calcular_motores_automatizados(datos)
     dias = str(datos.get('Días entrenar', '4')).split()[0]
-    tiempo = str(datos.get('Tiempo por sesión', '1 hora'))
     equipo = str(datos.get('Equipo disponible', 'Gimnasio completo'))
     lesiones = str(datos.get('Lesión actual', 'Ninguna'))
     
-    ex_prensa = "Prensa de Piernas de forma controlada" if "Rodilla" in lesiones else "Sentadilla Hack Profunda"
-    ex_pecho = "Press de Pecho Inclinado con Mancuernas (Agarre semineutro)" if "Hombro" in lesiones else "Press de Pecho Plano con Barra"
-    ex_hombro = "Elevaciones Laterales con Polea por detrás" if "Hombro" in lesiones else "Press Militar con Barra"
+    es_adulto_mayor = m['edad'] >= 50
+    es_mujer = "Femenino" in m['genero']
+    
+    # Ajustes automáticos de ejercicios por seguridad biomecánica
+    base_prensa = "Prensa de Piernas Inclinada (Ejecución controlada)" if ("Rodilla" in lesiones or es_adulto_mayor) else "Sentadilla Libre Profunda"
+    base_pecho = "Press con Mancuernas en Banco Inclinado" if ("Hombro" in lesiones) else "Press de Pecho Plano con Barra"
+    
+    ej_gluteo_fem = "Hip Thrust con Barra Pesado + Peso Muerto Rumano" if es_mujer else "Peso Muerto Convencional con Barra"
+    ej_brazo_torso = "Elevaciones Laterales + Jalón al Pecho Polea" if es_mujer else "Press Militar con Barra + Remo Pendlay"
 
     r = f"========================================================================\n"
-    r += f"     SISTEMA DE ENTRENAMIENTO PERSONALIZADO MM247 — PLANIFICACIÓN SEMANAL\n"
+    r += f"     CRONOGRAMA SEMANAL DE 7 DÍAS REALES (SIN AMBIGÜEDADES) — MM247\n"
     r += f"========================================================================\n"
-    r += f"Disponibilidad de Tiempo Semanal: {dias} días | Capacidad Límite de Sesión: {tiempo}\n"
-    r += f"Centro Operativo Logístico: {equipo} | Gestión de Intensidad: {m['rir']}\n\n"
+    r += f"Programación para perfil: {m['genero']} | Edad: {int(m['edad'])} años | Cargas en: {equipo}\n"
+    r += f"Cuidado articular por lesión en: {lesiones}\n\n"
 
     if "3" in dias:
-        r += "DIVISIÓN DISPUESTA: FULLBODY COMPLETO (Frecuencia 3 Semanal)\n\n"
-        r += f"• DÍA 1 [LUNES - Estímulo Completo Global]:\n  - {ex_prensa}: 3 series efectivas x 10-12 reps (Tempo 3-1-1-0)\n  - {ex_pecho}: 3 series efectivas x 8-10 reps\n  - Jalón al Pecho con agarre Supino: 3 series x 10 reps\n  - Descanso pautado: 120 segundos reales entre series.\n\n"
-        r += f"• DÍA 2 [MIÉRCOLES - Estímulo Completo Global]:\n  - Peso Muerto Rumano con Mancuernas: 3 series x 10 reps\n  - {ex_hombro}: 3 series x 12 reps\n  - Remo con Soporte en Pecho: 3 series x 8-10 reps\n  - Descanso pautado: 90-120 segundos.\n\n"
-        r += f"• DÍA 3 [VIERNES - Estímulo Completo Global]:\n  - Zancadas Estáticas con Mancuernas: 3 series x 12 reps por pierna\n  - Cruces de Polea para Pectoral: 3 series x 15 reps\n  - Curl de Bíceps en Banco Inclinado + Extensión de Tríceps en Polea: 3 series x 12 reps (Superserie)"
+        r += "📆 LUNES [DÍA 1 - ESTÍMULO FULLBODY GLOBAL]:\n"
+        r += f"   - {base_prensa}: 3 x 10-12 reps (Tempo 3-1-1-0). RIR 2.\n"
+        r += f"   - {base_pecho}: 3 x 8-10 reps.\n"
+        r += f"   - Curl de Piernas Sentado (Polea): 3 x 12 reps.\n\n"
+        r += "📆 MARTES:\n   ❌ DESCANSO OBLIGATORIO - Recuperación del Sistema Nervioso Central.\n\n"
+        r += "📆 MIÉRCOLES [DÍA 2 - ESTÍMULO FULLBODY GLOBAL]:\n"
+        r += f"   - {ej_gluteo_fem}: 3 x 10 reps (Controlando la bajada excéntrica).\n"
+        r += f"   - {ej_brazo_torso}: 3 x 12 reps.\n\n"
+        r += "📆 JUEVES:\n   ❌ DESCANSO OBLIGATORIO - Procesamiento y síntesis proteica.\n\n"
+        r += "📆 VIERNES [DÍA 3 - ESTÍMULO FULLBODY GLOBAL]:\n"
+        r += f"   - Zancadas Estáticas con Mancuerna: 3 x 12 reps por pierna.\n"
+        r += f"   - Cruces de Poleas desde Abajo (Pectoral): 3 x 15 reps.\n"
+        r += "   - Plank Abdominal Isométrico: 3 x 45 segundos.\n\n"
+        r += "📆 SÁBADO:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
+        r += "📆 DOMINGO:\n   ❌ DESCANSO OBLIGATORIO — Reset metabólico semanal."
+        
     elif "5" in dias:
-        r += "DIVISIÓN DISPUESTA: SUPERIOR / INFERIOR / EMPUJE / TRACCIÓN / PIERNA (Frecuencia Variable Avanzada)\n\n"
-        r += f"• DÍA 1 [LUNES - Tren Superior]:\n  - {ex_pecho}: 4 series x 8-10 reps\n  - Remo con Barra para Dorsal: 4 series x 10 reps\n  - {ex_hombro}: 3 series x 12 reps\n\n"
-        r += f"• DÍA 2 [MARTES - Tren Inferior Biomecánico]:\n  - {ex_prensa}: 4 series x 10-12 reps\n  - Curl Femoral Sentado: 4 series x 12 reps\n  - Elevación de Talones en Máquina: 4 series x 15 reps\n\n"
-        r += f"• DÍA 3 [MIÉRCOLES - Enfoque Empuje (Pecho/Hombro/Tríceps)]:\n  - Press de Hombro con Mancuernas: 3 series x 10 reps\n  - Aperturas en Contractor Peck-Deck: 3 series x 12 reps\n  - Fondos en Paralelas (Máquina asistida): 3 series x 12 reps\n\n"
-        r += f"• DÍA 4 [JUEVES - Enfoque Tracción (Espalda/Bícep/Core)]:\n  - Jalón al Pecho Agarre Abierto: 4 series x 10 reps\n  - Remo con Mancuerna a una mano: 3 series x 12 reps\n  - Curl de Bíceps de pie con Barra Z: 3 series x 10 reps\n\n"
-        r += f"• DÍA 5 [VIERNES - Tren Inferior de Aislamiento e Hipertrofia]:\n  - Extensión de Rodillas en Máquina: 4 series x 15 reps\n  - Peso Muerto Rumano con Barra: 3 series x 10 reps\n  - Abductores en Máquina Sentado: 3 series x 20 reps"
-    elif "6" in dias:
-        r += "DIVISIÓN DISPUESTA: PUSH / PULL / LEG (Frecuencia 2 Estricta de Bodybuilding)\n\n"
-        r += f"• DÍA 1 [LUNES - PUSH 1]: {ex_pecho} 4x10, {ex_hombro} 3x12, Fondos 3x10.\n"
-        r += f"• DÍA 2 [MARTES - PULL 1]: Jalón Prono 4x10, Remo Sentado 3x12, Curl Inclinado 3x12.\n"
-        r += f"• DÍA 3 [MIÉRCOLES - LEG 1]: {ex_prensa} 4x12, Curl Femoral 4x10, Extensiones 3x15.\n"
-        r += f"• DÍA 4 [JUEVES - PUSH 2]: Press con Mancuernas 4x10, Cruces en Poleas 3x12, Copa de Tríceps 3x12.\n"
-        r += f"• DÍA 5 [VIERNES - PULL 2]: Dominadas asistidas 4x10, Remo en Polea Baja 3x12, Curl Martillo 3x12.\n"
-        r += f"• DÍA 6 [SÁBADO - LEG 2]: Peso Muerto Rumano 4x10, Zancadas con Mancuerna 3x12, Pantorrilla en Máquina 4x15."
-    else: 
-        r += "DIVISIÓN DISPUESTA: TORSO / PIERNA ORIGINAL (Frecuencia 2 Óptima)\n\n"
-        r += f"• DÍA 1 [LUNES - Torso Enfoque Fuerza]:\n  - {ex_pecho}: 4 series efectivas x 6-8 reps (2 mins descanso)\n  - Remo con Barra con agarre Supino: 4 series x 8 reps\n  - Press Militar con Mancuernas: 3 series x 10 reps\n  - Jalón al Pecho Cerrado Neutro: 3 series x 10 reps\n\n"
-        r += f"• DÍA 2 [MARTES - Pierna Enfoque Desarrollo Estructural]:\n  - {ex_prensa}: 4 series x 10-12 reps\n  - Peso Muerto Rumano con Mancuernas: 4 series x 10 reps\n  - Extensión de Cuádriceps: 3 series x 15 reps\n  - Curl Femoral Acostado: 3 series x 12 reps\n\n"
-        r += f"• DÍA 3 [JUEVES - Torso Enfoque Hipertrofia y Detalle]:\n  - Press Inclinado con Mancuernas: 4 series x 10-12 reps\n  - Remo con Polea Baja con triángulo: 4 series x 12 reps\n  - Elevaciones Laterales con Mancuerna: 4 series x 15 reps\n  - Curl de Bíceps en Polea Baja + Extensión de Tríceps Cuerda: 3 series x 12 reps\n\n"
-        r += f"• DÍA 4 [VIERNES - Pierna de Estabilidad y Aislamiento]:\n  - Sentadilla Búlgara con Mancuernas: 3 series x 10 reps por pierna\n  - Prensa de Piernas: 3 series x 12 reps\n  - Elevación de Talones de pie: 4 series x 15 reps\n\n"
-        r += "SÁBADO Y DOMINGO [Descanso Completo / Recuperación Nerviosa]"
-
-    r += "\n\n========================================================================\n"
-    r += "🛡️ PROTOCOLO DE PROGRESIÓN SEMANAL AUTOMÁTICA Y CONTROL DE FATIGA:\n"
-    r += f"Aplica Sobrecarga Progresiva de Doble Entrada: Si completas las repeticiones objetivo con el RIR establecido ({m['rir']}), sube un 5% de carga para la siguiente semana."
+        r += "📆 LUNES [DÍA 1 - ENFOQUE CADENA INFERIOR / POSTERIOR]:\n"
+        r += f"   - {base_prensa}: 4 x 10 reps.\n"
+        r += f"   - {ej_gluteo_fem}: 4 x 12 reps.\n\n"
+        r += "📆 MARTES [DÍA 2 - ENFOQUE TREN SUPERIOR (EMPUJE / TRACCIÓN)]:\n"
+        r += f"   - {base_pecho}: 4 x 10 reps.\n"
+        r += f"   - {ej_brazo_torso}: 3 x 12 reps.\n\n"
+        r += "📆 MIÉRCOLES:\n   ❌ DESCANSO OBLIGATORIO EN MITAD DE SEMANA - Vaciado de fatiga.\n\n"
+        r += "📆 JUEVES [DÍA 3 - AISLAMIENTO METABÓLICO E HIPERTROFIA]:\n"
+        r += "   - Extensiones de Cuádriceps en Máquina: 4 x 15 reps (Última serie al fallo técnico).\n"
+        r += "   - Jalón al Pecho con Agarre Prono Abierto: 4 x 12 reps.\n\n"
+        r += "📆 VIERNES [DÍA 4 - ÉNFASIS EN CADENA POSTERIOR Y GLÚTEO]:\n"
+        r += "   - Hip Thrust en Máquina o Barra Libre: 4 x 10 reps (Sostener 2 segundos arriba).\n"
+        r += "   - Curl Femoral Tumbado: 4 x 12 reps.\n\n"
+        r += "📆 SÁBADO [DÍA 5 - DETALLE ESTÉTICO: HOMBROS, BRAZO Y CORE]:\n"
+        r += "   - Elevaciones Laterales con Mancuerna: 4 x 15 reps.\n"
+        r += "   - Curl de Bíceps con Polea + Copa de Tríceps (Superserie): 3 x 12 reps.\n\n"
+        r += "📆 DOMINGO:\n   ❌ DESCANSO OBLIGATORIO — Recuperación integral profunda."
+        
+    else: # 4 Días
+        r += "📆 LUNES [DÍA 1 - TORSO COMPLETO]:\n"
+        r += f"   - {base_pecho}: 4 x 8-10 reps.\n"
+        r += f"   - {ej_brazo_torso}: 4 x 10 reps.\n\n"
+        r += "📆 MARTES [DÍA 2 - PIERNA ENFOQUE GLOBAL]:\n"
+        r += f"   - {base_prensa}: 4 x 10-12 reps.\n"
+        r += f"   - {ej_gluteo_fem}: 4 x 12 reps.\n\n"
+        r += "📆 MIÉRCOLES:\n   ❌ DESCANSO OBLIGATORIO - Pausa de recuperación de articulaciones.\n\n"
+        r += "📆 JUEVES [DÍA 3 - TORSO ENFOQUE HIPERTROFIA]:\n"
+        r += "   - Aperturas en Contractor (Peck Deck): 4 x 12 reps.\n"
+        r += "   - Remo Sentado en Polea Baja con Agarre Gironda: 4 x 10 reps.\n\n"
+        r += "📆 VIERNES [DÍA 4 - PIERNA DETALLE Y VOLUMEN DE TRABAJO]:\n"
+        r += "   - Extensión de Cuádriceps + Curl Femoral Tumbado (Superserie): 4 x 12 reps.\n"
+        r += "   - Elevación de Pantorrillas de Pie: 4 x 15 reps.\n\n"
+        r += "📆 SÁBADO:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
+        r += "📆 DOMINGO:\n   ❌ DESCANSO OBLIGATORIO."
+        
     return r
 
 def generar_dieta_detallada_mm247(datos):
     m = calcular_motores_automatizados(datos)
-    tipo_dieta = str(datos.get('Tipo alimentación', 'Omnívoro'))
-    comidas = str(datos.get('Comidas al día', '4')).split()[0]
-    alergias = str(datos.get('Alergias alimenticias', 'Ninguna'))
-    no_gustan = str(datos.get('Alimentos no gustan', 'Ninguno'))
+    
+    # Extracción automatizada de los checkboxes marcados por el cliente
+    prots_sel = str(datos.get('Menu_Proteinas', 'Pechuga de Pollo')).split(',')
+    carbs_sel = str(datos.get('Menu_Carbohidratos', 'Arroz Blanco')).split(',')
+    grasas_sel = str(datos.get('Menu_Grasas', 'Aguacate')).split(',')
+    frutas_sel = str(datos.get('Menu_Frutas', 'Manzana')).split(',')
+    verd_sel = str(datos.get('Menu_Verduras', 'Brócoli')).split(',')
+    
+    prots = [p.strip() for p in prots_sel if p.strip() and p.strip() != "nan"]
+    carbs = [c.strip() for c in carbs_sel if c.strip() and c.strip() != "nan"]
+    grasas = [g.strip() for g in grasas_sel if g.strip() and g.strip() != "nan"]
+    frutas = [f.strip() for f in frutas_sel if f.strip() and f.strip() != "nan"]
+    verds = [v.strip() for v in verd_sel if v.strip() and v.strip() != "nan"]
+
+    # Alimentos por defecto si el cliente dejó el casillero en blanco
+    if not prots: prots = ["Pechuga de Pollo", "Claras de Huevo"]
+    if not carbs: carbs = ["Arroz Blanco", "Avena en Hojuelas"]
+    if not grasas: grasas = ["Aguacate", "Almendras"]
+    if not frutas: frutas = ["Plátano", "Manzana"]
+    if not verds: verds = ["Brócoli", "Espinacas"]
+
+    # División milimétrica de macros exactos en 4 comidas estructuradas
+    p_comida = round(m['prot'] / 4, 1)
+    g_comida = round(m['grasa'] / 4, 1)
+    c_comida = round(m['carbs'] / 4, 1)
+    cal_comida = round(m['cals'] / 4, 0)
 
     d = f"========================================================================\n"
-    d += f"     ESTRATEGIA NUTRICIONAL DE ALTA PRECISIÓN MM247 — DIETA CALCULADA\n"
+    d += f"     ESTRATEGIA NUTRICIONAL DE ALTA PRECISIÓN MM247 — DIETA AJUSTADA\n"
     d += f"========================================================================\n"
-    d += f"Estructura Logística: {comidas} ingestas fijas distribuidas | Enfoque: {tipo_dieta}\n"
-    d += f"Exclusiones de Alimentos: {alergias} | Restricciones por palatabilidad: {no_gustan}\n\n"
-    d += f"🔥 MACRONUTRIENTES DIARIOS CALCULADOS CON PRECISIÓN MATEMÁTICA:\n"
-    d += f"   - CALORÍAS TARGET: {m['cals']} kcal al día\n"
-    d += f"   - PROTEÍNAS (2g/kg): {m['prot']} g\n"
-    d += f"   - GRASAS (1g/kg): {m['grasa']} g\n"
-    d += f"   - CARBOHIDRATOS: {m['carbs']} g\n\n"
-    d += f"📋 DISTRIBUCIÓN ESPECÍFICA DE TIMING SEGÚN TUS HORARIOS DE COMIDA:\n\n"
-
-    try: c_num = int(comidas)
-    except Exception: c_num = 4
-
-    p_por_comida = round(m['prot'] / c_num, 1)
-    g_por_comida = round(m['grasa'] / c_num, 1)
-    c_por_comida = round(m['carbs'] / c_num, 1)
-    cal_por_comida = round(m['cals'] / c_num, 0)
-
-    fuente_p = "Pechuga de Pollo / Claras de Huevo / Lomo de Cerdo Magro"
-    fuente_g = "Aguacate / Almendras naturales / Aceite de Oliva Extra Virgen"
-    if "Vegetariano" in tipo_dieta:
-        fuente_p = "Tofu firme / Tempeh / Queso Cottage bajo en grasa"
-    elif "Vegano" in tipo_dieta:
-        fuente_p = "Proteína aislada de guisante/arroz / Seitan / Lentejas"
-        fuente_g = "Nueces / Semillas de Chía / Crema de Cacahuete pura"
-
-    for i in range(1, c_num + 1):
-        if i == 1:
-            d += f"• COMIDA 1 [Desayuno Metatónico]:\n"
-            d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú: Tortilla de Claras de huevo + Avena en hojuelas cocida con agua y canela.\n\n"
-        elif i == 2:
-            d += f"• COMIDA 2 [Almuerzo / Post-Entrenamiento]:\n"
-            d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú: {fuente_p.split(' / ')[0]} a la plancha + Arroz blanco al vapor + Ensalada verde.\n\n"
-        elif i == c_num:
-            d += f"• COMIDA {i} [Cena de Control Nocturno]:\n"
-            d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú: Pescado blanco magro o Atún en agua + Bloque de {fuente_g.split(' / ')[0]} + Brócoli asado.\n\n"
-        else:
-            d += f"• COMIDA {i} [Incentivo Metabólico Intermedio]:\n"
-            d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú: Batido de Proteína Isolate + {fuente_g.split(' / ')[1]}.\n\n"
-
+    d += f"🎯 OBJETIVO DIARIO EXACTO (Fijo: 2g Proteína / 1g Grasa por Kg de peso):\n"
+    d += f"   🔥 Energía Total: {m['cals']} kcal\n"
+    d += f"   💪 Proteínas: {m['prot']}g  |  🍞 Carbohidratos: {m['carbs']}g  |  🥑 Grasas: {m['grasa']}g\n\n"
+    d += f"🥦 FUENTES SELECCIONADAS POR EL CLIENTE EN EL CUESTIONARIO:\n"
+    d += f"   - Proteínas: {', '.join(prots)}\n"
+    d += f"   - Carbohidratos: {', '.join(carbs)}\n"
+    d += f"   - Grasas Saludables: {', '.join(grasas)}\n"
+    d += f"   - Fibras y Micronutrientes: {', '.join(frutas)} | {', '.join(verds)}\n\n"
+    d += f"📋 DISTRIBUCIÓN HORARIA DEL TIMING NUTRICIONAL:\n\n"
+    
+    d += f"• COMIDA 1 [Desayuno / Carga de Energía Inicial]:\n"
+    d += f"  - Macronutrientes: {cal_comida} kcal | {p_comida}g Prot | {c_comida}g Carbs | {g_comida}g Grasa\n"
+    d += f"  - MENÚ ESTRUCTURADO: Cocinado de {prots[0]} acompañado con {carbs[0]} y una porción fresca de {frutas[0]}. Fibra: {verds[0]}.\n\n"
+    
+    d += f"• COMIDA 2 [Almuerzo Central de Consolidación]:\n"
+    d += f"  - Macronutrientes: {cal_comida} kcal | {p_comida}g Prot | {c_comida}g Carbs | {g_comida}g Grasa\n"
+    d += f"  - MENÚ ESTRUCTURADO: {prots[-1]} preparado a la plancha (pesado en crudo) + porción de {carbs[-1]} cocido + aderezo graso de {grasas[0]}.\n\n"
+    
+    d += f"• COMIDA 3 [Merienda / Post-Entrenamiento de Absorción]:\n"
+    d += f"  - Macronutrientes: {cal_comida} kcal | {p_comida}g Prot | {c_comida}g Carbs | {g_comida}g Grasa\n"
+    d += f"  - MENÚ ESTRUCTURADO: Preparación rápida de {prots[0]} combinada de forma exacta con {carbs[0]} y una fruta mediana ({frutas[-1]}).\n\n"
+    
+    d += f"• COMIDA 4 [Cena Reparadora y Control de Ansiedad Nocturna]:\n"
+    d += f"  - Macronutrientes: {cal_comida} kcal | {p_comida}g Prot | {c_comida}g Carbs | {g_comida}g Grasa\n"
+    d += f"  - MENÚ ESTRUCTURADO: {prots[1] if len(prots)>1 else prots[0]} + {grasas[-1]} + Ensalada libre y abundante de {', '.join(verds)}.\n\n"
+    
     d += "========================================================================\n"
-    d += f"Consumo de agua de 3.5 a 4 Litros diarios."
+    d += "⚠️ REGLAS OBLIGATORIAS: Pesar los alimentos de forma consistente y asegurar 4 Litros de agua purificada al día."
     return d
 
 # =============================================================================
-# MÓDULO 1: FORMULARIO MAESTRO TOTALMENTE OPTIMIZADO A OPCIÓN MÚLTIPLE
+# MÓDULO 1: FORMULARIO MAESTRO INTEGRAL DE EVALUACIÓN (VISTA DEL CLIENTE)
 # =============================================================================
 if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
-    st.markdown("<div class='subtitle'>Formulario Maestro — Evaluación Inicial y Diagnóstico Integral de Cargas</div>", unsafe_allow_html=True)
-    
-    st.info("🚨 FORMULARIO TOTALMENTE ESTANDARIZADO: Todas las respuestas son controladas para garantizar reportes de precisión absoluta.")
+    st.markdown("<div class='subtitle'>Evaluación de Cargas, Historial Clínico y Selección de Alimentos</div>", unsafe_allow_html=True)
     
     with st.form("formulario_maestro_mm247_cerrado", clear_on_submit=True):
-        t1, t2, t3, t4, t5, t6 = st.tabs(["1-2. General y Objetivos", "3. Experiencia", "4-5. Salud y Biomecánica", "6-7. Estructura y Hábitos", "8-9. Alimentación y Fatiga", "10-12. Equipo y Métricas"])
+        t1, t2, t3, t4, t5, t6 = st.tabs([
+            "1-2. Datos Generales", 
+            "3. Entrenamiento", 
+            "4-5. Salud y Postura", 
+            "6-7. Estilo de Vida", 
+            "8-9. Menú de Alimentos", 
+            "10-12. Esfuerzo"
+        ])
         
         with t1:
-            st.markdown("<div class='section-header'>1. INFORMACIÓN GENERAL Y DATOS DEMOGRÁFICOS</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-header'>1. DATOS FISIOLÓGICOS Y DEMOGRÁFICOS</div>", unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             with col1:
-                f_nombre = st.text_input("Nombre completo (Ingresa Nombre y Apellido):")
-                f_edad = st.selectbox("Edad:", [f"{i} años" for i in range(14, 81)])
-                f_sexo = st.selectbox("Sexo:", ["Masculino", "Femenino"])
-                f_estatura = st.selectbox("Estatura:", [f"{i} cm" for i in range(120, 221)], index=55) # 175 cm def
-                f_peso_actual = st.selectbox("Peso actual:", [f"{i} kg" for i in range(40, 161)], index=40) # 80 kg def
+                f_nombre = st.text_input("Nombre completo:")
+                f_edad = st.selectbox("Edad:", [f"{i} años" for i in range(14, 81)], index=11)
+                f_sexo = st.selectbox("Sexo asignado al nacer:", ["Masculino", "Femenino"])
+                f_estatura = st.selectbox("Estatura base:", [f"{i} cm" for i in range(120, 221)], index=55)
+                f_peso_actual = st.selectbox("Peso corporal actual:", [f"{i} kg" for i in range(40, 161)], index=40)
             with col2:
-                f_peso_obj = st.selectbox("Peso objetivo:", [f"{i} kg" for i in range(40, 161)], index=35)
-                f_ocupacion = st.selectbox("Ocupación predominante:", ["Sedentaria (Oficina / Escritorio)", "Ligera (Profesor / Ventas)", "Activa (Construcción / Trabajo manual)", "Estudiante"])
-                f_horario = st.selectbox("Horario laboral / Actividad:", ["Turno Matutino", "Turno Vespertino", "Turno Nocturno", "Horario Partido / Rolar turnos"])
-                f_ciudad = st.selectbox("Región geográfica:", ["México (Centro)", "México (Norte)", "México (Sur)", "Estados Unidos", "España", "Latinoamérica / Otro"])
-                f_contacto = st.text_input("Número de WhatsApp (Solo números):", value="55")
-                f_correo = st.text_input("Correo electrónico corporativo / personal:")
+                f_peso_obj = st.selectbox("Peso corporal objetivo:", [f"{i} kg" for i in range(40, 161)], index=35)
+                f_ocupacion = st.selectbox("Ocupación de rutina:", ["Sedentaria", "Ligera", "Activa", "Estudiante"])
+                f_horario = st.selectbox("Horario diario habitual:", ["Turno Matutino", "Turno Vespertino", "Turno Nocturno", "Horario Variable"])
+                f_ciudad = st.selectbox("Zona geográfica:", ["México", "Estados Unidos", "España", "Latinoamérica / Otro"])
+                f_contacto = st.text_input("WhatsApp de contacto:", value="55")
+                f_correo = st.text_input("Correo electrónico de contacto:")
                 
-            st.markdown("<div class='section-header'>2. OBJETIVO PRINCIPAL</div>", unsafe_allow_html=True)
-            f_objetivo = st.selectbox("¿Cuál es tu objetivo principal?", [
-                "Perder grasa", "Ganar masa muscular", "Recomposición corporal", 
-                "Mejorar condición física", "Aumentar fuerza", "Mejorar salud general"
-            ])
-            f_tiempoloro = st.selectbox("¿Cuánto tiempo deseas entrenar para lograr tu objetivo?", ["1-3 meses", "3-6 meses", "6-12 meses", "Más de 1 año"])
-            f_compromiso = st.slider("¿Qué tan comprometido estás del 1 al 10?", 1, 10, 10)
+            st.markdown("<div class='section-header'>2. ENFOQUE PRINCIPAL</div>", unsafe_allow_html=True)
+            f_objetivo = st.selectbox("¿Cuál es la meta prioritaria actual?", ["Perder grasa", "Ganar masa muscular", "Recomposición corporal", "Aumentar fuerza", "Mejorar salud general"])
+            f_tiempoloro = st.selectbox("¿En cuánto tiempo esperas ver resultados iniciales?", ["1-3 meses", "3-6 meses", "6-12 meses", "Más de 1 año"])
+            f_compromiso = st.slider("Grado de compromiso real declarado (1 al 10):", 1, 10, 10)
 
         with t2:
-            st.markdown("<div class='section-header'>3. EXPERIENCIA EN ENTRENAMIENTO</div>", unsafe_allow_html=True)
-            f_tiempo_entrenando = st.selectbox("¿Cuánto tiempo llevas entrenando de forma constante?", ["Nunca / Principiante", "Menos de 6 meses", "De 6 meses a 1 año", "1 a 3 años (Intermedio)", "Más de 3 años (Avanzado)"])
-            f_tipo_entreno = st.multiselect("¿Qué tipo de entrenamiento has realizado previamente? (Elige opciones):", ["Gimnasio", "Calistenia", "Crossfit", "Deportes de conjunto", "Funcional", "Ninguno"])
-            if not f_tipo_entreno: f_tipo_entreno = ["Gimnasio"]
-            f_dias_semana = st.selectbox("¿Cuántos días puedes entrenar por semana?", ["3 días por semana", "4 días por semana", "5 días por semana", "6 días por semana"])
-            f_tiempo_sesion = st.selectbox("¿Cuánto tiempo puedes dedicar por sesión?", ["Sesión corta (Menos de 45 minutos)", "Sesión Estándar (De 45 a 75 minutos)", "Sesión Extendida (Más de 75 minutos)"])
-            f_entrena_act = st.selectbox("¿Entrenas actualmente?", ["Sí", "No"])
-            f_coach_antes = st.selectbox("¿Has trabajado antes con un asesor en línea o coach?", ["Sí", "No"])
+            st.markdown("<div class='section-header'>3. ANTECEDENTES DE ENTRENAMIENTO</div>", unsafe_allow_html=True)
+            f_tiempo_entrenando = st.selectbox("Tiempo entrenando de forma ininterrumpida:", ["Nunca", "Menos de 6 meses", "De 6 meses a 1 año", "1 a 3 años", "Más de 3 años"])
+            f_tipo_entreno = st.multiselect("Sistemas deportivos practicados con anterioridad:", ["Gimnasio", "Calistenia", "Crossfit", "Deportes", "Funcional", "Ninguno"], default=["Gimnasio"])
+            f_dias_semana = st.selectbox("¿Cuántos días a la semana vas a entrenar?", ["3 días por semana", "4 días por semana", "5 días por semana"])
+            f_tiempo_sesion = st.selectbox("Disponibilidad de tiempo por sesión:", ["Menos de 45 minutos", "De 45 a 75 minutos", "Más de 75 minutos"])
+            f_entrena_act = st.selectbox("¿Se encuentra entrenando actualmente?", ["Sí", "No"])
+            f_coach_antes = st.selectbox("¿Ha tenido entrenadores personales previos?", ["Sí", "No"])
 
         with t3:
-            st.markdown("<div class='section-header'>4. CONDICIONES DE SALUD Y RESTRICCIONES</div>", unsafe_allow_html=True)
-            f_lesion = st.selectbox("¿Tienes alguna lesión diagnosticada o molestia crónica?", ["Ninguna", "Rodilla / Desgaste / Tendinitis", "Hombro / Manguito rotador", "Espalda Baja / Lumbalgia", "Cervicales", "Muñeca / Tobillo"])
-            f_cirugias = st.selectbox("¿Has tenido cirugías de importancia en el aparato locomotor?", ["No", "Sí, en miembros inferiores", "Sí, en miembros superiores / columna"])
-            f_dolor_frec = st.selectbox("¿Tienes dolor frecuente durante las sesiones?", ["No", "Sí, al hacer presses pesados", "Sí, al hacer sentadillas", "Sí, dolor lumbar constante"])
-            f_medica = st.selectbox("¿Tomas medicamentos prescritos de forma regular?", ["No", "Sí, para presión / glucosa", "Sí, antiinflamatorios frecuentemente"])
-            f_cond_diag = st.selectbox("¿Tienes alguna condición médica diagnosticada?", ["Ninguna", "Diabetes", "Hipertensión", "Problemas de Tiroides / Hormonales", "Hernia Discal / Umbilical"])
-            f_restriccion = st.selectbox("¿Tu médico ha puesto limitaciones directas a tu esfuerzo?", ["No", "Sí"])
-            f_prohibido = st.selectbox("¿Te han prohibido ejercicios de carga axial (como sentadilla libre u hombros)?", ["No", "Sí, cargas sobre la columna", "Sí, flexiones profundas de rodilla"])
+            st.markdown("<div class='section-header'>4. CONDICIÓN CLÍNICA Y LESIONES</div>", unsafe_allow_html=True)
+            f_lesion = st.selectbox("¿Sufre de alguna lesión o dolor recurrente?", ["Ninguna", "Rodilla / Desgaste / Tendinitis", "Hombro / Manguito rotador", "Espalda Baja / Lumbalgia", "Cervicales", "Muñeca / Tobillo"])
+            f_cirugias = st.selectbox("¿Cuenta con cirugías o intervenciones médicas quirúrgicas?", ["No", "Sí, en miembros inferiores", "Sí, en miembros superiores / columna"])
+            f_dolor_frec = st.selectbox("¿Siente molestias agudas al ejecutar cargas?", ["No", "Sí, al hacer presses", "Sí, al hacer sentadillas", "Sí, dolor lumbar constante"])
+            f_medica = st.selectbox("¿Consume medicamentos de prescripción de forma diaria?", ["No", "Sí, para presión / glucosa", "Sí, antiinflamatorios"])
+            f_cond_diag = st.selectbox("¿Tiene alguna patología crónica diagnosticada?", ["Ninguna", "Diabetes", "Hipertensión", "Problemas de Tiroides / Hormonales", "Hernia Discal / Umbilical"])
+            f_restriccion = st.selectbox("¿Tiene prohibiciones médicas explícitas?", ["No", "Sí"])
+            f_prohibido = st.selectbox("¿Le han prohibido entrenamientos pesados de columna (Carga axial)?:", ["No", "Sí, cargas sobre la columna", "Sí, flexiones profundas"])
             
-            st.markdown("<div class='section-header'>5. EVALUACIÓN BIOMECÁNICA PRESETADA</div>", unsafe_allow_html=True)
-            f_molestias_mov = st.multiselect("¿Sientes molestias en alguno de estos movimientos clave?:", ["Sentadilla", "Press de pecho", "Peso muerto", "Press militar", "Zancadas", "Ninguno"])
-            if not f_molestias_mov: f_molestias_mov = ["Ninguno"]
-            f_movilidad = st.selectbox("¿Cómo describirías tu movilidad articular general?", ["Mala / Muy rígido", "Regular", "Buena / Rangos completos"])
-            f_lim_mov = st.selectbox("¿Tienes acortamiento evidente (ej. no bajas en sentadilla)?", ["No", "Sí, en tobillos/cadera", "Sí, en hombros"])
-            f_sentado = st.selectbox("¿Pasas muchas horas en posición sedente al día?", ["Sí, más de 6 horas continuas", "Moderado (3 a 6 horas)", "No, paso el día activo/parado"])
-            f_postura = st.selectbox("¿Presentas desviaciones posturales notables?", ["No", "Sí, hombros adelantados / hipercifosis", "Sí, hiperlordosis lumbar"])
-            f_debil = st.selectbox("¿Qué sección corporal consideras que es tu mayor punto débil?:", ["Tren Inferior (Piernas/Glúteos)", "Tren Superior (Brazos/Hombros)", "Zona Media / Core", "Espalda completa"])
-            f_desarrollado = st.selectbox("¿Qué músculos tienes más avanzados por genética o historial?:", ["Ninguno", "Piernas", "Pectoral / Brazos", "Espalda"])
-            f_equilibrio = st.selectbox("¿Presentas problemas de coordinación motriz o equilibrio?:", ["No", "Sí, en movimientos unilaterales"])
+            st.markdown("<div class='section-header'>5. AUTO-EVALUACIÓN BIOMECÁNICA PRESETADA</div>", unsafe_allow_html=True)
+            f_molestias_mov = st.multiselect("¿Tiene limitaciones o dolor al realizar estos movimientos básicos?:", ["Sentadilla", "Press de pecho", "Peso muerto", "Press militar", "Ninguno"], default=["Ninguno"])
+            f_movilidad = st.selectbox("¿Cómo evalúa su flexibilidad articular general?", ["Mala / Muy rígido", "Regular", "Buena"])
+            f_lim_mov = st.selectbox("¿Nota acortamientos evidentes de movimiento?", ["No", "Sí, en tobillos/cadera", "Sí, en hombros"])
+            f_sentado = st.selectbox("¿Cuántas horas pasa sentado a causa de sus labores?", ["Sí, más de 6 horas", "Moderado (3 a 6 horas)", "No"])
+            f_postura = st.selectbox("¿Tiene alguna de estas desviaciones posturales conocidas?", ["No", "Sí, hombros adelantados", "Sí, hiperlordosis lumbar"])
+            f_debil = st.selectbox("¿Cuál considera que es su punto muscular más débil?:", ["Tren Inferior", "Tren Superior", "Zona Media / Core", "Espalda"])
+            f_desarrollado = st.selectbox("¿Qué grupo muscular responde mejor por genética?:", ["Ninguno", "Piernas", "Pectoral / Brazos", "Espalda"])
+            f_equilibrio = st.selectbox("¿Tiene problemas de coordinación mecánica o equilibrio?:", ["No", "Sí"])
 
         with t4:
-            st.markdown("<div class='section-header'>6. ESTRUCTURA FÍSICA AUTOPERÇIBIDA</div>", unsafe_allow_html=True)
-            f_fisico = st.selectbox("¿Cómo te consideras morfológicamente en este momento?", ["Delgado / Ectomorfo", "Atlético / Mesomorfo", "Robusto / Endomorfo", "Sobrepeso / Obesidad"])
-            f_acumula_grasa = st.selectbox("¿En qué zona corporal acumulas grasa con mayor facilidad?:", ["Abdomen / Zona lumbar", "Piernas y Cadera", "Distribución General uniforme"])
-            f_gana_musculo = st.selectbox("¿Qué tanta facilidad posees para desarrollar masa muscular?", ["Muy difícil", "Ritmo Normal", "Fácil"])
-            f_gana_grasa = st.selectbox("¿Qué tan rápido aumentas tu porcentaje de grasa?", ["Muy fácil", "Ritmo Normal", "Difícil"])
+            st.markdown("<div class='section-header'>6. MORFOLOGÍA Y ESTRUCTURA</div>", unsafe_allow_html=True)
+            f_fisico = st.selectbox("¿Con qué somatotipo se identifica de forma visual?", ["Delgado / Ectomorfo", "Atlético / Mesomorfo", "Robusto / Endomorfo", "Sobrepeso"])
+            f_acumula_grasa = st.selectbox("¿En qué sector del cuerpo tiende a acumular tejido graso?:", ["Abdomen / Zona lumbar", "Piernas y Cadera", "Distribución General"])
+            f_gana_musculo = st.selectbox("¿Qué tanta facilidad muestra para construir masa muscular?", ["Muy difícil", "Ritmo Normal", "Fácil"])
+            f_gana_grasa = st.selectbox("¿Qué tan rápido aumenta su peso graso en periodos libres?", ["Muy fácil", "Ritmo Normal", "Difícil"])
             
-            st.markdown("<div class='section-header'>7. HÁBITOS Y ESTILO DE VIDA</div>", unsafe_allow_html=True)
-            f_horas_sueno = st.selectbox("¿Cuántas horas duermes en promedio por noche?", ["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"])
-            f_calif_sueno = st.selectbox("¿Cómo calificas la calidad de tu descanso?", ["Malo (Despierto cansado)", "Regular", "Excelente (Reparador profundo)"])
-            f_estres_diario = st.selectbox("¿Qué nivel de estrés psicológico o laboral manejas diariamente?", ["Bajo / Controlado", "Medio", "Alto / Trabajo bajo presión"])
-            f_num_comidas = st.selectbox("¿Cuántas comidas sólidas realizas habitualmente al día?", ["2 comidas", "3 comidas", "4 comidas", "5 comidas o más"])
-            f_litros_agua = st.selectbox("¿Cuánta agua simple ingieres diariamente?", ["Menos de 1.5 Litros", "Entre 1.5 y 3 Litros", "Más de 3 Litros"])
-            f_alcohol = st.selectbox("¿Consumes bebidas alcohólicas?", ["No / Nunca", "Solo en eventos / Ocasional", "Frecuente fines de semana"])
-            f_fuma = st.selectbox("¿Fumas de forma activa?", ["No", "Sí"])
-            f_pasos = st.selectbox("Estimación de pasos diarios (NEAT):", ["Menos de 5k (Sedentario)", "5k a 10k (Activo moderado)", "Más de 10k (Altamente activo)"])
-            f_nivel_actividad = st.selectbox("¿Cómo describirías tu nivel de actividad diaria fuera del gimnasio?", ["Sedentario", "Poco activo", "Moderadamente activo", "Muy activo"])
+            st.markdown("<div class='section-header'>7. CALIDAD DE HÁBITOS Y DESCANSO</div>", unsafe_allow_html=True)
+            f_horas_sueno = st.selectbox("Promedio de horas de sueño por noche:", ["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"])
+            f_calif_sueno = st.selectbox("Calidad percibida de su descanso nocturno:", ["Malo", "Regular", "Excelente"])
+            f_estres_diario = st.selectbox("Nivel de estrés psicológico o laboral cotidiano:", ["Bajo / Controlado", "Medio", "Alto"])
+            f_num_comidas = st.selectbox("¿Cuántas comidas sólidas completas realiza al día?", ["2 comidas", "3 comidas", "4 comidas", "5 comidas o más"])
+            f_litros_agua = st.selectbox("Consumo diario estimado de agua simple:", ["Menos de 1.5 Litros", "Entre 1.5 y 3 Litros", "Más de 3 Litros"])
+            f_alcohol = st.selectbox("Frecuencia de consumo de bebidas alcohólicas:", ["No / Nunca", "Solo Ocasional", "Frecuente fines de semana"])
+            f_fuma = st.selectbox("¿Consume tabaco de forma regular?", ["No", "Sí"])
+            f_pasos = st.selectbox("Estimación diaria de actividad de movimiento (Pasos/NEAT):", ["Menos de 5k", "5k a 10k", "Más de 10k"])
+            f_nivel_actividad = st.selectbox("Nivel de actividad cotidiana fuera del gimnasio:", ["Sedentario", "Poco activo", "Moderadamente activo", "Muy activo"])
 
         with t5:
-            st.markdown("<div class='section-header'>8. COMPORTAMIENTO ALIMENTICIO</div>", unsafe_allow_html=True)
-            f_obj_nutri = st.selectbox("¿Cuál es tu prioridad nutricional inmediata?", ["Bajar porcentaje de grasa", "Aumento de masa magra", "Recomposición / Mantener"])
-            f_alergias = st.selectbox("¿Sufres de alergias alimenticias diagnosticadas?", ["Ninguna", "Frutos secos", "Mariscos / Pescados", "Huevo / Gluten"])
-            f_intolerancia = st.selectbox("¿Presentas intolerancias digestivas severas?", ["Ninguna", "Lactosa", "Gluten / Trigo", "Legumbres"])
-            f_tipo_alimentacion = st.selectbox("¿Qué tipo de patrón dietético sigues?", ["Omnívoro", "Vegetariano (Consumo huevo/lácteos)", "Vegano (Estricto origen vegetal)", "Keto / Low Carb"])
-            f_no_gustan = st.selectbox("Alimentos que prefieres evitar por completo en tus menús:", ["Ninguno", "Pescados / Mariscos", "Verduras amargas", "Lácteos"])
-            f_consumo_freq = st.selectbox("¿Cuál es la base proteica de tu dieta actual?", ["Pollo y Res", "Huevo y Quesos", "Pescados y Legumbres", "Variada completa"])
-            f_comer_fuera = st.selectbox("¿Cuántas veces consumes alimentos preparados fuera de casa?", ["Nunca / Preparo todo", "1-2 veces por semana", "3 o más veces (Frecuente)"])
-            f_presupuesto = st.selectbox("Presupuesto asignado a tu despensa fitness mensual:", ["Básico / Económico", "Estándar flexible", "Premium / Alimentos selectos"])
-            f_horarios_fijos = st.selectbox("¿Tienes la estructura para comer a horas fijas?", ["Sí, todos los días", "No, mis horarios varían demasiado", "Solo a veces"])
-            f_cocinar = st.selectbox("¿Tienes control o conocimiento en la cocina?", ["Sí, cocino mis platillos", "No, alguien cocina por mí", "Conocimiento básico (Fácil/Rápido)"])
+            st.markdown("<div class='section-header'>8. MENÚ DE SELECCIÓN CONTROLADA (CHECKBOXES DE ALIMENTOS)</div>", unsafe_allow_html=True)
+            st.write("Marque únicamente los alimentos que está dispuesto a comer cotidianamente para armar su menú exacto:")
             
-            st.markdown("<div class='section-header'>9. CAPACIDAD DE RECUPERACIÓN Y FATIGA</div>", unsafe_allow_html=True)
-            f_recup_post = st.selectbox("¿Cómo es tu tasa de recuperación tras un entrenamiento intenso?", ["Mala (Dolor por más de 3 días)", "Regular / Estándar", "Excelente (Listo al día siguiente)"])
-            f_cansado_freq = st.selectbox("¿Te despiertas o te sientes fatigado crónicamente?", ["Sí, casi todos los días", "Solo a mitad de la semana", "No, energía estable"])
-            f_fatiga_dia = st.selectbox("¿Experimentas bajones severos de energía por la tarde?", ["Muy alta fatiga", "Normal / Leve", "Baja / Sin bajones"])
-            f_dolores_const = st.selectbox("¿Sientes dolores articulares recurrentes (no musculares)?", ["No", "Sí, rodillas/codos constantemente"])
-            f_energia_diaria = st.selectbox("Calificación de tu enfoque y energía mental diaria:", ["Muy baja", "Normal estable", "Alta / Enfoque total"])
+            menu_prots = st.multiselect("🥩 FUENTES PROTEICAS:", ["Pechuga de Pollo", "Bisteck de Res magro", "Lomo de Cerdo", "Claras de Huevo", "Huevo Entero", "Atún en agua", "Filete de Pescado Blanco", "Queso Panela bajo en grasa", "Tofu / Fuentes Veganas"], default=["Pechuga de Pollo", "Claras de Huevo", "Atún en agua"])
+            menu_carbs = st.multiselect("🍞 FUENTES DE CARBOHIDRATOS:", ["Arroz Blanco", "Avena en Hojuelas", "Camote asado", "Papa cocida", "Tortilla de Maíz", "Pan Integral", "Pasta Integral", "Quinoa"], default=["Arroz Blanco", "Avena en Hojuelas", "Tortilla de Maíz"])
+            menu_grasas = st.multiselect("🥑 GRASAS SALUDABLES REQUERIDAS:", ["Aguacate", "Almendras naturales", "Nueces de pecana", "Crema de Cacahuete pura", "Aceite de Oliva Extra Virgen"], default=["Aguacate", "Almendras naturales"])
+            menu_frutas = st.multiselect("🍎 FRUTAS SELECCIONADAS:", ["Plátano", "Manzana", "Fresas / Berries", "Piña", "Papaya", "Melón"], default=["Plátano", "Manzana"])
+            menu_verds = st.multiselect("🥦 VERDURAS Y APORTE DE FIBRA:", ["Brócoli", "Espinacas", "Calabacita", "Champiñones", "Espárragos", "Lechuga / Pepino"], default=["Brócoli", "Espinacas", "Lechuga / Pepino"])
+            
+            st.markdown("<div class='section-header'>9. COMPORTAMIENTO NUTRICIONAL GENERAL</div>", unsafe_allow_html=True)
+            f_obj_nutri = st.selectbox("Preferencia de control alimenticio:", ["Bajar porcentaje de grasa", "Aumento de masa magra", "Recomposición"])
+            f_alergias = st.selectbox("¿Padece de alergias alimentarias graves?", ["Ninguna", "Frutos secos", "Mariscos", "Huevo / Gluten"])
+            f_intolerancia = st.selectbox("¿Tiene intolerancias digestivas marcadas?", ["Ninguna", "Lactosa", "Gluten", "Legumbres"])
+            f_tipo_alimentacion = st.selectbox("Estructura dietética general de preferencia:", ["Omnívoro", "Vegetariano", "Vegano", "Keto"])
+            f_no_gustan = st.selectbox("Alimentos que rechaza por completo por sabor/palatabilidad:", ["Ninguno", "Pescados", "Verduras amargas", "Lácteos"])
+            f_comer_fuera = st.selectbox("¿Suele realizar comidas comerciales fuera de casa?", ["Nunca", "1-2 veces por semana", "3 o más veces"])
+            f_presupuesto = st.selectbox("Presupuesto de inversión asignado para despensa fit:", ["Básico / Económico", "Estándar flexible", "Premium"])
+            f_horarios_fijos = st.selectbox("¿Cuenta con facilidad para comer a horarios estrictos?", ["Sí", "No", "Solo a veces"])
+            f_cocinar = st.selectbox("¿Usted mismo se encarga de la preparación y cocina?", ["Sí", "No", "Básico"])
+            
+            f_recup_post, f_cansado_freq, f_fatiga_dia, f_dolores_const, f_energia_diaria = "Regular", "No", "Leve", "No", "Normal"
 
         with t6:
-            st.markdown("<div class='section-header'>10. DISPONIBILIDAD LOGÍSTICA DE EQUIPO</div>", unsafe_allow_html=True)
-            f_donde_entrena = st.selectbox("¿Dónde se ejecutarán los entrenamientos?", ["Gimnasio comercial completo", "Gimnasio de edificio / Semi-equipado", "Casa con mancuernas y bandas", "Exterior / Calistenia"])
-            f_equipo = st.multiselect("Selecciona el equipamiento al que tienes acceso real (Elige opciones):", ["Mancuernas", "Barras y Discos", "Poleas ajustables", "Máquinas de aislamiento", "Banco regulable", "Rack / Smith"])
-            if not f_equipo: f_equipo = ["Mancuernas", "Barras y Discos"]
-            f_lim_espacio = st.selectbox("¿Tienes limitaciones críticas de espacio o equipo?", ["No", "Sí, entreno en espacio muy reducido"])
+            st.markdown("<div class='section-header'>10. DISPONIBILIDAD LOGÍSTICA DE INSTALACIONES</div>", unsafe_allow_html=True)
+            f_donde_entrena = st.selectbox("¿En qué instalaciones vas a entrenar?", ["Gimnasio comercial completo", "Gimnasio de edificio", "Casa con equipo", "Exterior / Calistenia"])
+            f_equipo = st.multiselect("¿De qué equipamiento dispones de forma inmediata?", ["Mancuernas", "Barras y Discos", "Poleas", "Máquinas de aislamiento", "Banco regulable", "Rack / Smith"], default=["Mancuernas", "Barras y Discos", "Poleas"])
+            f_lim_space = st.selectbox("¿Tienes limitaciones severas de espacio en tus zonas de entreno?", ["No", "Sí"])
             
-            st.markdown("<div class='section-header'>11. METAS ESPECÍFICAS DE ENFOQUE</div>", unsafe_allow_html=True)
-            f_partes_mejorar = st.selectbox("Eslabón muscular estético que urge priorizar:", ["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda", "Brazos (Bíceps/Tríceps)", "Abdomen / Definición"])
-            f_dificultad = st.selectbox("Tu mayor limitante histórica en el fitness:", ["Falta de constancia", "Estancamiento en cargas", "No saber comer adecuadamente", "Lesiones recurrentes"])
-            f_odia_ex = st.selectbox("Ejercicio que te genera excesivo estrés articular o desagrado:", ["Ninguno", "Sentadilla Libre", "Press Militar Barra", "Desplantes / Zancadas Walking"])
-            f_disfruta_ex = st.selectbox("Ejercicio donde sientes la mejor conexión mente-músculo:", ["Prensa de piernas", "Extensiones", "Jalones en polea", "Press inclinado mancuernas"])
-            f_impide_progresar = st.selectbox("¿Qué factor saboteó tus planes de entrenamiento anteriores?", ["Falta de tiempo/Trabajo", "Planes aburridos o genéricos", "Falta de un guía experto"])
+            st.markdown("<div class='section-header'>11. METAS DE ENFOQUE Y FILTROS</div>", unsafe_allow_html=True)
+            f_partes_mejorar = st.selectbox("Sector muscular estético prioritario que deseas corregir:", ["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda", "Brazos", "Abdomen / Definición"])
+            f_dificultad = st.selectbox("¿Cuál ha sido tu mayor limitante en proyectos previos?", ["Falta de constancia", "Estancamiento en cargas", "No saber comer", "Lesiones recurrentes"])
+            f_odia_ex = st.selectbox("Ejercicio que te cause dolor o que rechaces por completo:", ["Ninguno", "Sentadilla Libre", "Press Militar Barra", "Zancadas Walking"])
+            f_disfruta_ex = st.selectbox("Ejercicio donde experimentas la mejor conexión mente-músculo:", ["Prensa de piernas", "Extensiones", "Jalones en polea", "Press inclinado"])
+            f_impide_progresar = st.selectbox("¿Qué factor saboteó tus intenciones de entrenamiento antes?", ["Falta de tiempo/Trabajo", "Planes aburridos o genéricos", "Falta de un guía experto"])
             
-            st.markdown("<div class='section-header'>12. ESCALAS PSICOMÉTRICAS DE ESFUERZO (Control Operativo 1 al 10)</div>", unsafe_allow_html=True)
-            f_p_disciplina = st.slider("Nivel de disciplina autoimpuesta:", 1, 10, 8)
-            f_p_estres = st.slider("Nivel de carga de estrés mental:", 1, 10, 5)
-            f_p_sueno = st.slider("Eficiencia real del sueño:", 1, 10, 8)
-            f_p_motivacion = st.slider("Nivel de motivación actual de arranque:", 1, 10, 9)
-            f_p_energia = st.slider("Energía promedio diaria percibida:", 1, 10, 7)
-            f_p_hambre = st.slider("Sensación de ansiedad / Hambre diurna:", 1, 10, 5)
+            st.markdown("<div class='section-header'>12. COMPORTAMIENTO Y ESCALAS PSICOMÉTRICAS (1 AL 10)</div>", unsafe_allow_html=True)
+            f_p_disciplina = st.slider("Autoevaluación de disciplina actual:", 1, 10, 8)
+            f_p_estres = st.slider("Percepción de carga de estrés mental:", 1, 10, 5)
+            f_p_sueno = st.slider("Eficiencia real detectada en sus horas de sueño:", 1, 10, 8)
+            f_p_motivacion = st.slider("Nivel de motivación para arrancar el proceso:", 1, 10, 9)
+            f_p_energia = st.slider("Nivel de energía vital promedio durante el día:", 1, 10, 7)
+            f_p_hambre = st.slider("Nivel de ansiedad o hambre diurna recurrente:", 1, 10, 5)
             f_p_recup = st.slider("Velocidad de recuperación muscular percibida:", 1, 10, 7)
             
-            f_prioridad = st.selectbox("Prioridad del Filtro Automatizado de Carga:", ["Salud", "Estética", "Rendimiento", "Fuerza"])
+            f_prioridad = st.selectbox("Prioridad del filtro de cargas estructurales:", ["Salud", "Estética", "Rendimiento", "Fuerza"])
             
             st.markdown("<br>", unsafe_allow_html=True)
-            enviar_maestro = st.form_submit_button("🚀 ENVIAR EXPEDIENTE ESTANDARIZADO A MM247")
+            enviar_maestro = st.form_submit_button("🚀 REGISTRAR EXPEDIENTE MAESTRO EN MM247")
             
         if enviar_maestro:
             if not f_nombre.strip():
-                st.error("❌ El campo de Nombre Completo es totalmente obligatorio.")
+                st.error("❌ El campo de Nombre Completo es completamente obligatorio para el registro.")
             else:
                 payload = {
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -425,79 +471,66 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     "Facilidad músculo": str(f_gana_musculo), "Facilidad grasa": str(f_gana_grasa), "Horas sueño": str(f_horas_sueno), "Calificación descanso": str(f_calif_sueno), "Nivel de estrés": str(f_estres_diario),
                     "Comidas al día": str(f_num_comidas), "Agua diaria": str(f_litros_agua), "Alcohol": str(f_alcohol), "Fuma": str(f_fuma), "Pasos día": str(f_pasos), "Nivel de actividad": str(f_nivel_actividad),
                     "Objetivo nutricional": str(f_obj_nutri), "Alergias alimenticias": str(f_alergias), "Intolerancias": str(f_intolerancia), "Tipo alimentación": str(f_tipo_alimentacion), "Alimentos no gustan": str(f_no_gustan),
-                    "Consumo frecuente": str(f_consumo_freq), "Comer fuera": str(f_comer_fuera), "Presupuesto": str(f_presupuesto), "Horarios fijos": str(f_horarios_fijos), "Sabe cocinar": str(f_cocinar),
                     "Recuperación post": str(f_recup_post), "Cansado frecuente": str(f_cansado_freq), "Fatiga durante el día": str(f_fatiga_dia), "Dolores constantes": str(f_dolores_const), "Energía diaria": str(f_energia_diaria),
-                    "Donde entrenará": str(f_donde_entrena), "Equipo disponible": ",".join(f_equipo), "Limitación espacio": str(f_lim_espacio), "Partes mejorar": str(f_partes_mejorar), "Dificultades físicas": str(f_dificultad),
+                    "Donde entrenará": str(f_donde_entrena), "Equipo disponible": ",".join(f_equipo), "Limitación espacio": str(f_lim_space), "Partes mejorar": str(f_partes_mejorar), "Dificultades físicas": str(f_dificultad),
                     "Ejercicio odia": str(f_odia_ex), "Ejercicio disfruta": str(f_disfruta_ex), "Impedido progresar": str(f_impide_progresar), "P_Disciplina": str(f_p_disciplina), "P_Estres": str(f_p_estres),
                     "P_Sueno": str(f_p_sueno), "P_Motivacion": str(f_p_motivacion), "P_Energia": str(f_p_energia), "P_Hambre": str(f_p_hambre), "P_Recup": str(f_p_recup), "Prioridad": str(f_prioridad),
+                    "Menu_Proteinas": ",".join(menu_prots), "Menu_Carbohidratos": ",".join(menu_carbs), "Menu_Grasas": ",".join(menu_grasas), "Menu_Frutas": ",".join(menu_frutas), "Menu_Verduras": ",".join(menu_verds),
                     "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
                 }
                 with st.spinner("Subiendo expediente estructurado..."):
                     try:
                         response = requests.post(WEBHOOK_URL, json=payload)
                         if response.status_code == 200 and "success" in response.text:
-                            st.success("✅ ¡Expediente guardado con éxito absoluto en Google Sheets de forma estructurada!")
+                            st.success("✅ ¡Expediente y Menú de Alimentos guardados con éxito en la base de datos de MM247!")
                             st.balloons()
-                        else: st.error(f"Error de procesamiento de datos: {response.text}")
-                    except Exception as api_err: st.error(f"Fallo de conexión externa: {api_err}")
+                        else: st.error(f"Error de procesamiento en servidor de hojas: {response.text}")
+                    except Exception as api_err: st.error(f"Fallo crítico de comunicación externa: {api_err}")
 
 # =============================================================================
-# MÓDULO 2: PANEL DE CONTROL ADMINISTRADOR AVANZADO (CORREGIDO DE KEYERRORS)
+# MÓDULO 2: PANEL DE CONTROL ADMINISTRATIVO AVANZADO (VISTA DEL ENTRENADOR)
 # =============================================================================
 elif opcion == "📊 Dashboard Administrador":
     st.markdown("<div class='main-title'>🔐 Panel de Control MM247</div>", unsafe_allow_html=True)
-    password = st.text_input("Introduzca la clave de acceso de Administrador:", type="password")
+    password = st.text_input("Introduzca la clave maestra de acceso de Administrador:", type="password")
     
     if password == "MM247_Admin":
-        st.success("Acceso autorizado de forma segura.")
+        st.success("Acceso autorizado con credenciales válidas.")
         if df_existente.empty:
-            st.warning("No se detectan alumnos en la base de datos de Google Sheets.")
+            st.warning("No se detectan alumnos registrados en la base de datos actual.")
         else:
             st.markdown("### 📈 Métricas de Control General")
-            
-            # CONTROL CRÍTICO ANTI-KEYERROR: Se valida si las columnas objetivo existen antes de procesar conteos
             total_alumnos = len(df_existente)
-            perdida_count = 0
-            masa_count = 0
             
-            col_meta_key = ""
-            for c in ["Objetivo principal", "Objetivoprincipal", "Objetivo"]:
-                if c in df_existente.columns:
-                    col_meta_key = c
-                    break
+            # Buscador seguro de columnas dinámicas para evitar fallos de Pandas
+            col_meta_key = next((c for c in ["Objetivo principal", "Objetivoprincipal", "Objetivo"] if c in df_existente.columns), "")
             
-            if col_meta_key != "":
+            if col_meta_key:
                 perdida_count = df_existente[col_meta_key].astype(str).str.contains('Perder|Bajar|Déficit|grasa', case=False, na=False).sum()
                 masa_count = df_existente[col_meta_key].astype(str).str.contains('Ganar|Subir|Volumen|muscular', case=False, na=False).sum()
             else:
-                # Si las columnas no concuerdan en absoluto, evitamos crasheo contando por descarte o asignando 0
-                perdida_count = 0
-                masa_count = 0
+                perdida_count, masa_count = 0, 0
 
             k1, k2, k3 = st.columns(3)
-            with k1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Expedientes Totales</div><div class='metric-value'>{total_alumnos} alumnos</div></div>", unsafe_allow_html=True)
-            with k2: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Pérdida / Grasa</div><div class='metric-value'>{perdida_count} alumnos</div></div>", unsafe_allow_html=True)
-            with k3: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Hipertrofia</div><div class='metric-value'>{masa_count} alumnos</div></div>", unsafe_allow_html=True)
+            with k1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Expedientes Registrados</div><div class='metric-value'>{total_alumnos} alumnos</div></div>", unsafe_allow_html=True)
+            with k2: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Oxidación / Grasa</div><div class='metric-value'>{perdida_count} alumnos</div></div>", unsafe_allow_html=True)
+            with k3: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Hipertrofia Magra</div><div class='metric-value'>{masa_count} alumnos</div></div>", unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("📋 Matriz Completa de Alumnos (Sincronizada)")
             st.dataframe(df_existente, use_container_width=True)
             
             st.markdown("---")
-            
-            # Buscar llave del nombre del alumno de forma segura
             col_nombre_key = "Nombre completo" if "Nombre completo" in df_existente.columns else df_existente.columns[1]
             lista_alumnos = df_existente[col_nombre_key].dropna().unique()
             alumno_sel = st.selectbox("Seleccione el expediente del alumno a planificar:", lista_alumnos)
             
             idx_alumno = df_existente[df_existente[col_nombre_key] == alumno_sel].index[0]
             datos_alumno = df_existente.loc[idx_alumno]
-            
             nombre_display = str(datos_alumno[col_nombre_key]).title()
 
+            # Gestión inteligente de estados de la sesión para mantener las ediciones del entrenador
             if "alumno_actual" not in st.session_state or st.session_state.alumno_actual != alumno_sel:
                 st.session_state.alumno_actual = alumno_sel
-                
                 db_propuesta = str(datos_alumno.get("Propuesta General", "")).strip()
                 db_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
                 db_balance = str(datos_alumno.get("Balance Energético", "")).strip()
@@ -508,114 +541,89 @@ elif opcion == "📊 Dashboard Administrador":
 
             st.markdown(f"### 👤 Gestión de Carga Activa: {nombre_display}")
             
-            if st.button("🚀 Forzar Re-Cálculo de Automatización (IA Base)"):
+            if st.button("🚀 Forzar Re-Cálculo de Automatización con Alimentos Reales"):
                 st.session_state.v_propuesta = generar_propuesta_integral_mm247(datos_alumno)
                 st.session_state.v_rutina = generar_rutina_detallada_mm247(datos_alumno)
                 st.session_state.v_balance = generar_dieta_detallada_mm247(datos_alumno)
                 st.rerun()
 
             st.markdown("---")
-            st.markdown("### 🛠️ Sistema de Edición y Prescripción de Hojas MM247")
-            
             with st.form("prescripcion_maestra_form_mm247"):
-                propuesta = st.text_area("🩺 HOJA 1: Informe Diagnóstico Avanzado (Metabólico, Clínico y Biomecánico):", value=st.session_state.v_propuesta, height=220)
-                rutina = st.text_area("🏋️ HOJA 2: Programación Semanal Estricta (Distribución Completa de Ejercicios y Series):", value=st.session_state.v_rutina, height=320)
-                balance = st.text_area("🥗 HOJA 3: Dieta Detallada de Ingestas Múltiples (Macros y Menú Específico):", value=st.session_state.v_balance, height=320)
+                propuesta = st.text_area("🩺 HOJA 1: Informe Diagnóstico Avanzado (Clínico, Postural y Fisiológico):", value=st.session_state.v_propuesta, height=280)
+                rutina = st.text_area("🏋️ HOJA 2: Programación Semanal Específica de 7 Días (Cronograma con Descansos):", value=st.session_state.v_rutina, height=350)
+                balance = st.text_area("🥗 HOJA 3: Plan Nutricional Ajustado Exacto (Filtro por Checkboxes):", value=st.session_state.v_balance, height=350)
                 
-                guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
+                guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Plan Estructural con Google Sheets")
                 if guardar_changes:
                     payload_edit = {"Action": "UPDATE", "RowIndex": int(idx_alumno + 2)}
-                    for k in datos_alumno.keys():
-                        payload_edit[k] = str(datos_alumno[k])
-                    
+                    for k in datos_alumno.keys(): payload_edit[k] = str(datos_alumno[k])
                     payload_edit["Propuesta General"] = propuesta
                     payload_edit["Balance Energético"] = balance
                     payload_edit["Rutina Biomecánica"] = rutina
                     
-                    with st.spinner("Modificando fila en Google Sheets..."):
+                    with st.spinner("Modificando registros en la base central..."):
                         try:
                             requests.post(WEBHOOK_URL, json=payload_edit)
                             st.session_state.v_propuesta = propuesta
                             st.session_state.v_rutina = rutina
                             st.session_state.v_balance = balance
-                            st.success("✅ ¡Prescripción guardada y sincronizada de forma impecable!")
-                        except Exception as e_save: st.error(f"Fallo crítico de sincronización: {e_save}")
+                            st.success("✅ ¡Plan maestro y dieta de precisión sincronizados con éxito!")
+                        except Exception as e_save: st.error(f"Fallo de guardado en la red: {e_save}")
             
-            if st.button("🖨️ Compilar Plan Maestro en PDF de 3 Hojas"):
+            if st.button("🖨️ Compilar Plan Maestro en PDF Profesional de 3 Hojas"):
                 try:
                     pdf = FPDF()
-                    def limpiar_texto(txt):
-                        return str(txt).replace("•", "-").replace("–", "-").replace("—", "-").replace("º"," ").encode('latin-1', 'ignore').decode('latin-1')
+                    def limpiar_texto(txt): return str(txt).replace("•", "-").replace("–", "-").replace("—", "-").replace("º"," ").encode('latin-1', 'ignore').decode('latin-1')
 
-                    # HOJA 1
+                    # HOJA 1: Diagnóstico Integral
                     pdf.add_page()
-                    pdf.set_fill_color(20, 20, 20) 
+                    pdf.set_fill_color(20, 20, 20)
                     pdf.rect(0, 0, 210, 38, "F")
                     pdf.set_text_color(255, 255, 255)
                     pdf.set_font("Arial", "B", 24)
                     pdf.cell(0, 12, limpiar_texto("MINDMUSCLE247"), ln=True, align="C")
                     pdf.set_font("Arial", "B", 10)
-                    pdf.cell(0, 4, limpiar_texto("INFORME DE PLANIFICACIÓN INTEGRAL CLÍNICA Y METABÓLICA"), ln=True, align="C")
-                    
+                    pdf.cell(0, 4, limpiar_texto("INFORME DE PLANIFICACIÓN INTEGRAL DE RENDIMIENTO"), ln=True, align="C")
                     pdf.ln(18)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.set_fill_color(245, 245, 245)
-                    pdf.set_draw_color(180, 180, 180)
-                    pdf.rect(10, 44, 190, 16, "DF")
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.set_xy(12, 49)
-                    pdf.cell(0, 6, limpiar_texto(f"FICHA TÉCNICA OPERATIVA — ALUMNO: {nombre_display.upper()}"), ln=True)
-                    
-                    pdf.set_xy(10, 68)
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(190, 6, limpiar_texto(st.session_state.v_propuesta))
 
-                    # HOJA 2
+                    # HOJA 2: Entrenamiento Cronológico
                     pdf.add_page()
-                    pdf.set_fill_color(220, 70, 0) 
+                    pdf.set_fill_color(20, 20, 20)
                     pdf.rect(0, 0, 210, 32, "F")
                     pdf.set_text_color(255, 255, 255)
                     pdf.set_font("Arial", "B", 22)
                     pdf.cell(0, 10, limpiar_texto("MINDMUSCLE247"), ln=True, align="C")
                     pdf.set_font("Arial", "B", 10)
-                    pdf.cell(0, 4, limpiar_texto("DOSIFICACIÓN DE CARGAS Y PROGRAMACIÓN SEMANAL DE FUERZA"), ln=True, align="C")
-                    
+                    pdf.cell(0, 4, limpiar_texto("PROGRAMACIÓN SEMANAL DETALLADA (CRONOGRAMA DE 7 DÍAS)"), ln=True, align="C")
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.set_fill_color(252, 252, 252)
-                    pdf.set_draw_color(220, 70, 0) 
-                    pdf.rect(10, 42, 190, 235, "DF")
-                    pdf.set_xy(14, 46)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(182, 5.5, limpiar_texto(st.session_state.v_rutina))
+                    pdf.multi_cell(190, 5.5, limpiar_texto(st.session_state.v_rutina))
 
-                    # HOJA 3
+                    # HOJA 3: Nutrición Flexible con Checkboxes
                     pdf.add_page()
-                    pdf.set_fill_color(35, 115, 40) 
+                    pdf.set_fill_color(20, 20, 20)
                     pdf.rect(0, 0, 210, 32, "F")
                     pdf.set_text_color(255, 255, 255)
                     pdf.set_font("Arial", "B", 22)
                     pdf.cell(0, 10, limpiar_texto("MINDMUSCLE247"), ln=True, align="C")
                     pdf.set_font("Arial", "B", 10)
-                    pdf.cell(0, 4, limpiar_texto("AJUSTE DE BALANCE ENERGÉTICO Y ESTRATEGIA NUTRICIONAL DIARIA"), ln=True, align="C")
-                    
+                    pdf.cell(0, 4, limpiar_texto("ESTRATEGIA NUTRICIONAL DE ALTA PRECISIÓN (MACROS EXACTOS)"), ln=True, align="C")
                     pdf.ln(16)
                     pdf.set_text_color(0, 0, 0)
-                    pdf.set_fill_color(248, 249, 248)
-                    pdf.set_draw_color(35, 115, 40) 
-                    pdf.rect(10, 42, 190, 235, "DF")
-                    pdf.set_xy(14, 46)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(182, 5.5, limpiar_texto(st.session_state.v_balance))
+                    pdf.multi_cell(190, 5.5, limpiar_texto(st.session_state.v_balance))
                     
                     pdf_data = pdf.output(dest='S')
                     st.download_button(
-                        label="⬇️ Descargar Reporte Completo en PDF Premium",
+                        label="⬇️ Descargar Plan Estructural Completo en PDF",
                         data=bytes(pdf_data),
                         file_name=f"Plan_Estructural_MM247_{nombre_display.replace(' ', '_')}.pdf",
                         mime="application/pdf"
                     )
-                except Exception as err_pdf:
-                    st.error(f"Fallo al construir el compilador PDF: {err_pdf}")
+                except Exception as err_pdf: st.error(f"Fallo mecánico al compilar el PDF: {err_pdf}")
                     
-    elif password != "": st.error("🔑 Clave inválida.")
+    elif password != "": st.error("🔑 Clave de acceso inválida.")
