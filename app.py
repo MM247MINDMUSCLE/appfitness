@@ -13,7 +13,7 @@ WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AW
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
 
 def cargar_base_datos():
-    """Carga y limpia de forma segura los datos de Google Sheets evitando KeyErrors"""
+    """Carga y limpia de forma segura los datos de Google Sheets evitando de forma estricta fallos de caché"""
     try:
         url_fresca = f"{SHEET_URL}&nocache={datetime.datetime.now().timestamp()}"
         df = pd.read_csv(url_fresca)
@@ -34,6 +34,7 @@ st.markdown("""
     .metric-card { background: #ffffff; padding: 22px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-left: 6px solid #111111; }
     .metric-title { font-size: 13px; color: #777777; font-weight: bold; text-transform: uppercase; }
     .metric-value { font-size: 26px; color: #111111; font-weight: bold; margin-top: 4px; }
+    .profile-box { background-color: #f9f9f9; padding: 18px; border-radius: 6px; border: 1px solid #eeeeee; }
     .stButton>button { background-color: #111111; color: white; width: 100%; border-radius: 4px; font-weight: bold; height: 48px; border: none; }
     .stButton>button:hover { background-color: #333333; color: white; }
     </style>
@@ -45,9 +46,7 @@ opcion = st.sidebar.selectbox("Navegación MM247:", ["📝 Cuestionario Integral
 # 2. MOTOR DE NORMALIZACIÓN FLEXIBLE
 # =============================================================================
 def normalizar_datos_alumno(datos_raw):
-    """Busca de forma difusa las columnas sin importar variaciones de texto en la hoja de cálculo"""
     norm = {}
-    
     def buscar_columna(lista_palabras_clave, defecto="", indice_respaldo=None):
         for col in datos_raw.index:
             col_limpia = str(col).lower().strip()
@@ -62,7 +61,6 @@ def normalizar_datos_alumno(datos_raw):
                 return str(val).strip()
         return defecto
 
-    # Asignaciones dinámicas tolerantes a fallos
     norm['Nombre completo'] = buscar_columna(['nombre', 'alumno', 'completo'], 'Alumno', 1)
     norm['Edad'] = buscar_columna(['edad', 'años'], '25', 2)
     norm['Sexo'] = buscar_columna(['sexo', 'género', 'genero'], 'Masculino', 3)
@@ -86,7 +84,6 @@ def normalizar_datos_alumno(datos_raw):
     norm['Días entrenar'] = buscar_columna(['días entrenar', 'semana cuántos', 'dias'], '4 días por semana')
     norm['Equipo disponible'] = buscar_columna(['equipo disponible', 'equipamiento', 'accesorios'], 'Gimnasio completo')
     
-    # Escalas numéricas de hábitos
     def extraer_numero(lista_kw, defecto=5):
         texto_val = buscar_columna(lista_kw, None)
         if texto_val:
@@ -98,7 +95,6 @@ def normalizar_datos_alumno(datos_raw):
     norm['P_Sueno'] = extraer_numero(['p_sueno', 'sueño eficiencia', 'calidad'], 8)
     norm['P_Recup'] = extraer_numero(['p_recup', 'recuperación', 'velocidad'], 7)
     
-    # Checkboxes nutricionales
     norm['Menu_Proteinas'] = buscar_columna(['menu_proteinas', 'proteínas', 'proteinas'], 'Pechuga de Pollo')
     norm['Menu_Carbohidratos'] = buscar_columna(['menu_carbohidratos', 'carbs', 'carbohidratos'], 'Arroz Blanco')
     norm['Menu_Grasas'] = buscar_columna(['menu_grasas', 'grasas'], 'Aguacate')
@@ -118,6 +114,22 @@ def calcular_motores_automatizados(datos):
     try: edad = float(str(datos.get('Edad', '25')).replace(" años", "").split()[0])
     except Exception: edad = 25.0
     genero = str(datos.get('Sexo', 'Masculino'))
+    
+    imc = peso / ((estatura/100)**2)
+    
+    # Diagnóstico clínico basado en rangos clínicos de IMC
+    if imc < 18.5:
+        estado_clinico = "Bajo Peso / Déficit Nutrimental"
+    elif imc < 25.0:
+        estado_clinico = "Normopeso / Composición Corporal Saludable"
+    elif imc < 30.0:
+        estado_clinico = "Sobrepeso / Alerta de Tejido Adiposo Elevado"
+    elif imc < 35.0:
+        estado_clinico = "Obesidad Grado I / Riesgo Cardiovascular Moderado"
+    elif imc < 40.0:
+        estado_clinico = "Obesidad Grado II / Riesgo Clínico Alto"
+    else:
+        estado_clinico = "Obesidad Grado III (Mórbida) / Alerta Crítica Multiorgánica"
     
     if "Masculino" in genero:
         tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
@@ -142,13 +154,13 @@ def calcular_motores_automatizados(datos):
         cals_obj = tdee
         balance_str = f"Normocalórico de Consolidación ({round(cals_obj)} kcal)"
         
-    prot = peso * 2.0 
-    grasa = peso * 1.0 
+    prot = peso * 2.0  # Regla inmutable MM247
+    grasa = peso * 1.0 # Regla inmutable MM247
     cals_restantes = cals_obj - ((prot * 4) + (grasa * 9))
     carbs = max(cals_restantes / 4, 50.0)
     
     return {
-        "imc": round(peso / ((estatura/100)**2), 1), "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals_obj, 0),
+        "imc": round(imc, 1), "estado_clinico": estado_clinico, "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals_obj, 0),
         "prot": round(prot, 1), "grasa": round(grasa, 1), "carbs": round(carbs, 1), "balance_str": balance_str,
         "edad": edad, "genero": genero, "condicion": condicion, "peso": peso
     }
@@ -193,16 +205,17 @@ def generar_propuesta_integral_mm247(datos):
     if estres_mental >= 8 or sueno_eficiencia <= 5:
         capacidad_snc = "CRÍTICA / RESTRIGIDA"
         volumen_recomendado = "8 a 10 Series Efectivas semanales por grupo muscular (Control de fatiga central)"
-        pauta_recup = "Evitar entrenamientos extenuantes continuos al fallo absoluto."
     else:
         capacidad_snc = "ESTÁNDAR EFICIENTE"
         volumen_recomendado = "12 a 14 Series Efectivas semanales por grupo muscular"
-        pauta_recup = "Sistemas listos para alta densidad y sobrecarga progresiva intensa."
 
     res = f"========================================================================\n"
     res += f"        MM247 INFORME DIAGNÓSTICO MAESTRO AVANZADO (100% PERSONALIZADO)\n"
     res += f"========================================================================\n\n"
     res += f"👤 ALUMNO EVALUADO: {nombre} | EDAD: {int(m['edad'])} años | SEXO: {m['genero']}\n"
+    res += f"🏥 CLASIFICACIÓN CLÍNICA INICIAL:\n"
+    res += f"   - Índice de Masa Corporal (IMC): {m['imc']}\n"
+    res += f"   - Estado de Composición: {m['estado_clinico']}\n\n"
     res += f"📊 ANÁLISIS METABÓLICO BASE:\n"
     res += f"   - Tasa Metabólica Basal (TMB): {m['tmb']} kcal\n"
     res += f"   - Gasto Diario Total (TDEE): {m['tdee']} kcal\n"
@@ -215,70 +228,114 @@ def generar_propuesta_integral_mm247(datos):
     res += f"========================================================================\n"
     return res
 
+# =============================================================================
+# 4. MOTOR DE RUTINAS MUTABLES (DÍAS DE DESCANSO Y EJERCICIOS VARIADOS)
+# =============================================================================
 def generar_rutina_detallada_mm247(datos):
     m = calcular_motores_automatizados(datos)
     dias = str(datos.get('Días entrenar', '4')).split()[0]
-    equipo = str(datos.get('Equipo disponible', 'Gimnasio completo'))
+    meta = str(datos.get('Objetivo principal', '')).lower()
     lesiones = str(datos.get('Lesión actual', 'Ninguna'))
     
-    es_adulto_mayor = m['edad'] >= 50
+    # Determinar si el perfil es de Pérdida de Grasa (Oxidación/Definición) o Ganancia (Hipertrofia)
+    es_deficit = "perder" in meta or "bajar" in meta or "grasa" in meta
     es_mujer = "Femenino" in m['genero']
     
-    base_prensa = "Prensa de Piernas Inclinada" if ("Rodilla" in lesiones or es_adulto_mayor) else "Sentadilla Libre Profunda"
-    base_pecho = "Press con Mancuernas Inclinado" if ("Hombro" in lesiones) else "Press de Pecho Plano con Barra"
-    ej_gluteo_fem = "Hip Thrust con Barra Pesado + Peso Muerto Rumano" if es_mujer else "Peso Muerto Convencional con Barra"
-    ej_brazo_torso = "Elevaciones Laterales + Jalón al Pecho Polea" if es_mujer else "Press Militar con Barra + Remo Pendlay"
+    base_prensa = "Prensa de Piernas Inclinada" if "Rodilla" in lesiones else "Sentadilla Libre Profunda"
+    base_pecho = "Press con Mancuernas Inclinado" if "Hombro" in lesiones else "Press de Pecho Plano"
 
     r = f"========================================================================\n"
-    r += f"     CRONOGRAMA SEMANAL DE 7 DÍAS REALES (SIN AMBIGÜEDADES) — MM247\n"
+    r += f"     CRONOGRAMA DE ENTRENAMIENTO ESTRUCTURADO Y MUTABLE — MM247\n"
     r += f"========================================================================\n"
-    r += f"Programación para perfil: {m['genero']} | Edad: {int(m['edad'])} años | Cargas en: {equipo}\n\n"
+    r += f"Perfil: {m['genero']} | Frecuencia: {dias} Días | Enfoque: {'Oxidación y Densidad' if es_deficit else 'Hipertrofia Mágnum'}\n\n"
 
+    # ESCENARIO A: 3 DÍAS DE ENTRENAMIENTO
     if "3" in dias:
-        r += "📆 LUNES [DÍA 1 - ESTÍMULO FULLBODY GLOBAL]:\n"
-        r += f"   - {base_prensa}: 3 x 10-12 reps. RIR 2.\n"
-        r += f"   - {base_pecho}: 3 x 8-10 reps.\n\n"
-        r += "📆 MARTES:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
-        r += "📆 MIÉRCOLES [DÍA 2 - ESTÍMULO FULLBODY GLOBAL]:\n"
-        r += f"   - {ej_gluteo_fem}: 3 x 10 reps.\n"
-        r += f"   - {ej_brazo_torso}: 3 x 12 reps.\n\n"
-        r += "📆 JUEVES:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
-        r += "📆 VIERNES [DÍA 3 - ESTÍMULO FULLBODY GLOBAL]:\n"
-        r += f"   - Zancadas Estáticas con Mancuerna: 3 x 12 reps por pierna.\n"
-        r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO OBLIGATORIO."
+        if es_deficit:
+            r += "📆 LUNES [DÍA 1 - FULLBODY METABÓLICO / ALTA DENSIDAD]:\n"
+            r += f"   - {base_prensa}: 3 x 12-15 reps (Descanso corto: 60s)\n"
+            r += f"   - {base_pecho}: 3 x 12 reps combinado con Remo invertido\n"
+            r += "📆 MARTES:\n   ❌ DESCANSO METABÓLICO REPARADOR (Caminata NEAT ligera)\n\n"
+            r += "📆 MIÉRCOLES [DÍA 2 - EMPOWERMENT INFERIOR + ZONA MEDIA]:\n"
+            r += "   - Peso Muerto Rumano: 3 x 12 reps\n"
+            r += "   - Desplantes Dinámicos: 3 x 15 pasos por lado\n"
+            r += "📆 JUEVES:\n   ❌ DESCANSO ABSORCIÓN DE FATIGA CENTRAL\n\n"
+            r += "📆 VIERNES [DÍA 3 - CIRCUITOS DE VACIADO DE GLUCÓGENO]:\n"
+            r += "   - Flexiones + Jalón al Pecho Polea: 3 x 15 reps continuas\n"
+            r += "   - Elevaciones Laterales: 4 x 20 reps buscando bombeo extremo\n"
+            r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO ABSOLUTO (Cero impacto sobre la columna)"
+        else:
+            r += "📆 LUNES [DÍA 1 - ENFOQUE EMPUJE / TENSIÓN MECÁNICA HEAVY]:\n"
+            r += f"   - {base_pecho}: 4 x 6-8 reps (RIR 1 | Descanso largo: 120s)\n"
+            r += "   - Press Militar con Barra: 3 x 8 reps\n"
+            r += "📆 MARTES:\n   ❌ DESCANSO DE CONSTRUCCIÓN MIOFIBRILAR\n\n"
+            r += "📆 MIÉRCOLES [DÍA 2 - ENFOQUE TRACCIÓN Y CADENA POSTERIOR]:\n"
+            r += "   - Peso Muerto Convencional: 3 x 6 reps pesadas\n"
+            r += "   - Remo Pendlay con Barra: 4 x 8 reps\n"
+            r += "📆 JUEVES:\n   ❌ DESCANSO SISTEMA NERVIOSO CENTRAL\n\n"
+            r += "📆 VIERNES [DÍA 3 - DESARROLLO DE TREN INFERIOR CUÁDRICEPS]:\n"
+            r += f"   - {base_prensa}: 4 x 8-10 reps (Aumentando carga por serie)\n"
+            r += "   - Extensiones de Cuádriceps: 3 x 12 reps al fallo técnico\n"
+            r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO INTEGRAL (Superávit y síntesis proteica)"
+
+    # ESCENARIO B: 5 DÍAS DE ENTRENAMIENTO
     elif "5" in dias:
-        r += "📆 LUNES [DÍA 1 - ENFOQUE CADENA INFERIOR]:\n"
-        r += f"   - {base_prensa}: 4 x 10 reps.\n"
-        r += f"   - {ej_gluteo_fem}: 4 x 12 reps.\n\n"
-        r += "📆 MARTES [DÍA 2 - ENFOQUE TREN SUPERIOR]:\n"
-        r += f"   - {base_pecho}: 4 x 10 reps.\n"
-        r += f"   - {ej_brazo_torso}: 3 x 12 reps.\n\n"
-        r += "📆 MIÉRCOLES:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
-        r += "📆 JUEVES [DÍA 3 - HIPERTROFIA]:\n"
-        r += "   - Extensiones de Cuádriceps: 4 x 15 reps.\n"
-        r += "📆 VIERNES [DÍA 4 - ÉNFASIS POSTERIOR]:\n"
-        r += "   - Hip Thrust en Máquina o Barra: 4 x 10 reps.\n"
-        r += "📆 SÁBADO [DÍA 5 - DESTELLO ESTÉTICO]:\n"
-        r += "   - Elevaciones Laterales + Brazos: 3 x 12 reps.\n"
-        r += "📆 DOMINGO:\n   ❌ DESCANSO OBLIGATORIO."
+        if es_deficit:
+            r += "📆 LUNES [DÍA 1 - TREN SUPERIOR COMPACTO]:\n"
+            r += f"   - {base_pecho}: 4 x 12 reps | Fondos en paralelas: 3 x Máximas\n"
+            r += "📆 MARTES [DÍA 2 - TREN INFERIOR ÉNFASIS GLÚTEO-FEMORAL]:\n"
+            r += "   - Hip Thrust con Barra: 4 x 15 reps pesado | Curl Femoral: 4 x 12\n"
+            r += "📆 MIÉRCOLES [DÍA 3 - CARDIO HIIT + CORE ACTIVO DE CONTROL]:\n"
+            r += "   - Circuitos funcionales sin barra + Plancas isométricas abdominales\n"
+            r += "📆 JUEVES:\n   ❌ DESCANSO OBLIGATORIO DE VACIADO ARTICULAR\n\n"
+            r += "📆 VIERNES [DÍA 4 - TRACCIÓN Y HIPERTROFIA DE ESPALDA]:\n"
+            r += "   - Jalón al Pecho Polea: 4 x 12 reps | Remo con Mancuerna: 3 x 10\n"
+            r += "📆 SÁBADO [DÍA 5 - ESTÉTICA TOTAL: HOMBRO, BRAZO Y PANTORRILLA]:\n"
+            r += "   - Elevaciones Laterales: 5 x 15 reps | Copa Tríceps: 3 x 12\n"
+            r += "📆 DOMINGO:\n   ❌ DESCANSO TOTAL DE REESTRUCTURACIÓN"
+        else:
+            r += "📆 LUNES [DÍA 1 - HIPERTROFIA: PECHO Y TRÍCEPS]:\n"
+            r += f"   - {base_pecho}: 4 x 8 reps | Press inclinado: 3 x 10 | Copa Tríceps: 4 x 12\n"
+            r += "📆 MARTES [DÍA 2 - HIPERTROFIA: PIERNA COMPLETA POTENCIA]:\n"
+            r += f"   - {base_prensa}: 4 x 10 reps | Sentadilla Hacka: 3 x 8 | Desplantes: 3 x 10\n"
+            r += "📆 MIÉRCOLES [DÍA 3 - HIPERTROFIA: ESPALDA Y BÍCEPS]:\n"
+            r += "   - Remo con Barra: 4 x 8 reps | Dominadas Supinas: 3 x Fallo | Curl de Bíceps: 4 x 10\n"
+            r += "📆 JUEVES:\n   ❌ DESCANSO ESTRATÉGICO DE REGENERACIÓN ANABÓLICA\n\n"
+            r += "📆 VIERNES [DÍA 4 - ESCULTURA DE HOMBRO Y DETALLES]:\n"
+            r += "   - Press Militar Mancuernas: 4 x 10 reps | Pájaros Posterior: 4 x 12\n"
+            r += "📆 SÁBADO [DÍA 5 - ÉNFASIS ISQUIOS, CADERA Y PANTORRILLA]:\n"
+            r += "   - Peso Muerto Rumano: 4 x 8 reps pesadas | Elevación talones: 4 x 20\n"
+            r += "📆 DOMINGO:\n   ❌ DESCANSO TOTAL OBLIGATORIO"
+
+    # ESCENARIO C: 4 DÍAS DE ENTRENAMIENTO (POR DEFECTO)
     else:
-        r += "📆 LUNES [DÍA 1 - TORSO COMPLETO]:\n"
-        r += f"   - {base_pecho}: 4 x 8-10 reps.\n"
-        r += f"   - {ej_brazo_torso}: 4 x 10 reps.\n\n"
-        r += "📆 MARTES [DÍA 2 - PIERNA GLOBAL]:\n"
-        r += f"   - {base_prensa}: 4 x 10-12 reps.\n"
-        r += f"   - {ej_gluteo_fem}: 4 x 12 reps.\n\n"
-        r += "📆 MIÉRCOLES:\n   ❌ DESCANSO OBLIGATORIO.\n\n"
-        r += "📆 JUEVES [DÍA 3 - TORSO ENFOQUE HIPERTROFIA]:\n"
-        r += "   - Remo Sentado en Polea Baja: 4 x 10 reps.\n"
-        r += "📆 VIERNES [DÍA 4 - PIERNA DETALLE]:\n"
-        r += "   - Extensión de Cuádriceps + Curl Femoral: 4 x 12 reps.\n"
-        r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO OBLIGATORIO."
+        if es_deficit:
+            r += "📆 LUNES [DÍA 1 - TREN SUPERIOR DENSIDAD ANTAGONISTA]:\n"
+            r += f"   - {base_pecho} superserie con Remo Gironda: 4 x 12 reps cada uno.\n"
+            r += "📆 MARTES [DÍA 2 - TREN INFERIOR QUEMA METABÓLICA]:\n"
+            r += f"   - {base_prensa}: 4 x 15 reps (Descanso rígido de 45 segundos).\n"
+            r += "📆 MIÉRCOLES:\n   ❌ DESCANSO MITAD DE SEMANA (SNC activo)\n\n"
+            r += "📆 JUEVES [DÍA 3 - TORSO ENFOQUE CONDICIONAMIENTO Y BRAZOS]:\n"
+            r += "   - Press Militar + Fondos + Curl: 3 rondas sin descanso continuo.\n"
+            r += "📆 VIERNES [DÍA 4 - PIERNA DE DETALLE FISIOLÓGICO]:\n"
+            r += "   - Extensión de Cuádriceps + Zancadas estáticas: 4 x 12 reps.\n"
+            r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO DE RESET SISTÉMICO"
+        else:
+            r += "📆 LUNES [DÍA 1 - DIVISION TORSO COMPLETO F1]:\n"
+            r += f"   - {base_pecho}: 4 x 8 reps | Remo con Barra Pecho: 4 x 8 reps pesadas.\n"
+            r += "📆 MARTES [DÍA 2 - DIVISION PIERNA FUERZA F1]:\n"
+            r += f"   - {base_prensa} o Sentadilla Pesada: 4 x 6-8 reps netas.\n"
+            r += "📆 MIÉRCOLES:\n   ❌ DESCANSO CRUCIAL (Permite hipertrofia miofibrilar)\n\n"
+            r += "📆 JUEVES [DÍA 3 - TORSO HIPERTROFIA EXTREMA F2]:\n"
+            r += "   - Cruces en Poleas: 4 x 12 reps | Jalones al pecho supinos: 4 x 10.\n"
+            r += "📆 VIERNES [DÍA 4 - PIERNA DETALLE EN MÁQUINAS F2]:\n"
+            r += "   - Curl Femoral Tumbado: 4 x 12 reps | Prensa Inclinada: 3 x 15 reps bomba.\n"
+            r += "📆 SÁBADO Y DOMINGO:\n   ❌ DESCANSO COMPLETO (Recuperación estructural profunda)"
         
     return r
 
 # =============================================================================
-# 4. MOTOR NUTRICIONAL CORREGIDO: PORCIONES AUTOMÁTICAS EN GRAMOS REALES
+# 5. MOTOR NUTRICIONAL: PORCIONES AUTOMÁTICAS EN GRAMOS REALES
 # =============================================================================
 def generar_dieta_detallada_mm247(datos):
     m = calcular_motores_automatizados(datos)
@@ -301,16 +358,11 @@ def generar_dieta_detallada_mm247(datos):
     if not frutas: frutas = ["Plátano"]
     if not verds: verds = ["Brócoli"]
 
-    # Repartición equitativa en 4 comidas diarias sólidas
     p_comida = round(m['prot'] / 4, 1)
     g_comida = round(m['grasa'] / 4, 1)
     c_comida = round(m['carbs'] / 4, 1)
     cal_comida = round(m['cals'] / 4, 0)
 
-    # Factores matemáticos de conversión macro -> gramaje neto de comida:
-    # 1. Proteínas magras (Pollo/Res/Pescado): promedio de ~23g de proteína pura por cada 100g en crudo.
-    # 2. Carbohidratos complejos (Arroz/Papa/Avena cocidos): promedio de ~25g de carbohidrato por cada 100g ya preparados.
-    # 3. Grasas saludables (Aguacate): promedio de ~15g de lípidos por cada 100g de pulpa limpia.
     g_alimento_prot = round(p_comida * 4.35)
     g_alimento_carb = round(c_comida * 4.0)
     g_alimento_grasa = round(g_comida * 6.66)
@@ -514,27 +566,46 @@ elif opcion == "📊 Dashboard Administrador":
         if df_existente.empty:
             st.warning("No se detectan alumnos registrados en la base de datos actual.")
         else:
-            st.markdown("### 📈 Métricas de Control General")
+            # --- INTERFAZ DINÁMICA Y GRÁFICOS VISUALES ---
             total_alumnos = len(df_existente)
-            
             col_meta_key = next((c for c in ["Objetivo principal", "Objetivoprincipal", "Objetivo"] if c in df_existente.columns), "")
+            
             if col_meta_key:
                 perdida_count = df_existente[col_meta_key].astype(str).str.contains('Perder|Bajar|Déficit|grasa', case=False, na=False).sum()
                 masa_count = df_existente[col_meta_key].astype(str).str.contains('Ganar|Subir|Volumen|muscular', case=False, na=False).sum()
             else:
                 perdida_count, masa_count = 0, 0
 
+            st.markdown("### 📈 Métricas Estatales de Carga Activa")
             k1, k2, k3 = st.columns(3)
-            with k1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Expedientes Registrados</div><div class='metric-value'>{total_alumnos} alumnos</div></div>", unsafe_allow_html=True)
-            with k2: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Oxidación / Grasa</div><div class='metric-value'>{perdida_count} alumnos</div></div>", unsafe_allow_html=True)
-            with k3: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Enfoque Hipertrofia Magra</div><div class='metric-value'>{masa_count} alumnos</div></div>", unsafe_allow_html=True)
+            with k1: st.markdown(f"<div class='metric-card'><div class='metric-title'>Expedientes Registrados</div><div class='metric-value'>{total_alumnos} Alumnos Activos</div></div>", unsafe_allow_html=True)
+            with k2: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Oxidación de Grasa</div><div class='metric-value'>{perdida_count} Alumnos</div></div>", unsafe_allow_html=True)
+            with k3: st.markdown(f"<div class='metric-card'><div class='metric-title'>En Hipertrofia Miofibrilar</div><div class='metric-value'>{masa_count} Alumnos</div></div>", unsafe_allow_html=True)
             
+            # Sección de Analíticas Gráficas
             st.markdown("<br>", unsafe_allow_html=True)
+            col_chart1, col_chart2 = st.columns([1, 1])
+            with col_chart1:
+                if col_meta_key and not df_existente[col_meta_key].empty:
+                    st.markdown("#### 🎯 Distribución de Objetivos")
+                    dist_obj = df_existente[col_meta_key].value_counts()
+                    st.bar_chart(dist_obj, color="#111111")
+            with col_chart2:
+                col_sex_key = next((c for c in ["Sexo", "Género", "Genero"] if c in df_existente.columns), "")
+                if col_sex_key and not df_existente[col_sex_key].empty:
+                    st.markdown("#### 👥 Demografía por Sexo")
+                    dist_sex = df_existente[col_sex_key].value_counts()
+                    st.bar_chart(dist_sex, color="#333333")
+
+            st.markdown("---")
+            st.markdown("### 🗃️ Registro General de Alumnos")
             st.dataframe(df_existente, use_container_width=True)
             
             st.markdown("---")
             col_nombre_key = next((c for c in ["Nombre completo", "Nombre", "Alumno"] if c in df_existente.columns), df_existente.columns[1])
             lista_alumnos = df_existente[col_nombre_key].dropna().unique()
+            
+            st.markdown("### 🛠️ Constructor de Prescripciones Estructurales")
             alumno_sel = st.selectbox("Seleccione el expediente del alumno a planificar:", lista_alumnos)
             
             idx_alumno = df_existente[df_existente[col_nombre_key] == alumno_sel].index[0]
@@ -542,6 +613,18 @@ elif opcion == "📊 Dashboard Administrador":
             
             datos_alumno = normalizar_datos_alumno(datos_alumno_raw)
             nombre_display = str(datos_alumno['Nombre completo']).title()
+            
+            # Tarjeta de Datos Rápidos del Alumno Seleccionado
+            m_previo = calcular_motores_automatizados(datos_alumno)
+            st.markdown(f"""
+            <div class='profile-box'>
+                <strong>Ficha Rápida:</strong> {nombre_display} | 
+                <strong>IMC Base:</strong> {m_previo['imc']} ({m_previo['estado_clinico']}) | 
+                <strong>Meta Electa:</strong> {datos_alumno['Objetivo principal']} | 
+                <strong>Frecuencia Elegida:</strong> {datos_alumno['Días entrenar']}
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
             if "alumno_actual" not in st.session_state or st.session_state.alumno_actual != alumno_sel:
                 st.session_state.alumno_actual = alumno_sel
@@ -554,9 +637,7 @@ elif opcion == "📊 Dashboard Administrador":
                 st.session_state.v_rutina = db_rutina if db_rutina and db_rutina != "nan" else generar_rutina_detallada_mm247(datos_alumno)
                 st.session_state.v_balance = db_balance if db_balance and db_balance != "nan" else generar_dieta_detallada_mm247(datos_alumno)
 
-            st.markdown(f"### 👤 Gestión de Carga Activa: {nombre_display}")
-            
-            if st.button("🚀 Forzar Re-Cálculo de Automatización con Alimentos Reales"):
+            if st.button("🚀 Forzar Re-Cálculo de Automatización Dinámica (IMC y Rutina Mutada)"):
                 st.session_state.v_propuesta = generar_propuesta_integral_mm247(datos_alumno)
                 st.session_state.v_rutina = generar_rutina_detallada_mm247(datos_alumno)
                 st.session_state.v_balance = generar_dieta_detallada_mm247(datos_alumno)
@@ -564,8 +645,8 @@ elif opcion == "📊 Dashboard Administrador":
 
             st.markdown("---")
             with st.form("prescripcion_maestra_form_mm247"):
-                propuesta = st.text_area("🩺 HOJA 1: Informe Diagnóstico Avanzado:", value=st.session_state.v_propuesta, height=280)
-                rutina = st.text_area("🏋️ HOJA 2: Programación Semanal Específica:", value=st.session_state.v_rutina, height=350)
+                propuesta = st.text_area("🩺 HOJA 1: Informe Diagnóstico Avanzado (Clínico e IMC):", value=st.session_state.v_propuesta, height=280)
+                rutina = st.text_area("🏋️ HOJA 2: Programación Semanal Específica e Inteligente:", value=st.session_state.v_rutina, height=350)
                 balance = st.text_area("🥗 HOJA 3: Plan Nutricional Ajustado Exacto con Gramajes:", value=st.session_state.v_balance, height=350)
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Plan Estructural con Google Sheets")
