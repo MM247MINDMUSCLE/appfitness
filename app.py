@@ -4,7 +4,9 @@ from fpdf import FPDF
 import datetime
 import requests
 
+# =============================================================================
 # 1. CONFIGURACIÓN DE PÁGINA (BRANDING MM247)
+# =============================================================================
 st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
 
 # URL del puente Apps Script 
@@ -49,11 +51,62 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
+# =============================================================================
+# 2. MOTOR DE INTELIGENCIA Y CÁLCULOS AUTOMÁTICOS
+# =============================================================================
+def generar_propuesta_inteligente(datos):
+    nombre = str(datos.get('Nombre', '')).title()
+    grasa = str(datos.get('Grasa', ''))
+    lesion = str(datos.get('Lesiones', 'Ninguna'))
+    meta = str(datos.get('Meta', ''))
+    neat = str(datos.get('Gasto NEAT', ''))
+    frec = str(datos.get('Frecuencia', '3 Días por semana'))
+    tiempo = str(datos.get('Tiempo Sesión', 'De 45 a 75 minutos'))
+    exp = str(datos.get('Experiencia', ''))
 
+    return f"1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES\nALUMNO: {nombre}\nPunto de partida metabólico determinado mediante {grasa}. Presenta una condición de limitaciones catalogada como: {lesion}. Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos.\n\n2. RESUMEN DEL BALANCE ENERGÉGICO AJUSTADO\nFase asignada: {meta}. Déficit o superávit calculado según gasto diario ({neat}).\n\n3. RESUMEN DE DOSIFICACIÓN SEMANAL\nFrecuencia óptima establecida de: {frec} con sesiones de {tiempo} adaptada a madurez muscular: {exp}."
+
+def generar_rutina_inteligente(datos):
+    lesiones = str(datos.get('Lesiones', 'Ninguna'))
+    nivel = str(datos.get('Experiencia', 'Intermedio'))
+
+    rutina = f"SISTEMA DE ENTRENAMIENTO BIOMECÁNICO DETALLADO\nNivel: {nivel} | Restricciones de Carga: {lesiones}\n\n"
+    rutina += "LUNES [Empuje - Pecho/Hombro/Tríceps]:\n- Press Inclinado con mancuernas: 4 Series x 8-10 reps (RPE 9)\n- Fondos en paralelas guiados: 3 Series x 10 reps\n- Laterales con polea baja: 4 Series x 12 reps\n\n"
+    rutina += "MARTES [Tracción - Espalda/Bíceps]:\n- Jalón al pecho con agarre prono: 4 Series x 10 reps\n- Remo con soporte en pecho (Machine): 3 Series x 8-12 reps\n- Curl de bíceps inclinado: 3 Series x 12 reps\n\n"
+
+    if "Rodillas" in lesiones:
+        rutina += "MIÉRCOLES [Pierna Completa - Enfoque Terapéutico sin Impacto]:\n- Prensa de piernas (pies bajos, rango controlado): 4 Series x 12 reps\n- Extensión de rodillas (sin bloqueo articular): 3 Series x 15 reps\n- Curl femoral acostado: 4 Series x 10 reps\n\n"
+    else:
+        rutina += "MIÉRCOLES [Pierna Completa - Enfoque Estabilidad]:\n- Sentadilla Libre o en Hack: 4 Series x 8-10 reps\n- Prensa de piernas: 3 Series x 12 reps\n- Curl femoral acostado: 4 Series x 10 reps\n\n"
+
+    rutina += "JUEVES / VIERNES / SÁBADO:\n[Rotación adaptada a capacidad de recuperación del alumno según su nivel]"
+    return rutina
+
+def generar_dieta_inteligente(datos):
+    try:
+        peso_str = str(datos.get('Rango Peso', '80 kg'))
+        peso_kg = float(peso_str.replace(" kg", "").split(" ")[0])
+    except:
+        peso_kg = 80.0
+
+    meta = str(datos.get('Meta', 'Hipertrofia'))
+    neat = str(datos.get('Gasto NEAT', 'Moderado'))
+
+    prot = round(peso_kg * 2.0, 1)
+    grasa = round(peso_kg * 1.0, 1)
+    carbs = round(peso_kg * 3.0, 1) 
+    cals = round((prot * 4) + (grasa * 9) + (carbs * 4), 1)
+
+    return f"ESTRATEGIA NUTRICIONAL Y DIETA DIARIA PERSONALIZADA\nMeta: {meta} | Gasto Energético Base: {neat}\n\nMACRONUTRIENTES OBJETIVO DIARIOS:\nCalorías Totales Estimadas: {cals} kcal | Proteína: {prot}g | Carbohidratos: {carbs}g | Grasas: {grasa}g\n\nDISTRIBUCIÓN DIARIA ESTABLECIDA:\n• COMIDA 1 (Desayuno / Pre-Entreno):\n  - {int(prot*0.3)}g de proteína (Ej. huevos/claras) + {int(carbs*0.3)}g de carbohidratos (Ej. avena).\n• COMIDA 2 (Post-Entreno):\n  - {int(prot*0.35)}g de proteína (Ej. pechuga/pescado) + {int(carbs*0.4)}g de carbohidratos (Ej. arroz blanco) + vegetales.\n• COMIDA 3 (Tarde / Snack):\n  - {int(prot*0.15)}g de proteína (Ej. Whey Protein) + 30g de grasas (Ej. almendras).\n• COMIDA 4 (Cena / Control de Ansiedad):\n  - {int(prot*0.2)}g de proteína magra + {int(carbs*0.3)}g de carbohidratos complejos + ensalada verde libre."
+
+# =============================================================================
+# 3. VARIABLES GLOBALES DE FORMULARIO
+# =============================================================================
 OPCIONES_EDAD = [f"{i} años" for i in range(14, 81)]
 OPCIONES_PESO = [f"{round(i * 0.5, 1)} kg" for i in range(80, 401)] 
 OPCIONES_ESTATURA = [f"{i} cm" for i in range(120, 221)]
+
+opcion = st.sidebar.selectbox("Sección de la App:", ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"])
 
 # =============================================================================
 # MÓDULO 1: CUESTIONARIO CON SELECCIÓN DE NÚMEROS ESTRICTA
@@ -190,81 +243,31 @@ elif opcion == "📊 Dashboard Administrador":
             datos_alumno = df_existente.loc[idx_alumno]
             
             nombre_display = str(datos_alumno['Nombre']).title()
-            peso_display = str(datos_alumno.get('Rango Peso', 'No especificado'))
-            estatura_display = str(datos_alumno.get('Rango Estatura', 'No especificado'))
-            edad_display = str(datos_alumno.get('Rango Edad', 'No especificado'))
-            meta_display = str(datos_alumno.get('Meta', 'No especificado'))
-            neat_display = str(datos_alumno.get('Gasto NEAT', 'No especificado'))
-            lesion_display = str(datos_alumno.get('Lesiones', 'Ninguna'))
-            experiencia_display = str(datos_alumno.get('Experiencia', 'No especificado'))
-            frecuencia_display = str(datos_alumno.get('Frecuencia', '3 Días por semana'))
-            tiempo_display = str(datos_alumno.get('Tiempo Sesión', 'De 45 a 75 minutos'))
             grasa_display = str(datos_alumno.get('Grasa', ''))
+
+            # Control de Estado (Session State) para el Alumno Actual
+            if "alumno_actual" not in st.session_state or st.session_state.alumno_actual != alumno_sel:
+                st.session_state.alumno_actual = alumno_sel
+                st.session_state.v_propuesta = str(datos_alumno.get("Propuesta General", "")).strip()
+                st.session_state.v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
+                st.session_state.v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
 
             st.markdown(f"### 👤 Expediente Actualizado: {nombre_display}")
             
-            v_propuesta = str(datos_alumno.get("Propuesta General", "")).strip()
-            v_balance = str(datos_alumno.get("Balance Energético", "")).strip()
-            v_rutina = str(datos_alumno.get("Rutina Biomecánica", "")).strip()
-            
-            # --- HOJA 1: RESUMEN GENERAL (INTEGRAL TODO EN UNO) ---
-            if v_propuesta in ["", "nan"]:
-                v_propuesta = (
-                    f"1. DIAGNÓSTICO CLÍNICO DE PUNTO DE PARTIDA Y LIMITACIONES\n"
-                    f"ALUMNO: {nombre_display}\n"
-                    f"Punto de partida metabólico determinado mediante {grasa_display}. Presenta una condición de limitaciones catalogada como: {lesion_display}. Se autoriza entrenamiento de fuerza bajo progresión milimétrica enfocado en corregir desbalances biomecánicos.\n\n"
-                    f"2. RESUMEN DEL BALANCE ENERGÉGICO AJUSTADO\n"
-                    f"Fase asignada: {meta_display}. Déficit o superávit calculado según gasto diario ({neat_display}).\n\n"
-                    f"3. RESUMEN DE DOSIFICACIÓN SEMANAL\n"
-                    f"Frecuencia óptima establecida de: {frecuencia_display} con sesiones de {tiempo_display} adaptada a madurez muscular: {experiencia_display}."
-                )
-            
-            # --- HOJA 2: PLANTILLA DETALLADA POR MÚSCULO, EJERCICIO Y SERIES ---
-            if v_rutina in ["", "nan"]:
-                v_rutina = (
-                    f"SISTEMA DE ENTRENAMIENTO BIOMECÁNICO DETALLADO\n"
-                    f"Restricciones de Carga aplicadas por Seguridad: {lesion_display}\n\n"
-                    f"LUNES [Empuje - Pecho/Hombro/Tríceps]:\n"
-                    f"- Press Inclinado con mancuernas: 4 Series x 8-10 reps (RPE 9)\n"
-                    f"- Fondos en paralelas guiados: 3 Series x 10 reps\n"
-                    f"- Laterales con polea baja: 4 Series x 12 reps\n\n"
-                    f"MARTES [Tracción - Espalda/Bíceps]:\n"
-                    f"- Jalón al pecho con agarre prono: 4 Series x 10 reps\n"
-                    f"- Remo con soporte en pecho (Machine): 3 Series x 8-12 reps\n"
-                    f"- Curl de bíceps inclinado: 3 Series x 12 reps\n\n"
-                    f"MIÉRCOLES [Pierna Completa - Enfoque Estabilidad]:\n"
-                    f"- Prensa de piernas inclinada: 4 Series x 10-12 reps\n"
-                    f"- Extensión de rodillas en máquina: 3 Series x 15 reps\n"
-                    f"- Curl femoral acostado: 4 Series x 10 reps\n\n"
-                    f"JUEVES / VIERNES / SÁBADO:\n"
-                    f"[Añadir aquí las siguientes rotaciones adaptadas al alumno]"
-                )
-
-            # --- HOJA 3: PLANTILLA DE DIETA DIARIA Y MACROS ESTABLECIDOS ---
-            if v_balance in ["", "nan"]:
-                v_balance = (
-                    f"ESTRATEGIA NUTRICIONAL Y DIETA DIARIA PERSONALIZADA\n"
-                    f"Meta: {meta_display} | Gasto Energético Base: {neat_display}\n\n"
-                    f"MACRONUTRIENTES OBJETIVO DIARIOS:\n"
-                    f"Calorías Totales: 2,400 kcal | Proteína: 160g | Carbohidratos: 250g | Grasas: 65g\n\n"
-                    f"DISTRIBUCIÓN DIARIA ESTABLECIDA:\n"
-                    f"• COMIDA 1 (Desayuno / Pre-Entreno):\n"
-                    f"  - 4 claras de huevo + 2 huevos enteros + 60g de avena en hojuelas.\n"
-                    f"• COMIDA 2 (Post-Entreno):\n"
-                    f"  - 150g de pechuga de pollo asada + 200g de arroz blanco cocido + vegetales.\n"
-                    f"• COMIDA 3 (Tarde / Snack):\n"
-                    f"  - 30g de proteína en polvo (Whey) + 1 manzana mediana + 30g de almendras.\n"
-                    f"• COMIDA 4 (Cena / Control de Ansiedad):\n"
-                    f"  - 150g de filete de pescado o res magra + 150g de camote al horno + ensalada verde libre."
-                )
+            # --- BOTÓN MÁGICO DE GENERACIÓN AUTOMÁTICA ---
+            if st.button("🚀 Generar Plan Automático con IA (Cálculo Exacto MM247)"):
+                st.session_state.v_propuesta = generar_propuesta_inteligente(datos_alumno)
+                st.session_state.v_rutina = generar_rutina_inteligente(datos_alumno)
+                st.session_state.v_balance = generar_dieta_inteligente(datos_alumno)
+                st.rerun()
 
             st.markdown("---")
             st.markdown("### 🛠️ Prescripción y Planificación de Sistemas MM247")
             
             with st.form("prescripcion_exacta_form"):
-                propuesta = st.text_area("🩺 HOJA 1: Resumen Integral (Ficha, Dieta y Rutina juntas):", value=v_propuesta, height=140)
-                rutina = st.text_area("🏋️ HOJA 2: Rutina Semanal Detallada (Músculo, Ejercicio y Series):", value=v_rutina, height=200)
-                balance = st.text_area("🥗 HOJA 3: Dieta Diaria Establecida (Comidas y Balance Energético):", value=v_balance, height=200)
+                propuesta = st.text_area("🩺 HOJA 1: Resumen Integral (Ficha, Dieta y Rutina juntas):", value=st.session_state.v_propuesta, height=140)
+                rutina = st.text_area("🏋️ HOJA 2: Rutina Semanal Detallada (Músculo, Ejercicio y Series):", value=st.session_state.v_rutina, height=200)
+                balance = st.text_area("🥗 HOJA 3: Dieta Diaria Establecida (Comidas y Balance Energético):", value=st.session_state.v_balance, height=200)
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
                 if guardar_changes:
@@ -287,8 +290,11 @@ elif opcion == "📊 Dashboard Administrador":
                     with st.spinner("Guardando cambios..."):
                         try:
                             requests.post(WEBHOOK_URL, json=payload_edit)
-                            st.success("✅ ¡Planificación guardada!")
-                            st.rerun()
+                            # Actualizamos también el estado actual con lo modificado
+                            st.session_state.v_propuesta = propuesta
+                            st.session_state.v_rutina = rutina
+                            st.session_state.v_balance = balance
+                            st.success("✅ ¡Planificación guardada y sincronizada exitosamente!")
                         except Exception as e_save: st.error(f"Fallo de sincronización: {e_save}")
             
             # --- COMPILADOR PDF DE ALTA ARMONÍA ---
@@ -328,10 +334,10 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_x(12)
                     pdf.cell(0, 6, limpiar_texto(f"Diagnóstico Metabólico Inicial: {grasa_display}"), ln=True)
                     
-                    # Todo lo escrito en las 3 secciones se concatena armónicamente en la Hoja 1
                     pdf.set_xy(10, 72)
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(190, 6, limpiar_texto(propuesta))
+                    # Usamos los valores desde session_state para garantizar que imprima lo generado
+                    pdf.multi_cell(190, 6, limpiar_texto(st.session_state.v_propuesta))
 
                     # =========================================================================
                     # HOJA 2: RUTINA SEMANAL DETALLADA POR MÚSCULO, EJERCICIO Y SERIES
@@ -358,7 +364,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_xy(14, 46)
                     
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(182, 6, limpiar_texto(rutina))
+                    pdf.multi_cell(182, 6, limpiar_texto(st.session_state.v_rutina))
 
                     # =========================================================================
                     # HOJA 3: DIETA DIARIA ESTABLECIDA PARA BALANCE ENERGÉTICO IDEAL
@@ -385,7 +391,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_xy(14, 46)
                     
                     pdf.set_font("Arial", "", 10)
-                    pdf.multi_cell(182, 6, limpiar_texto(balance))
+                    pdf.multi_cell(182, 6, limpiar_texto(st.session_state.v_balance))
                     
                     # Descargar PDF
                     pdf_data = pdf.output(dest='S')
