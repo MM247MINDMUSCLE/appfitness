@@ -24,6 +24,7 @@ def cargar_base_datos():
 
 df_existente = cargar_base_datos()
 
+# Inyección de Estilos CSS Personalizados
 st.markdown("""
     <style>
     .main-title { font-size:44px; font-weight:900; color:#111111; text-align:center; letter-spacing: -1px; margin-bottom:0px; }
@@ -36,6 +37,14 @@ st.markdown("""
     .stButton>button:hover { background-color: #333333; color: white; }
     </style>
     """, unsafe_allow_html=True)
+
+# =============================================================================
+# MENU DE NAVEGACIÓN (CORRECCIÓN CRÍTICA DE VARIABLE NAMEERROR)
+# =============================================================================
+opcion = st.sidebar.selectbox(
+    "Navegación del Sistema MM247:",
+    ["📝 Cuestionario Integral de Evaluación", "📊 Dashboard Administrador"]
+)
 
 # =============================================================================
 # 2. MOTOR DE INTELIGENCIA CLÍNICA, BIOMECÁNICA Y METABÓLICA
@@ -58,7 +67,7 @@ def procesar_metricas_base(datos):
 def calcular_motores_automatizados(datos):
     peso, estatura, edad, genero = procesar_metricas_base(datos)
     
-    # 1. METABOLISMO BASE (Harris-Benedict)
+    # METABOLISMO BASE (Harris-Benedict)
     if "Masculino" in genero:
         tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
     else:
@@ -83,16 +92,15 @@ def calcular_motores_automatizados(datos):
         balance_str = "Normocalórico Estandarizado Normorregulado"
         
     # Macronutrientes Estrictos de Precisión MM247
-    prot = peso * 2.0  # Regla de oro estricta: 2g por kg
-    grasa = peso * 1.0 # Regla de oro estricta: 1g por kg
+    prot = peso * 2.0  
+    grasa = peso * 1.0 
     cals_restantes = cals_obj - ((prot * 4) + (grasa * 9))
     carbs = max(cals_restantes / 4, 50.0)
     
-    # 2. CAPACIDAD DE RECUPERACIÓN Y VOLUMEN TOLERABLE (Calculado con Variables avanzadas de estrés/sueño/fatiga)
+    # CAPACIDAD DE RECUPERACIÓN Y VOLUMEN TOLERABLE
     try:
         estres = float(str(datos.get('P_Estres', '5')))
         sueno = float(str(datos.get('P_Sueno', '5')))
-        fatiga = str(datos.get('Fatiga durante el día', 'Normal'))
         
         score_recup = (11 - estres) + sueno
         if "constant" in str(datos.get('Dolores constantes', 'No')).lower() or score_recup < 8:
@@ -110,7 +118,7 @@ def calcular_motores_automatizados(datos):
     except Exception:
         cap_recup, vol_por_musculo, rir_sugerido = "Media Estandarizada", "12-16 Series", "RIR 1-2"
 
-    # 3. RIESGO BIOMECÁNICO Y RESTRICCIONES ARTICULARES
+    # RIESGO BIOMECÁNICO Y RESTRICCIONES ARTICULARES
     lesion = str(datos.get('Lesión actual', 'Ninguna'))
     molestias_mov = str(datos.get('Molestias movimientos', ''))
     
@@ -165,7 +173,6 @@ def generar_rutina_detallada_mm247(datos):
     equipo = str(datos.get('Equipo disponible', 'Gimnasio completo'))
     lesiones = str(datos.get('Lesión actual', 'Ninguna'))
     
-    # Filtro de variables biomecánicas de ejercicios según lesiones detectadas
     ex_prensa = "Prensa de Piernas de forma controlada" if "Rodilla" in lesiones else "Sentadilla Hack Profunda"
     ex_pecho = "Press de Pecho Inclinado con Mancuernas (Agarre semineutro)" if "Hombro" in lesiones else "Press de Pecho Plano con Barra"
     ex_hombro = "Elevaciones Laterales con Polea por detrás" if "Hombro" in lesiones else "Press Militar con Barra"
@@ -188,23 +195,28 @@ def generar_rutina_detallada_mm247(datos):
         r += f"• DÍA 2 [MARTES - Tren Inferior Biomecánico]:\n  - {ex_prensa}: 4 series x 10-12 reps\n  - Curl Femoral Sentado: 4 series x 12 reps\n  - Elevación de Talones en Máquina: 4 series x 15 reps\n\n"
         r += f"• DÍA 3 [MIÉRCOLES - Enfoque Empuje (Pecho/Hombro/Tríceps)]:\n  - Press de Hombro con Mancuernas: 3 series x 10 reps\n  - Aperturas en Contractor Peck-Deck: 3 series x 12 reps\n  - Fondos en Paralelas (Máquina asistida): 3 series x 12 reps\n\n"
         r += f"• DÍA 4 [JUEVES - Enfoque Tracción (Espalda/Bícep/Core)]:\n  - Jalón al Pecho Agarre Abierto: 4 series x 10 reps\n  - Remo con Mancuerna a una mano: 3 series x 12 reps\n  - Curl de Bíceps de pie con Barra Z: 3 series x 10 reps\n\n"
-        r += f"• DÍA 5 [VIERNES - Tren Inferior de Aislamiento e Hipertrofia]:\n  - Extensión de Rodillas en Máquina: 4 series x 15 reps (Tensión constante)\n  - Peso Muerto Rumano con Barra: 3 series x 10 reps\n  - Abductores en Máquina Sentado: 3 series x 20 reps"
+        r += f"• DÍA 5 [VIERNES - Tren Inferior de Aislamiento e Hipertrofia]:\n  - Extensión de Rodillas en Máquina: 4 series x 15 reps\n  - Peso Muerto Rumano con Barra: 3 series x 10 reps\n  - Abductores en Máquina Sentado: 3 series x 20 reps"
         
     elif "6" in dias:
         r += "DIVISIÓN DISPUESTA: PUSH / PULL / LEG (Frecuencia 2 Estricta de Bodybuilding)\n\n"
-        r += f"• DÍA 1 [LUNES - PUSH]: {ex_pecho} 4x10, {ex_hombro} 3x12, Fondos 3x10.\n• DÍA 2 [MARTES - PULL]: Jalón Prono 4x10, Remo Sentado 3x12, Curl Inclinado 3x12.\n• DÍA 3 [MIÉRCOLES - LEG]: {ex_prensa} 4x12, Curl Femoral 4x10, Extensiones 3x15.\n• DÍA 4 [JUEVES - PUSH 2]: Press con Mancuernas, Cruces en Poleas, Copa de Tríceps.\n• DÍA 5 [VIERNES - PULL 2]: Dominadas asistidas, Remo en Polea, Curl Martillo.\n• DÍA 6 [SÁBADO - LEG 2]: Peso Muerto Rumano, Zancadas con mancuernas, Pantorrilla."
+        r += f"• DÍA 1 [LUNES - PUSH 1]: {ex_pecho} 4x10, {ex_hombro} 3x12, Fondos 3x10.\n"
+        r += f"• DÍA 2 [MARTES - PULL 1]: Jalón Prono 4x10, Remo Sentado 3x12, Curl Inclinado 3x12.\n"
+        r += f"• DÍA 3 [MIÉRCOLES - LEG 1]: {ex_prensa} 4x12, Curl Femoral 4x10, Extensiones 3x15.\n"
+        r += f"• DÍA 4 [JUEVES - PUSH 2]: Press con Mancuernas 4x10, Cruces en Poleas 3x12, Copa de Tríceps 3x12.\n"
+        r += f"• DÍA 5 [VIERNES - PULL 2]: Dominadas asistidas 4x10, Remo en Polea Baja 3x12, Curl Martillo 3x12.\n"
+        r += f"• DÍA 6 [SÁBADO - LEG 2]: Peso Muerto Rumano 4x10, Zancadas con Mancuerna 3x12, Pantorrilla en Máquina 4x15."
         
-    else: # Por defecto u opción de 4 días (La división metabólicamente más balanceada)
+    else: 
         r += "DIVISIÓN DISPUESTA: TORSO / PIERNA ORIGINAL (Frecuencia 2 Óptima)\n\n"
         r += f"• DÍA 1 [LUNES - Torso Enfoque Fuerza]:\n  - {ex_pecho}: 4 series efectivas x 6-8 reps (2 mins descanso)\n  - Remo con Barra con agarre Supino: 4 series x 8 reps\n  - Press Militar con Mancuernas: 3 series x 10 reps\n  - Jalón al Pecho Cerrado Neutro: 3 series x 10 reps\n\n"
         r += f"• DÍA 2 [MARTES - Pierna Enfoque Desarrollo Estructural]:\n  - {ex_prensa}: 4 series x 10-12 reps\n  - Peso Muerto Rumano con Mancuernas: 4 series x 10 reps\n  - Extensión de Cuádriceps: 3 series x 15 reps\n  - Curl Femoral Acostado: 3 series x 12 reps\n\n"
         r += f"• DÍA 3 [JUEVES - Torso Enfoque Hipertrofia y Detalle]:\n  - Press Inclinado con Mancuernas: 4 series x 10-12 reps\n  - Remo con Polea Baja con triángulo: 4 series x 12 reps\n  - Elevaciones Laterales con Mancuerna: 4 series x 15 reps\n  - Curl de Bíceps en Polea Baja + Extensión de Tríceps Cuerda: 3 series x 12 reps\n\n"
-        r += f"• DÍA 4 [VIERNES - Pierna de Estabilidad y Aislamiento]:\n  - Sentadilla Búlgara con Mancuernas: 3 series x 10 reps por pierna\n  - Prensa de Piernas (Pies altos y separados para enfoque en isquios/glúteo): 3 series x 12 reps\n  - Elevación de Talones de pie: 4 series x 15 reps\n\n"
-        r += "SÁBADO Y DOMINGO [Descanso Completo / Recuperación Nerviosa y Muscular Activa]"
+        r += f"• DÍA 4 [VIERNES - Pierna de Estabilidad y Aislamiento]:\n  - Sentadilla Búlgara con Mancuernas: 3 series x 10 reps por pierna\n  - Prensa de Piernas: 3 series x 12 reps\n  - Elevación de Talones de pie: 4 series x 15 reps\n\n"
+        r += "SÁBADO Y DOMINGO [Descanso Completo / Recuperación Nerviosa]"
 
     r += "\n\n========================================================================\n"
     r += "🛡️ PROTOCOLO DE PROGRESIÓN SEMANAL AUTOMÁTICA Y CONTROL DE FATIGA:\n"
-    r += f"Aplica Sobrecarga Progresiva de Doble Entrada: Si completas las repeticiones objetivo con el RIR establecido ({m['rir']}), sube un 5% de carga para la siguiente semana. En la Semana 5 se ejecutará un Deload Automático reduciendo las series a la mitad para disipar fatiga acumulada."
+    r += f"Aplica Sobrecarga Progresiva de Doble Entrada: Si completas las repeticiones objetivo con el RIR establecido ({m['rir']}), sube un 5% de carga para la siguiente semana. En la Semana 5 se ejecutará un Deload Automático."
     return r
 
 def generar_dieta_detallada_mm247(datos):
@@ -234,7 +246,6 @@ def generar_dieta_detallada_mm247(datos):
     c_por_comida = round(m['carbs'] / c_num, 1)
     cal_por_comida = round(m['cals'] / c_num, 0)
 
-    # Reemplazo dinámico de alimentos basados en el tipo de alimentación asignado
     fuente_p = "Pechuga de Pollo / Claras de Huevo / Lomo de Cerdo Magro"
     fuente_g = "Aguacate / Almendras naturales / Aceite de Oliva Extra Virgen"
     if "Vegetariano" in tipo_dieta:
@@ -245,25 +256,25 @@ def generar_dieta_detallada_mm247(datos):
 
     for i in range(1, c_num + 1):
         if i == 1:
-            d += f"• COMIDA 1 [Desayuno Metatónico / Carga de Energía Inicial]:\n"
+            d += f"• COMIDA 1 [Desayuno Metatónico]:\n"
             d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú Sugerido: Tortilla de Claras de huevo e higienizados de espinaca + Avena en hojuelas cocida con agua y canela.\n\n"
+            d += f"  - Menú: Tortilla de Claras de huevo + Avena en hojuelas cocida con agua y canela.\n\n"
         elif i == 2:
-            d += f"• COMIDA 2 [Almuerzo / Ventana Post-Entrenamiento Crítica]:\n"
+            d += f"• COMIDA 2 [Almuerzo / Post-Entrenamiento]:\n"
             d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú Sugerido: {fuente_p.split(' / ')[0]} a la plancha + Arroz blanco cocido al vapor + Ensalada verde libre con gotas de limón.\n\n"
+            d += f"  - Menú: {fuente_p.split(' / ')[0]} a la plancha + Arroz blanco al vapor + Ensalada verde.\n\n"
         elif i == c_num:
-            d += f"• COMIDA {i} [Cena de Control de Ansiedad y Reparación Nocturna]:\n"
+            d += f"• COMIDA {i} [Cena de Control Nocturno]:\n"
             d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú Sugerido: Pescado blanco magro o Atún en agua + Bloque de {fuente_g.split(' / ')[0]} + Espárragos o Brócoli asados.\n\n"
+            d += f"  - Menú: Pescado blanco magro o Atún en agua + Bloque de {fuente_g.split(' / ')[0]} + Brócoli asado.\n\n"
         else:
             d += f"• COMIDA {i} [Incentivo Metabólico Intermedio]:\n"
             d += f"  - Macronutrientes: {p_por_comida}g Prot | {c_por_comida}g Carbs | {g_por_comida}g Grasa ({cal_por_comida} kcal)\n"
-            d += f"  - Menú Sugerido: Batido de Proteína Isolate + {fuente_g.split(' / ')[1]} para estabilización de grasas saludables.\n\n"
+            d += f"  - Menú: Batido de Proteína Isolate + {fuente_g.split(' / ')[1]}.\n\n"
 
     d += "========================================================================\n"
     d += "💧 HIDRATACIÓN, REFEEDS Y PROTOCOLO DE AJUSTE METABÓLICO:\n"
-    d += f"Consumo de agua obligatorio de 3.5 a 4 Litros diarios para mantener volumen celular. Cada 21 días se pautará un Refeed controlado aumentando un 40% los carbohidratos si el peso corporal se estanca, optimizando la hormona leptina."
+    d += f"Consumo de agua de 3.5 a 4 Litros diarios. Cada 21 días se pautará un Refeed controlado aumentando un 40% los carbohidratos si el peso se estanca."
     return d
 
 # =============================================================================
@@ -273,7 +284,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>Formulario Maestro — Evaluación Inicial y Diagnóstico Integral de Cargas</div>", unsafe_allow_html=True)
     
-    st.info("🚨 ATENCIÓN ENTRENADOR/CLIENTE: Todas las secciones son obligatorias para el cálculo preciso de los algoritmos de entrenamiento y nutrición.")
+    st.info("🚨 ATENCIÓN: Todas las secciones son fundamentales para estructurar la progresión automatizada.")
     
     with st.form("formulario_maestro_mm247_cerrado", clear_on_submit=True):
         t1, t2, t3, t4, t5, t6 = st.tabs(["1-2. General y Objetivos", "3. Experiencia", "4-5. Salud y Biomecánica", "6-7. Estructura y Hábitos", "8-9. Alimentación y Fatiga", "10-12. Equipo y Métricas"])
@@ -309,7 +320,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
             f_tiempo_entrenando = st.selectbox("¿Cuánto tiempo llevas entrenando?", ["Nunca", "Menos de 6 meses", "1 año", "2-5 años", "Más de 5 años"])
             f_tipo_entreno = st.multiselect("¿Qué tipo de entrenamiento has realizado?", ["Gimnasio", "Calistenia", "Crossfit", "Deportes", "Powerlifting", "Bodybuilding", "Funcional", "Artes marciales"])
             f_dias_semana = st.selectbox("¿Cuántos días puedes entrenar por semana?", ["3 días por semana", "4 días por semana", "5 días por semana", "6 días por semana"])
-            f_tiempo_sesion = st.selectbox("¿Cuánto tiempo puedes dedicar por sesión?", ["Sesión corta (Menos de 45 minutos)", "Sesión Estándar (De 45 a 75 minutos)", "Sesión Extendera (Más de 75 minutos)"])
+            f_tiempo_sesion = st.selectbox("¿Cuánto tiempo puedes dedicar por sesión?", ["Sesión corta (Menos de 45 minutos)", "Sesión Estándar (De 45 a 75 minutos)", "Sesión Extendida (Más de 75 minutos)"])
             f_entrena_act = st.selectbox("¿Entrenas actualmente?", ["Sí", "No"])
             f_coach_antes = st.selectbox("¿Has trabajado antes con entrenador?", ["Sí", "No"])
 
@@ -336,7 +347,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
         with t4:
             st.markdown("<div class='section-header'>6. ESTRUCTURA FÍSICA</div>", unsafe_allow_html=True)
             f_fisico = st.selectbox("¿Cómo te consideras físicamente?", ["Muy delgado", "Delgado", "Atlético", "Robusto", "Sobrepeso", "Obesidad"])
-            f_acumula_grasa = st.selectbox("Where do you accumulate the most fat? (¿Dónde acumulas más grasa?):", ["Abdomen", "Piernas", "Espalda", "Brazos", "General"])
+            f_acumula_grasa = st.selectbox("¿Dónde acumulas más grasa?:", ["Abdomen", "Piernas", "Espalda", "Brazos", "General"])
             f_gana_musculo = st.selectbox("¿Qué tan fácil ganas músculo?", ["Muy difícil", "Difícil", "Normal", "Fácil"])
             f_gana_grasa = st.selectbox("¿Qué tan fácil ganas grasa?", ["Muy fácil", "Fácil", "Normal", "Difícil"])
             
@@ -354,7 +365,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
         with t5:
             st.markdown("<div class='section-header'>8. ALIMENTACIÓN</div>", unsafe_allow_html=True)
             f_obj_nutri = st.selectbox("¿Cuál es tu objetivo nutricional?", ["Bajar grasa", "Subir masa muscular", "Mantener peso", "Mejorar salud", "Rendimiento deportivo"])
-            f_alergias = st.text_input("¿Tienes allergies alimenticias? (Especificar o 'No'):", value="No")
+            f_alergias = st.text_input("¿Tienes alergias alimenticias? (Especificar o 'No'):", value="No")
             f_intolerancia = st.text_input("¿Tienes intolerancias? (Especificar o 'No'):", value="No")
             f_tipo_alimentacion = st.selectbox("¿Sigues algún tipo de alimentación?", ["Omnívoro", "Vegetariano", "Vegano", "Keto", "Low carb"])
             f_no_gustan = st.text_area("¿Qué alimentos no te gustan?:", value="Ninguno")
@@ -406,7 +417,7 @@ if opcion == "📝 Cuestionario Integral de Evaluación":
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Nombre completo": str(f_nombre.strip().lower()), "Edad": str(f_edad), "Sexo": str(f_sexo), "Estatura": str(f_estatura), "Peso actual": str(f_peso_actual),
                     "Peso objetivo": str(f_peso_obj), "Ocupación": str(f_ocupacion), "Horario laboral": str(f_horario), "Ciudad / País": str(f_ciudad), "Número de contacto": str(f_contacto), "Correo electrónico": str(f_correo),
-                    "Objetivo principal": str(f_objetivo), "Tiempo desado": str(f_tiempoloro), "Compromiso": str(f_compromiso), "Tiempo entrenando": str(f_tiempo_entrenando), "Tipo entreno": ",".join(f_tipo_entreno),
+                    "Objetivo principal": str(f_objetivo), "Tiempo deseado": str(f_tiempoloro), "Compromiso": str(f_compromiso), "Tiempo entrenando": str(f_tiempo_entrenando), "Tipo entreno": ",".join(f_tipo_entreno),
                     "Días entrenar": str(f_dias_semana), "Tiempo por sesión": str(f_tiempo_sesion), "Entrena actualmente": str(f_entrena_act), "Coach anterior": str(f_coach_antes), "Lesión actual": str(f_lesion),
                     "Cirugías": str(f_cirugias), "Dolor frecuente": str(f_dolor_frec), "Medicamentos": str(f_medica), "Condición médica": str(f_cond_diag), "Restricciones": str(f_restriccion), "Prohibido ejercicio": str(f_prohibido),
                     "Molestias movimientos": ",".join(f_molestias_mov), "Movilidad": str(f_movilidad), "Limitaciones movilidad": str(f_lim_mov), "Horas sentado": str(f_sentado), "Mala postura": str(f_postura),
@@ -465,7 +476,6 @@ elif opcion == "📊 Dashboard Administrador":
             
             nombre_display = str(datos_alumno['Nombre completo']).title()
 
-            # Automatización total: Genera el plan inmediato si el alumno es nuevo y no tiene registros guardados
             if "alumno_actual" not in st.session_state or st.session_state.alumno_actual != alumno_sel:
                 st.session_state.alumno_actual = alumno_sel
                 
@@ -495,12 +505,10 @@ elif opcion == "📊 Dashboard Administrador":
                 
                 guardar_changes = st.form_submit_button("💾 Guardar y Sincronizar Cambios con Google Sheets")
                 if guardar_changes:
-                    # Armando el diccionario completo mapeado exactamente con las columnas para evitar sobreescritura accidental
                     payload_edit = {"Action": "UPDATE", "RowIndex": int(idx_alumno + 2)}
                     for k in datos_alumno.keys():
                         payload_edit[k] = str(datos_alumno[k])
                     
-                    # Inyectando las modificaciones controladas del editor
                     payload_edit["Propuesta General"] = propuesta
                     payload_edit["Balance Energético"] = balance
                     payload_edit["Rutina Biomecánica"] = rutina
@@ -514,14 +522,13 @@ elif opcion == "📊 Dashboard Administrador":
                             st.success("✅ ¡Prescripción guardada y sincronizada de forma impecable!")
                         except Exception as e_save: st.error(f"Fallo crítico de sincronización: {e_save}")
             
-            # --- COMPILADOR PDF PREMIUM EN LÍNEA ---
             if st.button("🖨️ Compilar Plan Maestro en PDF de 3 Hojas"):
                 try:
                     pdf = FPDF()
                     def limpiar_texto(txt):
                         return str(txt).replace("•", "-").replace("–", "-").replace("—", "-").replace("º"," ").encode('latin-1', 'ignore').decode('latin-1')
 
-                    # HOJA 1: INFORME MAESTRO DIAGNÓSTICO
+                    # HOJA 1
                     pdf.add_page()
                     pdf.set_fill_color(20, 20, 20) 
                     pdf.rect(0, 0, 210, 38, "F")
@@ -544,7 +551,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(190, 6, limpiar_texto(st.session_state.v_propuesta))
 
-                    # HOJA 2: PROGRAMACIÓN DE ENTRENAMIENTO BIOMECÁNICO
+                    # HOJA 2
                     pdf.add_page()
                     pdf.set_fill_color(220, 70, 0) 
                     pdf.rect(0, 0, 210, 32, "F")
@@ -563,7 +570,7 @@ elif opcion == "📊 Dashboard Administrador":
                     pdf.set_font("Arial", "", 10)
                     pdf.multi_cell(182, 5.5, limpiar_texto(st.session_state.v_rutina))
 
-                    # HOJA 3: DISEÑO DE PLAN ALIMENTICIO
+                    # HOJA 3
                     pdf.add_page()
                     pdf.set_fill_color(35, 115, 40) 
                     pdf.rect(0, 0, 210, 32, "F")
