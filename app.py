@@ -3,6 +3,8 @@
 ================================================================================
           SISTEMA DIGITAL CORE MM247 — MIND MUSCLE ECOSYSTEM
    EVALUACIÓN METABÓLICA, CONTROL BIOMECÁNICO Y AUDITORÍA DE ADHERENCIA
+   
+   VERSIÓN 2.1 — ARQUITECTURA REFACTORIZADA CON VALIDACIÓN ESTRICTA
 ================================================================================
 """
 
@@ -11,770 +13,1048 @@ import pandas as pd
 from fpdf import FPDF
 import datetime
 import requests
-import random
+import uuid
 
 # =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA Y BRANDING (MIND MUSCLE AESTHETIC)
+# 0. CONFIGURACIÓN CENTRAL (CONFIG)
 # =============================================================================
-st.set_page_config(page_title="MINDMUSCLE247", page_icon="💪", layout="wide")
+CONFIG = {
+    "page_title": "MINDMUSCLE247",
+    "page_icon": "💪",
+    "webhook_url": "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AWyvHR2PpxotzRSPBpMeE5AVWNewO9AcqZ3PeXxmu_s0/exec",
+    "sheet_url": "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
+    "admin_password": "MM247_Admin",
+    "total_misiones": 6,
+    # Factor de actividad para TDEE según nivel reportado
+    "factores_actividad": {
+        "Sedentario":            1.20,
+        "Poco activo":           1.375,
+        "Moderadamente activo":  1.55,
+        "Muy activo":            1.725,
+    },
+    # Ejercicios por día según músculo objetivo y lesión
+    "rutinas": {
+        "Empuje": {
+            "sin_lesion": [
+                ("Press Banca con Barra", "4", "6-8", "90s"),
+                ("Press Inclinado con Mancuernas", "3", "10-12", "60s"),
+                ("Aperturas en Polea Alta", "3", "15-20", "45s"),
+                ("Press Militar con Barra", "3", "8-10", "90s"),
+                ("Elevaciones Laterales", "4", "12-15", "45s"),
+            ],
+            "con_lesion": [
+                ("Press en Máquina (neutro)", "4", "10-12", "90s"),
+                ("Aperturas en Polea Media", "3", "12-15", "60s"),
+                ("Press Hombro en Máquina", "3", "12-15", "60s"),
+                ("Elevaciones Laterales Cable", "4", "15-20", "45s"),
+            ],
+        },
+        "Tracción": {
+            "sin_lesion": [
+                ("Dominadas o Jalón al Pecho", "4", "6-10", "90s"),
+                ("Remo con Barra", "4", "8-10", "90s"),
+                ("Remo en Polea Baja", "3", "12-15", "60s"),
+                ("Curl Bíceps con Barra", "3", "10-12", "60s"),
+            ],
+            "con_lesion": [
+                ("Jalón al Pecho Agarre Neutro", "4", "10-12", "90s"),
+                ("Remo en Máquina", "3", "12-15", "60s"),
+                ("Polea Alta Agarre Neutro", "3", "15-20", "45s"),
+                ("Curl Martillo Mancuernas", "3", "12-15", "60s"),
+            ],
+        },
+        "Pierna": {
+            "sin_lesion": [
+                ("Sentadilla con Barra", "4", "6-8", "120s"),
+                ("Prensa de Pierna", "3", "10-12", "90s"),
+                ("Extensión de Cuádriceps", "3", "15-20", "60s"),
+                ("Curl Femoral", "3", "12-15", "60s"),
+                ("Pantorrillas de Pie", "4", "15-20", "45s"),
+            ],
+            "con_lesion": [
+                ("Prensa de Pierna Rango Parcial", "4", "12-15", "90s"),
+                ("Extensión Cuádriceps (peso bajo)", "3", "15-20", "60s"),
+                ("Hip Thrust con Barra", "4", "10-12", "90s"),
+                ("Curl Femoral Tumbado", "3", "15-20", "60s"),
+            ],
+        },
+        "Brazo/Full": {
+            "sin_lesion": [
+                ("Curl Bíceps con Barra EZ", "4", "10-12", "60s"),
+                ("Extensión Tríceps Polea", "4", "12-15", "60s"),
+                ("Curl Predicador", "3", "12-15", "45s"),
+                ("Press Francés", "3", "10-12", "60s"),
+                ("Plancha Abdominal", "3", "30-45s", "45s"),
+            ],
+            "con_lesion": [
+                ("Curl Martillo Cable", "4", "12-15", "60s"),
+                ("Tríceps Polea Agarre Neutro", "4", "15-20", "60s"),
+                ("Curl Concentrado", "3", "15-20", "45s"),
+                ("Extensión Tríceps Mancuerna", "3", "12-15", "60s"),
+            ],
+        },
+    },
+}
 
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AWyvHR2PpxotzRSPBpMeE5AVWNewO9AcqZ3PeXxmu_s0/exec"
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas"
+# =============================================================================
+# 1. CONFIGURACIÓN DE PÁGINA
+# =============================================================================
+st.set_page_config(
+    page_title=CONFIG["page_title"],
+    page_icon=CONFIG["page_icon"],
+    layout="wide"
+)
 
-def cargar_base_datos():
+# =============================================================================
+# 2. ESTILOS CSS
+# =============================================================================
+st.markdown("""
+<style>
+.stApp { background-color: #0E0E0E; color: #FFFFFF; }
+.main-title { font-size: 50px; font-weight: 900; color: #FFFFFF; text-align: center;
+              letter-spacing: 2px; margin-bottom: 0px; text-transform: uppercase; }
+.subtitle { font-size: 16px; color: #A0A0A0; text-align: center; margin-bottom: 35px;
+            text-transform: uppercase; letter-spacing: 3px; }
+.section-header { font-size: 22px; font-weight: 900; color: #FFFFFF; margin-top: 30px;
+                  margin-bottom: 15px; border-bottom: 2px solid #D32F2F;
+                  padding-bottom: 8px; text-transform: uppercase; }
+.id-box { background: linear-gradient(135deg, #1B5E20 0%, #000000 100%);
+          border-left: 5px solid #4CAF50; padding: 20px; border-radius: 8px;
+          font-size: 18px; color: #FFFFFF; text-align: center; font-weight: bold;
+          margin-top: 20px; box-shadow: 0 4px 15px rgba(76,175,80,0.3); }
+div.stButton > button, div[data-testid="stForm"] button {
+    background: linear-gradient(90deg, #D32F2F 0%, #B71C1C 100%);
+    color: white; width: 100%; border-radius: 6px; font-weight: 900;
+    height: 55px; border: none; text-transform: uppercase; letter-spacing: 1px;
+    transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(211,47,47,0.4); }
+div.stButton > button:hover, div[data-testid="stForm"] button:hover {
+    transform: translateY(-2px); box-shadow: 0 6px 20px rgba(211,47,47,0.6); }
+div[data-testid="stForm"] { background: #181818; padding: 30px; border-radius: 12px;
+    border: 1px solid #333333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.stTextInput>div>div>input { background-color: #2D2D2D !important; color: white !important; }
+.stSelectbox>div>div { background-color: #2D2D2D !important; color: white !important; }
+.stTextArea>div>div>textarea { background-color: #2D2D2D !important; color: white !important; }
+.barra-base { height:12px; border-radius:6px; width:100%; background:#333333; margin-top:5px; }
+.barra-verde { background:#4CAF50; height:12px; border-radius:6px; box-shadow:0 0 10px #4CAF50; }
+.barra-roja  { background:#D32F2F; height:12px; border-radius:6px; box-shadow:0 0 10px #D32F2F; }
+.barra-amarilla { background:#FBC02D; height:12px; border-radius:6px; box-shadow:0 0 10px #FBC02D; }
+.barra-gris  { background:#757575; height:12px; border-radius:6px; }
+.stProgress > div > div > div > div { background-color: #D32F2F; }
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] { background-color:#222222; border-radius:4px 4px 0 0;
+    padding:10px 20px; color:#AAAAAA; font-weight:bold; }
+.stTabs [aria-selected="true"] { background-color:#D32F2F; color:white !important; }
+</style>
+""", unsafe_allow_html=True)
+
+# =============================================================================
+# 3. CAPA DE DATOS — cacheada para no hacer HTTP en cada recarga
+# =============================================================================
+@st.cache_data(ttl=60)  # refresca cada 60 segundos
+def cargar_base_datos() -> pd.DataFrame:
+    """Carga el Google Sheet y normaliza columnas básicas."""
     try:
-        url_fresca = f"{SHEET_URL}&nocache={datetime.datetime.now().timestamp()}"
-        df = pd.read_csv(url_fresca)
+        url = f"{CONFIG['sheet_url']}&nocache={datetime.datetime.now().timestamp()}"
+        df = pd.read_csv(url)
         df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
         df.columns = df.columns.str.strip()
         df = df.fillna("")
-        
-        if "ID_Alumno" not in df.columns: df["ID_Alumno"] = ""
+        if "ID_Alumno"    not in df.columns: df["ID_Alumno"]    = ""
         if "Tipo_Registro" not in df.columns: df["Tipo_Registro"] = "INICIAL"
-        
         return df
     except Exception:
         return pd.DataFrame()
 
-df_existente = cargar_base_datos()
 
-def generar_id_unico(nombre):
+def generar_id_unico(nombre: str) -> str:
+    """Genera ID único usando UUID4 — sin riesgo de colisión."""
     iniciales = "".join([p[0].upper() for p in str(nombre).strip().split() if p])[:3]
-    if not iniciales: iniciales = "MM"
-    anio = datetime.datetime.now().year
-    numero = str(random.randint(1, 9999)).zfill(4)
-    return f"MM247-{anio}-{numero}"
+    if not iniciales:
+        iniciales = "MM"
+    anio  = datetime.datetime.now().year
+    sufijo = str(uuid.uuid4().hex)[:6].upper()
+    return f"MM247-{anio}-{iniciales}-{sufijo}"
 
-# Estilos CSS - Estética Profesional, Oscura y Atlética
-st.markdown("""
-    <style>
-    /* Fondo principal y textos */
-    .stApp { background-color: #0E0E0E; color: #FFFFFF; }
-    
-    /* Títulos de Impacto */
-    .main-title { font-size: 50px; font-weight: 900; color: #FFFFFF; text-align: center; letter-spacing: 2px; margin-bottom: 0px; text-transform: uppercase; }
-    .subtitle { font-size: 16px; color: #A0A0A0; text-align: center; margin-bottom: 35px; text-transform: uppercase; letter-spacing: 3px; }
-    
-    /* Separadores de sección */
-    .section-header { font-size: 22px; font-weight: 900; color: #FFFFFF; margin-top: 30px; margin-bottom: 15px; border-bottom: 2px solid #D32F2F; padding-bottom: 8px; text-transform: uppercase; }
-    
-    /* Caja de ID de Éxito */
-    .id-box { background: linear-gradient(135deg, #1B5E20 0%, #000000 100%); border-left: 5px solid #4CAF50; padding: 20px; border-radius: 8px; font-size: 18px; color: #FFFFFF; text-align: center; font-weight: bold; margin-top: 20px; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3); }
-    
-    /* Botones Call to Action */
-    div.stButton > button, div[data-testid="stForm"] button { background: linear-gradient(90deg, #D32F2F 0%, #B71C1C 100%); color: white; width: 100%; border-radius: 6px; font-weight: 900; height: 55px; border: none; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4); }
-    div.stButton > button:hover, div[data-testid="stForm"] button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(211, 47, 47, 0.6); }
-    
-    /* Tarjetas/Tabs de Preguntas y legibilidad */
-    div[data-testid="stForm"] { background: #181818; padding: 30px; border-radius: 12px; border: 1px solid #333333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-    .stTextInput>div>div>input { background-color: #2D2D2D !important; color: white !important; }
-    .stSelectbox>div>div { background-color: #2D2D2D !important; color: white !important; }
-    .stTextArea>div>div>textarea { background-color: #2D2D2D !important; color: white !important; }
-    
-    /* Barras de Admin y Progreso */
-    .barra-base { height: 12px; border-radius: 6px; width: 100%; background: #333333; margin-top: 5px;}
-    .barra-verde { background: #4CAF50; height: 12px; border-radius: 6px; box-shadow: 0 0 10px #4CAF50;}
-    .barra-roja { background: #D32F2F; height: 12px; border-radius: 6px; box-shadow: 0 0 10px #D32F2F;}
-    .barra-amarilla { background: #FBC02D; height: 12px; border-radius: 6px; box-shadow: 0 0 10px #FBC02D;}
-    .barra-gris { background: #757575; height: 12px; border-radius: 6px;}
-    .stProgress > div > div > div > div { background-color: #D32F2F; }
-    
-    /* Estilizar las pestañas */
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] { background-color: #222222; border-radius: 4px 4px 0px 0px; padding: 10px 20px; color: #AAAAAA; font-weight: bold; }
-    .stTabs [aria-selected="true"] { background-color: #D32F2F; color: white !important; }
-    </style>
-    """, unsafe_allow_html=True)
 
 # =============================================================================
-# ACCESO ADMINISTRATIVO DISCRETO
+# 4. MOTOR DE NORMALIZACIÓN
 # =============================================================================
-with st.sidebar:
-    st.markdown("<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>", unsafe_allow_html=True)
-    admin_pass = st.text_input("⚙️ Modo Administrador", type="password", help="Acceso exclusivo panel MM247")
+def normalizar_datos_alumno(datos_raw: pd.Series) -> dict:
+    """Extrae campos del registro crudo usando búsqueda por palabras clave."""
 
-# =============================================================================
-# 2. MOTOR DE NORMALIZACIÓN FLEXIBLE
-# =============================================================================
-def normalizar_datos_alumno(datos_raw):
-    norm = {}
-    def buscar_columna(lista_palabras_clave, defecto="", indice_respaldo=None):
+    def buscar(keywords: list, defecto: str = "", idx_respaldo: int = None) -> str:
         for col in datos_raw.index:
-            col_limpia = str(col).lower().strip()
-            for kw in lista_palabras_clave:
-                if kw.lower() in col_limpia:
+            col_l = str(col).lower().strip()
+            for kw in keywords:
+                if kw.lower() in col_l:
                     val = datos_raw[col]
-                    if pd.notna(val) and str(val).strip() != "" and str(val).lower() != "nan":
+                    if pd.notna(val) and str(val).strip() not in ("", "nan"):
                         return str(val).strip()
-        if indice_respaldo is not None and indice_respaldo < len(datos_raw):
-            val = datos_raw.iloc[indice_respaldo]
-            if pd.notna(val) and str(val).strip() != "" and str(val).lower() != "nan":
+        if idx_respaldo is not None and idx_respaldo < len(datos_raw):
+            val = datos_raw.iloc[idx_respaldo]
+            if pd.notna(val) and str(val).strip() not in ("", "nan"):
                 return str(val).strip()
         return defecto
 
-    norm['Nombre completo'] = buscar_columna(['nombre', 'alumno', 'completo'], 'Alumno', 1)
-    norm['Edad'] = buscar_columna(['edad', 'años'], '25', 2)
-    norm['Sexo'] = buscar_columna(['sexo', 'género', 'genero'], 'Masculino', 3)
-    norm['Estatura'] = buscar_columna(['estatura', 'altura', 'cm'], '175', 4)
-    norm['Peso actual'] = buscar_columna(['peso actual', 'peso corporal', 'kg'], '80', 5)
-    norm['Peso objetivo'] = buscar_columna(['peso objetivo', 'meta'], '75', 6)
-    norm['Nivel de actividad'] = buscar_columna(['nivel de actividad', 'neat', 'actividad'], 'Moderadamente activo')
-    norm['Objetivo principal'] = buscar_columna(['meta', 'objetivo principal', 'objetivo'], 'Recomposición corporal')
-    norm['Condición médica'] = buscar_columna(['condición médica', 'patología', 'enfermedad'], 'Ninguna')
-    norm['Tiempo entrenando'] = buscar_columna(['tiempo entrenando', 'experiencia'], 'Menos de 6 meses')
-    norm['Lesión actual'] = buscar_columna(['lesión', 'lesion', 'lastimado'], 'Ninguna')
-    norm['Mala postura'] = buscar_columna(['postura', 'desviación', 'hombros'], 'No')
-    norm['Prohibido ejercicio'] = buscar_columna(['prohibido', 'restricción', 'axial'], 'No')
-    norm['Días entrenar'] = buscar_columna(['días entrenar', 'semana cuántos', 'dias'], '4 días por semana')
-    norm['Tiempo por sesión'] = buscar_columna(['tiempo por sesión', 'disponibilidad'], '60 minutos')
-    norm['Compromiso'] = buscar_columna(['compromiso'], 'Alto')
-    norm['Menu_Proteinas'] = buscar_columna(['menu_proteinas', 'proteínas', 'proteinas'], 'Pechuga de Pollo')
-    norm['Menu_Carbohidratos'] = buscar_columna(['menu_carbohidratos', 'carbs'], 'Arroz Blanco')
-    norm['Menu_Grasas'] = buscar_columna(['menu_grasas', 'grasas'], 'Aguacate')
-    norm['Menu_Frutas'] = buscar_columna(['menu_frutas', 'frutas'], 'Manzana')
-    
-    return norm
-
-def calcular_motores_automatizados(datos):
-    try: peso = float(str(datos.get('Peso actual', '80')).replace(" kg", "").split()[0])
-    except: peso = 80.0
-    try: estatura = float(str(datos.get('Estatura', '175')).replace(" cm", "").split()[0])
-    except: estatura = 175.0
-    try: edad = float(str(datos.get('Edad', '25')).replace(" años", "").split()[0])
-    except: edad = 25.0
-    genero = str(datos.get('Sexo', 'Masculino'))
-    
-    imc = peso / ((estatura/100)**2) if estatura > 0 else 0
-    
-    if "Masculino" in genero: tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
-    else: tmb = 655.095 + (9.5634 * peso) + (1.8496 * estatura) - (4.6756 * edad)
-        
-    factor = 1.55
-    tdee = tmb * factor
-    meta = str(datos.get('Objetivo principal', 'Recomposición corporal'))
-    
-    if "Perder" in meta or "Bajar" in meta or "Déficit" in meta or "grasa" in meta:
-        cals_obj = tdee - 400
-        balance_str = "Déficit Calórico"
-    elif "Ganar" in meta or "Subir" in meta or "Volumen" in meta:
-        cals_obj = tdee + 300
-        balance_str = "Superávit Calórico"
-    else:
-        cals_obj = tdee
-        balance_str = "Normocalórico"
-        
-    prot = peso * 2.0  
-    grasa = peso * 1.0 
-    cals_restantes = cals_obj - ((prot * 4) + (grasa * 9))
-    carbs = max(cals_restantes / 4, 50.0)
-    
     return {
-        "imc": round(imc, 1), "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals_obj, 0),
-        "prot": round(prot, 1), "grasa": round(grasa, 1), "carbs": round(carbs, 1), "balance_str": balance_str,
-        "edad": edad, "genero": genero, "peso": peso, "estatura": estatura
+        "Nombre completo":    buscar(["nombre", "alumno", "completo"],         "Atleta",                1),
+        "Edad":               buscar(["edad", "años"],                          "25",                    2),
+        "Sexo":               buscar(["sexo", "género", "genero"],              "Masculino",             3),
+        "Estatura":           buscar(["estatura", "altura", "cm"],              "175",                   4),
+        "Peso actual":        buscar(["peso actual", "peso corporal", "kg"],    "80",                    5),
+        "Peso objetivo":      buscar(["peso objetivo", "meta"],                 "75",                    6),
+        "Nivel de actividad": buscar(["nivel de actividad", "neat", "actividad"], "Moderadamente activo"),
+        "Objetivo principal": buscar(["objetivo principal", "meta", "objetivo"],"Recomposición corporal"),
+        "Condición médica":   buscar(["condición médica", "patología"],         "Ninguna"),
+        "Tiempo entrenando":  buscar(["tiempo entrenando", "experiencia"],      "Menos de 6 meses"),
+        "Lesión actual":      buscar(["lesión", "lesion", "lastimado"],         "Ninguna"),
+        "Mala postura":       buscar(["postura", "desviación", "hombros"],      "No"),
+        "Prohibido ejercicio":buscar(["prohibido", "restricción", "axial"],     "No"),
+        "Días entrenar":      buscar(["días entrenar", "semana cuántos", "dias"],"4 días por semana"),
+        "Tiempo por sesión":  buscar(["tiempo por sesión", "disponibilidad"],   "60 minutos"),
+        "Compromiso":         buscar(["compromiso"],                            "Alto"),
+        "Menu_Proteinas":     buscar(["menu_proteinas", "proteínas", "proteinas"], "Pechuga de Pollo"),
+        "Menu_Carbohidratos": buscar(["menu_carbohidratos", "carbs"],           "Arroz Blanco"),
+        "Menu_Grasas":        buscar(["menu_grasas", "grasas"],                 "Aguacate"),
+        "Menu_Frutas":        buscar(["menu_frutas", "frutas"],                 "Manzana"),
+        "Menu_Verduras":      buscar(["menu_verduras", "verduras"],             "Brócoli"),
     }
 
-# =============================================================================
-# 3. MOTOR DE GENERACIÓN PDF
-# =============================================================================
-def generar_pdf_mm247(norm, mot, revs_df, id_al):
-    pdf = FPDF('P', 'mm', 'Letter')
-    pdf.set_auto_page_break(auto=True, margin=15)
-    
-    def limpiar(t):
-        return str(t).encode('latin-1', 'replace').decode('latin-1')
 
-    def draw_header(titulo_hoja):
+# =============================================================================
+# 5. MOTOR METABÓLICO
+# =============================================================================
+def _parse_float(valor: str, defecto: float) -> float:
+    """Convierte string a float limpiando unidades comunes."""
+    try:
+        return float(str(valor).replace("kg", "").replace("cm", "").replace("años", "").strip().split()[0])
+    except Exception:
+        return defecto
+
+
+def calcular_metabolismo(datos: dict) -> dict:
+    peso     = _parse_float(datos.get("Peso actual",        "80"),  80.0)
+    estatura = _parse_float(datos.get("Estatura",           "175"), 175.0)
+    edad     = _parse_float(datos.get("Edad",               "25"),  25.0)
+    genero   = str(datos.get("Sexo", "Masculino"))
+    actividad= str(datos.get("Nivel de actividad", "Moderadamente activo"))
+    meta     = str(datos.get("Objetivo principal", "Recomposición corporal"))
+
+    imc = peso / ((estatura / 100) ** 2) if estatura > 0 else 0.0
+
+    if "Masculino" in genero:
+        tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
+    else:
+        tmb = 655.095 + (9.5634 * peso) + (1.8496 * estatura) - (4.6756 * edad)
+
+    factor = CONFIG["factores_actividad"].get(actividad, 1.55)
+    tdee   = tmb * factor
+
+    if any(k in meta for k in ("Perder", "Bajar", "grasa", "Déficit")):
+        cals        = tdee - 400
+        balance_str = "Déficit Calórico (-400 kcal)"
+    elif any(k in meta for k in ("Ganar", "Subir", "Volumen", "muscular")):
+        cals        = tdee + 300
+        balance_str = "Superávit Calórico (+300 kcal)"
+    elif "fuerza" in meta.lower():
+        cals        = tdee + 200
+        balance_str = "Superávit Moderado (+200 kcal)"
+    else:
+        cals        = tdee
+        balance_str = "Normocalórico (mantenimiento)"
+
+    prot  = round(peso * 2.0, 1)
+    grasa = round(peso * 1.0, 1)
+    cals_restantes = cals - (prot * 4) - (grasa * 9)
+    carbs = round(max(cals_restantes / 4, 50.0), 1)
+
+    return {
+        "imc":         round(imc, 1),
+        "tmb":         round(tmb, 0),
+        "tdee":        round(tdee, 0),
+        "cals":        round(cals, 0),
+        "prot":        prot,
+        "grasa":       grasa,
+        "carbs":       carbs,
+        "balance_str": balance_str,
+        "factor":      factor,
+        "edad":        edad,
+        "genero":      genero,
+        "peso":        peso,
+        "estatura":    estatura,
+    }
+
+
+# =============================================================================
+# 6. MOTOR DE PDF
+# =============================================================================
+def _limpiar(texto: str) -> str:
+    return str(texto).encode("latin-1", "replace").decode("latin-1")
+
+def _tiene_lesion(norm: dict) -> bool:
+    lesion = norm.get("Lesión actual", "Ninguna").lower()
+    prohibido = norm.get("Prohibido ejercicio", "No").lower()
+    return lesion != "ninguna" or prohibido != "no"
+
+def _dias_entrenamiento(norm: dict) -> int:
+    try:
+        return int(str(norm.get("Días entrenar", "4")).strip()[0])
+    except Exception:
+        return 4
+
+def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) -> bytes:
+    pdf = FPDF("P", "mm", "Letter")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    con_lesion = _tiene_lesion(norm)
+    num_dias   = _dias_entrenamiento(norm)
+
+    def header(titulo: str):
         pdf.add_page()
         pdf.set_fill_color(17, 17, 17)
-        pdf.rect(0, 0, 216, 30, 'F')
+        pdf.rect(0, 0, 216, 30, "F")
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Arial', 'B', 24)
-        pdf.set_xy(10, 8)
-        pdf.cell(100, 10, 'MIND MUSCLE', 0, 0, 'L')
-        pdf.set_font('Arial', 'B', 12)
-        pdf.set_xy(160, 12)
-        pdf.cell(45, 10, 'CONFIDENCIAL', 0, 0, 'R')
+        pdf.set_font("Arial", "B", 24)
+        pdf.set_xy(10, 8);  pdf.cell(100, 10, "MIND MUSCLE",  0, 0, "L")
+        pdf.set_font("Arial", "B", 12)
+        pdf.set_xy(160, 12); pdf.cell(45, 10, "CONFIDENCIAL", 0, 0, "R")
         pdf.set_text_color(200, 200, 200)
-        pdf.set_font('Arial', '', 10)
-        pdf.set_xy(10, 18)
-        pdf.cell(100, 10, 'REPORTE MAESTRO - MM247', 0, 0, 'L')
+        pdf.set_font("Arial", "", 10)
+        pdf.set_xy(10, 18);  pdf.cell(100, 10, f"ID: {id_al}", 0, 0, "L")
         pdf.set_text_color(17, 17, 17)
-        pdf.set_font('Arial', 'B', 14)
-        pdf.set_xy(10, 35)
-        pdf.cell(196, 10, limpiar(titulo_hoja), 0, 1, 'C')
-        pdf.set_draw_color(0, 0, 0)
-        pdf.set_line_width(0.5)
-        pdf.line(10, 45, 206, 45)
-        pdf.ln(10)
+        pdf.set_font("Arial", "B", 14)
+        pdf.set_xy(10, 35);  pdf.cell(196, 10, _limpiar(titulo), 0, 1, "C")
+        pdf.set_draw_color(0, 0, 0); pdf.set_line_width(0.5)
+        pdf.line(10, 45, 206, 45); pdf.ln(10)
 
-    draw_header("HOJA 1: PERFIL CLINICO Y DIAGNOSTICO")
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, limpiar("1. DATOS GENERALES Y METRICAS DE INICIO"), 0, 1)
-    pdf.set_fill_color(248, 248, 248)
-    pdf.set_draw_color(200, 200, 200)
-    pdf.rect(10, pdf.get_y(), 196, 25, 'FD')
-    pdf.set_font('Arial', '', 11)
-    pdf.set_xy(15, pdf.get_y() + 5)
-    pdf.cell(80, 7, limpiar(f"CLIENTE: {norm['Nombre completo']}"), 0, 0)
-    pdf.cell(50, 7, limpiar(f"EDAD: {int(mot['edad'])} anos"), 0, 0)
-    pdf.cell(50, 7, limpiar(f"ESTATURA: {mot['estatura']} cm"), 0, 1)
-    pdf.set_x(15)
-    pdf.set_font('Arial', 'B', 11)
-    pdf.cell(80, 7, limpiar(f"PESO INICIAL: {mot['peso']} kg"), 0, 0)
-    pdf.cell(80, 7, limpiar(f"META: {norm['Objetivo principal']}"), 0, 1)
-    pdf.ln(15)
-    
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, limpiar("2. DISPONIBILIDAD Y COMPROMISO LOGISTICO"), 0, 1)
-    pdf.set_font('Arial', '', 11)
-    pdf.cell(0, 7, limpiar(f"DIAS A ENTRENAR: {norm['Días entrenar']}"), 0, 1)
-    pdf.cell(0, 7, limpiar(f"TIEMPO POR SESION: {norm['Tiempo por sesión']}"), 0, 1)
-    pdf.cell(0, 7, limpiar(f"NIVEL DE COMPROMISO: {norm['Compromiso']}"), 0, 1)
-    pdf.ln(10)
-    
-    pdf.set_font('Arial', 'B', 12)
+    def fila_dato(label: str, valor: str, col_w: int = 98):
+        pdf.set_font("Arial", "B", 10); pdf.cell(col_w, 7, _limpiar(label), 1, 0, "L")
+        pdf.set_font("Arial", "",  10); pdf.cell(col_w, 7, _limpiar(valor), 1, 1, "L")
+
+    header("HOJA 1: PERFIL CLÍNICO Y DIAGNÓSTICO")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, _limpiar("1. DATOS GENERALES"), 0, 1)
+    fila_dato("Cliente",         norm["Nombre completo"])
+    fila_dato("Edad / Sexo",     f"{int(mot['edad'])} años / {mot['genero']}")
+    fila_dato("Estatura / Peso", f"{mot['estatura']} cm / {mot['peso']} kg")
+    fila_dato("IMC calculado",   f"{mot['imc']}  |  Objetivo: {norm['Objetivo principal']}")
+    fila_dato("Peso objetivo",   norm.get("Peso objetivo", "--"))
+    pdf.ln(8)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, _limpiar("2. DISPONIBILIDAD LOGÍSTICA"), 0, 1)
+    fila_dato("Días de entrenamiento", norm["Días entrenar"])
+    fila_dato("Tiempo por sesión",     norm["Tiempo por sesión"])
+    fila_dato("Nivel de compromiso",   str(norm["Compromiso"]))
+    fila_dato("Nivel de actividad",    norm["Nivel de actividad"])
+    pdf.ln(8)
+
+    pdf.set_font("Arial", "B", 12)
     pdf.set_text_color(204, 0, 0)
-    pdf.cell(0, 10, limpiar("3. LIMITACIONES Y ALERTAS BIOMECANICAS"), 0, 1)
-    pdf.set_fill_color(255, 240, 240)
-    pdf.set_draw_color(204, 0, 0)
-    pdf.rect(10, pdf.get_y(), 196, 30, 'FD')
-    pdf.set_xy(15, pdf.get_y() + 5)
-    pdf.set_font('Arial', 'B', 11)
-    pdf.cell(0, 7, limpiar("ADVERTENCIA CLINICA ACTIVA:"), 0, 1)
-    pdf.set_text_color(17, 17, 17)
-    pdf.set_font('Arial', '', 11)
-    pdf.set_x(15)
-    pdf.cell(0, 6, limpiar(f"- Lesion/Condicion: {norm['Lesión actual']} / {norm['Condición médica']}"), 0, 1)
-    pdf.set_x(15)
-    pdf.cell(0, 6, limpiar(f"- Restriccion de Movimiento: {norm['Prohibido ejercicio']}"), 0, 1)
-    pdf.set_x(15)
-    pdf.cell(0, 6, limpiar(f"- Correccion Postural: {norm['Mala postura']}"), 0, 1)
+    pdf.cell(0, 10, _limpiar("3. ALERTAS BIOMECÁNICAS"), 0, 1)
+    pdf.set_fill_color(255, 240, 240); pdf.set_draw_color(204, 0, 0)
+    pdf.rect(10, pdf.get_y(), 196, 32, "FD")
+    pdf.set_xy(15, pdf.get_y() + 4)
+    pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 10)
+    for linea in [
+        f"Lesión / Condición : {norm['Lesión actual']} / {norm['Condición médica']}",
+        f"Restricción de mov.: {norm['Prohibido ejercicio']}",
+        f"Corrección postural: {norm['Mala postura']}",
+        f"Protocolo aplicado : {'ADAPTADO (sin carga axial / rango reducido)' if con_lesion else 'ESTÁNDAR (sin restricciones)'}",
+    ]:
+        pdf.set_x(15); pdf.cell(0, 6, _limpiar(f"• {linea}"), 0, 1)
 
-    draw_header("HOJA 2: PROGRAMACION SEMANAL DE ENTRENAMIENTO")
-    pdf.set_font('Arial', 'B', 11)
-    pdf.cell(0, 7, limpiar(f"ESTRUCTURA BASADA EN: {norm['Días entrenar']}"), 0, 1)
+    header("HOJA 2: PROGRAMACIÓN SEMANAL DE ENTRENAMIENTO")
+    estado_protocolo = "ADAPTADO" if con_lesion else "ESTÁNDAR"
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(0, 7, _limpiar(f"Estructura: {norm['Días entrenar']}  |  Protocolo: {estado_protocolo}"), 0, 1)
     pdf.ln(5)
-    dias = ["DIA 1 (ENFOQUE EMPUJE / PECHO-HOMBRO)", "DIA 2 (ENFOQUE TRACCION / ESPALDA)", "DIA 3 (ENFOQUE PIERNA)", "DIA 4 (ENFOQUE BRAZO / FULL BODY)"]
-    for dia in dias:
-        pdf.set_fill_color(17, 17, 17)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(196, 8, limpiar(dia), 0, 1, 'L', fill=True)
-        pdf.set_fill_color(238, 238, 238)
-        pdf.set_text_color(17, 17, 17)
-        pdf.cell(96, 7, limpiar("EJERCICIO"), 1, 0, 'C', fill=True)
-        pdf.cell(30, 7, limpiar("SERIES"), 1, 0, 'C', fill=True)
-        pdf.cell(35, 7, limpiar("REPETICIONES"), 1, 0, 'C', fill=True)
-        pdf.cell(35, 7, limpiar("DESCANSO"), 1, 1, 'C', fill=True)
-        pdf.set_font('Arial', '', 10)
-        ejercicios = [("Press Principal (Ajustado a lesion)", "4", "8 - 10", "90s"), ("Movimiento Secundario Maquina", "3", "10 - 12", "60s"), ("Aislamiento Polea", "4", "15 - 20", "60s")]
-        for ej in ejercicios:
-            pdf.cell(96, 7, limpiar(ej[0]), 1, 0, 'L')
-            pdf.cell(30, 7, limpiar(ej[1]), 1, 0, 'C')
-            pdf.cell(35, 7, limpiar(ej[2]), 1, 0, 'C')
-            pdf.cell(35, 7, limpiar(ej[3]), 1, 1, 'C')
-        pdf.ln(8)
 
-    draw_header("HOJA 3: PROTOCOLO NUTRICIONAL Y PORCIONES EXACTAS")
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, limpiar("1. MACRONUTRIENTES Y OBJETIVO DIARIO EXACTO"), 0, 1)
-    pdf.set_font('Arial', '', 10)
-    pdf.cell(0, 5, limpiar("(Regla MM247: 2.0g Proteina / 1.0g Grasa por Kg de peso)"), 0, 1)
-    pdf.ln(3)
-    pdf.set_fill_color(248, 248, 248)
-    pdf.set_draw_color(200, 200, 200)
-    pdf.rect(10, pdf.get_y(), 196, 20, 'FD')
-    pdf.set_xy(10, pdf.get_y() + 5)
-    pdf.set_font('Arial', 'B', 10)
-    pdf.cell(49, 5, limpiar("ENERGIA TOTAL"), 0, 0, 'C')
-    pdf.cell(49, 5, limpiar("PROTEINA"), 0, 0, 'C')
-    pdf.cell(49, 5, limpiar("CARBOHIDRATOS"), 0, 0, 'C')
-    pdf.cell(49, 5, limpiar("GRASAS"), 0, 1, 'C')
-    pdf.set_font('Arial', 'B', 14)
-    pdf.cell(49, 8, limpiar(f"{mot['cals']} Kcal"), 0, 0, 'C')
-    pdf.cell(49, 8, limpiar(f"{mot['prot']} g"), 0, 0, 'C')
-    pdf.cell(49, 8, limpiar(f"{mot['carbs']} g"), 0, 0, 'C')
-    pdf.cell(49, 8, limpiar(f"{mot['grasa']} g"), 0, 1, 'C')
-    pdf.ln(15)
-    pdf.set_font('Arial', 'B', 12)
-    pdf.cell(0, 10, limpiar("2. ESTRUCTURA DE COMIDAS (4 TOMAS DIARIAS)"), 0, 1)
-    p_c, c_c, g_c, cal_c = mot['prot']/4, mot['carbs']/4, mot['grasa']/4, mot['cals']/4
-    nombres_comida = ["COMIDA 1 (Desayuno)", "COMIDA 2 (Post-Entrenamiento)", "COMIDA 3 (Comida Fuerte)", "COMIDA 4 (Cena)"]
-    for comida in nombres_comida:
-        pdf.set_fill_color(238, 238, 238)
-        pdf.set_font('Arial', 'B', 11)
-        pdf.cell(196, 8, limpiar(comida), 0, 1, 'L', fill=True)
-        pdf.set_font('Arial', 'B', 10)
-        pdf.cell(0, 6, limpiar(f"  {cal_c} Kcal | {p_c}g Prot | {c_c}g Carbs | {g_c}g Grasa"), 0, 1)
-        pdf.set_font('Arial', '', 10)
-        pdf.cell(0, 6, limpiar(f"  - Fuentes Sugeridas: {norm['Menu_Proteinas']} | {norm['Menu_Carbohidratos']}"), 0, 1)
-        pdf.cell(0, 6, limpiar(f"  - Complementos: {norm['Menu_Grasas']} | {norm['Menu_Verduras']}"), 0, 1)
-        pdf.ln(4)
+    bloques = ["Empuje", "Tracción", "Pierna", "Brazo/Full"]
+    nombres_bloque = [
+        "DÍA 1 — EMPUJE (Pecho · Hombro · Tríceps)",
+        "DÍA 2 — TRACCIÓN (Espalda · Bíceps)",
+        "DÍA 3 — PIERNA (Cuádriceps · Femoral · Glúteo)",
+        "DÍA 4 — BRAZO / FULL BODY",
+    ]
+    modo = "con_lesion" if con_lesion else "sin_lesion"
+
+    for i, bloque in enumerate(bloques[:num_dias]):
+        ejercicios = CONFIG["rutinas"][bloque][modo]
+        pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(196, 8, _limpiar(nombres_bloque[i]), 0, 1, "L", fill=True)
+        pdf.set_fill_color(238, 238, 238); pdf.set_text_color(17, 17, 17)
+        for txt, w in [("EJERCICIO", 90), ("SERIES", 26), ("REPS", 40), ("DESCANSO", 40)]:
+            pdf.cell(w, 7, _limpiar(txt), 1, 0, "C", fill=True)
+        pdf.ln()
+        pdf.set_font("Arial", "", 10)
+        for ej, series, reps, desc in ejercicios:
+            pdf.cell(90, 7, _limpiar(ej),     1, 0, "L")
+            pdf.cell(26, 7, _limpiar(series), 1, 0, "C")
+            pdf.cell(40, 7, _limpiar(reps),   1, 0, "C")
+            pdf.cell(40, 7, _limpiar(desc),   1, 1, "C")
+        pdf.ln(6)
+
+    header("HOJA 3: PROTOCOLO NUTRICIONAL")
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, _limpiar("1. MÉTRICAS METABÓLICAS"), 0, 1)
+    fila_dato("TMB (Harris-Benedict)",         f"{mot['tmb']} kcal/día")
+    fila_dato(f"TDEE (factor actividad {mot['factor']})", f"{mot['tdee']} kcal/día")
+    fila_dato("Balance objetivo",              mot["balance_str"])
+    fila_dato("Calorías diarias prescritas",   f"{mot['cals']} kcal")
+    pdf.ln(8)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, _limpiar("2. MACRONUTRIENTES DIARIOS (Regla MM247: 2g Prot · 1g Grasa / kg)"), 0, 1)
+    pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+    for h, w in [("PROTEÍNA", 49), ("CARBOHIDRATOS", 49), ("GRASAS", 49), ("CALORÍAS", 49)]:
+        pdf.cell(w, 8, _limpiar(h), 1, 0, "C", fill=True)
+    pdf.ln()
+    pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "B", 13)
+    for val, w in [(f"{mot['prot']}g", 49), (f"{mot['carbs']}g", 49),
+                   (f"{mot['grasa']}g", 49), (f"{mot['cals']} kcal", 49)]:
+        pdf.cell(w, 10, _limpiar(val), 1, 0, "C")
+    pdf.ln(12)
+
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, _limpiar("3. DISTRIBUCIÓN EN 4 TOMAS DIARIAS"), 0, 1)
+    comidas = ["COMIDA 1 — Desayuno", "COMIDA 2 — Post-Entreno",
+               "COMIDA 3 — Comida Fuerte", "COMIDA 4 — Cena"]
+    p_c = round(mot["prot"]  / 4, 1)
+    c_c = round(mot["carbs"] / 4, 1)
+    g_c = round(mot["grasa"] / 4, 1)
+    k_c = round(mot["cals"]  / 4, 0)
+
+    for comida in comidas:
+        pdf.set_fill_color(238, 238, 238); pdf.set_font("Arial", "B", 11)
+        pdf.cell(196, 8, _limpiar(comida), 0, 1, "L", fill=True)
+        pdf.set_font("Arial", "B", 10)
+        pdf.cell(0, 6, _limpiar(f"  {k_c} kcal  |  {p_c}g Prot  |  {c_c}g Carbs  |  {g_c}g Grasa"), 0, 1)
+        pdf.set_font("Arial", "", 10)
+        pdf.cell(0, 6, _limpiar(f"  Proteína  : {norm['Menu_Proteinas']}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"  Carbs     : {norm['Menu_Carbohidratos']}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"  Grasas    : {norm['Menu_Grasas']}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"  Verduras  : {norm['Menu_Verduras']}"), 0, 1)
+        pdf.ln(3)
 
     if len(revs_df) > 0:
-        draw_header("HOJA 4: AUDITORIA DE RESULTADOS Y PLAN DE ACCION")
-        ult_rev = revs_df.iloc[-1]
-        peso_actual = float(ult_rev.get('Peso_Revision', mot['peso']))
-        dif_peso = peso_actual - mot['peso']
-        pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 10, limpiar("1. COMPARATIVO DE RUBROS MEDIBLES"), 0, 1)
-        pdf.set_fill_color(17, 17, 17)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(60, 8, limpiar("METRICA"), 1, 0, 'C', fill=True)
-        pdf.cell(45, 8, limpiar("INICIAL"), 1, 0, 'C', fill=True)
-        pdf.cell(45, 8, limpiar("ACTUAL"), 1, 0, 'C', fill=True)
-        pdf.cell(46, 8, limpiar("DIFERENCIA"), 1, 1, 'C', fill=True)
+        header("HOJA 4: AUDITORÍA DE RESULTADOS Y PLAN DE ACCIÓN")
+        ult = revs_df.iloc[-1]
+        try:
+            peso_actual = float(str(ult.get("Peso_Revision", mot["peso"])).replace(",", "."))
+        except Exception:
+            peso_actual = mot["peso"]
+
+        dif_peso = round(peso_actual - mot["peso"], 1)
+        estado   = str(ult.get("Estado_Calculado", "AVANCE")).upper()
+
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, _limpiar("1. COMPARATIVO DE MÉTRICAS"), 0, 1)
+        pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+        for h, w in [("MÉTRICA", 60), ("INICIAL", 45), ("ACTUAL", 45), ("DELTA", 46)]:
+            pdf.cell(w, 8, _limpiar(h), 1, 0, "C", fill=True)
+        pdf.ln()
+
+        pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 11)
+        pdf.cell(60, 8, "Peso Corporal",   1, 0, "C")
+        pdf.cell(45, 8, f"{mot['peso']} kg", 1, 0, "C")
+        pdf.cell(45, 8, f"{peso_actual} kg", 1, 0, "C")
+        if dif_peso <= 0: pdf.set_text_color(34, 197, 94)
+        else:             pdf.set_text_color(239, 68, 68)
+        pdf.cell(46, 8, f"{dif_peso:+.1f} kg", 1, 1, "C")
+
         pdf.set_text_color(17, 17, 17)
-        pdf.set_font('Arial', '', 11)
-        pdf.cell(60, 8, limpiar("Peso Corporal"), 1, 0, 'C')
-        pdf.cell(45, 8, limpiar(f"{mot['peso']} kg"), 1, 0, 'C')
-        pdf.cell(45, 8, limpiar(f"{peso_actual} kg"), 1, 0, 'C')
-        pdf.set_text_color(34, 197, 94) if dif_peso <= 0 else pdf.set_text_color(239, 68, 68)
-        pdf.cell(46, 8, limpiar(f"{dif_peso:+.1f} kg"), 1, 1, 'C')
-        pdf.set_text_color(17, 17, 17)
-        pdf.cell(60, 8, limpiar("Nivel de Adherencia"), 1, 0, 'C')
-        pdf.cell(45, 8, limpiar("N/A"), 1, 0, 'C')
-        pdf.cell(45, 8, limpiar(ult_rev.get('Adherencia_Dieta', '--')[:15]), 1, 0, 'C')
-        pdf.cell(46, 8, limpiar("Reportado"), 1, 1, 'C')
-        pdf.ln(15)
-        estado = ult_rev.get('Estado_Calculado', 'AVANCE')
-        color_fill = (34, 197, 94) if "AVANCE" in estado else (234, 179, 8) if "LENTO" in estado else (239, 68, 68)
-        pdf.set_font('Arial', 'B', 12)
-        pdf.cell(0, 10, limpiar("2. DIAGNOSTICO DEL SISTEMA Y ESTADO"), 0, 1)
-        pdf.set_fill_color(*color_fill)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(80, 10, limpiar(f"ESTATUS: {estado}"), 0, 1, 'C', fill=True)
-        pdf.ln(10)
-        pdf.set_text_color(17, 17, 17)
-        pdf.cell(0, 10, limpiar("3. DICTAMEN ESTRATEGICO Y PLAN DE ACCION"), 0, 1)
+        pdf.cell(60, 8, "Adherencia",          1, 0, "C")
+        pdf.cell(45, 8, "N/A",                 1, 0, "C")
+        pdf.cell(45, 8, str(ult.get("Adherencia_Dieta", "--"))[:20], 1, 0, "C")
+        pdf.cell(46, 8, "Reportado",           1, 1, "C")
+
+        pdf.cell(60, 8, "Progreso Fuerza",     1, 0, "C")
+        pdf.cell(45, 8, "N/A",                 1, 0, "C")
+        pdf.cell(45, 8, str(ult.get("Progreso_Fuerza", "--"))[:20], 1, 0, "C")
+        pdf.cell(46, 8, "Reportado",           1, 1, "C")
+        pdf.ln(12)
+
+        color_map = {"AVANCE": (34, 197, 94), "LENTO": (234, 179, 8), "RETROCESO": (239, 68, 68)}
+        fill_color = color_map.get(estado, (100, 100, 100))
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, _limpiar("2. DIAGNÓSTICO Y DICTAMEN"), 0, 1)
+        pdf.set_fill_color(*fill_color); pdf.set_text_color(255, 255, 255)
+        pdf.cell(100, 12, _limpiar(f"ESTATUS SISTEMA: {estado}"), 0, 1, "C", fill=True)
+        pdf.ln(6)
+
+        pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 11)
+        dictamen = {
+            "AVANCE":    "El sistema confirma progresión sostenida. Mantener protocolo vigente. Revisar sobrecarga progresiva en ejercicios principales.",
+            "LENTO":     "Avance subóptimo detectado. Revisar adherencia nutricional y calidad del sueño. Considerar ajuste calórico de ±100 kcal.",
+            "RETROCESO": "ALERTA: Se detecta retroceso. Auditar fugas calóricas, consistencia del entrenamiento y nivel de estrés. Agendar revisión urgente.",
+        }.get(estado, "Continuar monitoreo y reportar en la próxima revisión.")
+
         pdf.set_fill_color(248, 248, 248)
-        pdf.rect(10, pdf.get_y(), 196, 25, 'F')
-        pdf.set_font('Arial', '', 11)
-        pdf.set_xy(15, pdf.get_y() + 5)
-        pdf.multi_cell(186, 6, limpiar(f"El sistema ha dictaminado un estado de {estado}. Se mantendran los registros para continuar con la progresion. Ajustar cargas mecanicas en base a la percepcion de fuerza reportada."))
+        pdf.rect(10, pdf.get_y(), 196, 22, "F")
+        pdf.set_xy(15, pdf.get_y() + 4)
+        pdf.multi_cell(186, 6, _limpiar(dictamen))
 
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
+        if len(revs_df) > 1:
+            pdf.ln(8)
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, _limpiar(f"3. HISTORIAL DE {len(revs_df)} REVISIONES"), 0, 1)
+            pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+            for h, w in [("FECHA", 50), ("PESO", 40), ("ADHERENCIA", 60), ("ESTADO", 46)]:
+                pdf.cell(w, 7, _limpiar(h), 1, 0, "C", fill=True)
+            pdf.ln()
+            pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 9)
+            for _, row in revs_df.iterrows():
+                pdf.cell(50, 6, _limpiar(str(row.get("Fecha", ""))[:19]),             1, 0, "C")
+                pdf.cell(40, 6, _limpiar(f"{row.get('Peso_Revision', '--')} kg"),     1, 0, "C")
+                pdf.cell(60, 6, _limpiar(str(row.get("Adherencia_Dieta", "--"))[:25]),1, 0, "C")
+                pdf.cell(46, 6, _limpiar(str(row.get("Estado_Calculado", "--"))),     1, 1, "C")
+
+    return pdf.output(dest="S").encode("latin-1", "ignore")
 
 # =============================================================================
-# ENRUTAMIENTO DE VISTAS (ADMIN vs CLIENTE)
+# 7. HELPERS DE FORMULARIO
+# =============================================================================
+def g_idx(lista: list, clave: str, default: int = 0) -> int:
+    val = st.session_state.db.get(clave)
+    return lista.index(val) if val in lista else default
+
+def guardar_y_navegar(datos: dict, destino: int):
+    st.session_state.db.update(datos)
+    st.session_state.step = destino
+    st.rerun()
+
+# =============================================================================
+# 8. SIDEBAR — ACCESO ADMIN
+# =============================================================================
+with st.sidebar:
+    st.markdown("<br>" * 15, unsafe_allow_html=True)
+    admin_pass = st.text_input("⚙️ Modo Administrador", type="password",
+                                help="Acceso exclusivo panel MM247")
+
+df_existente = cargar_base_datos()
+
+# =============================================================================
+# 9. ENRUTAMIENTO PRINCIPAL
 # =============================================================================
 
-if admin_pass == "MM247_Admin":
-    # -------------------------------------------------------------------------
-    # VISTA ADMINISTRADOR
-    # -------------------------------------------------------------------------
+# ─── VISTA ADMIN ──────────────────────────────────────────────────────────────
+if admin_pass == CONFIG["admin_password"]:
     st.markdown("<div class='main-title'>🔐 Panel Maestro MM247</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>CONTROL CENTRAL DE RESULTADOS</div>", unsafe_allow_html=True)
-    
-    if df_existente.empty or len(df_existente["ID_Alumno"].dropna().unique()) == 0:
-        st.warning("Aún no hay alumnos dados de alta en el sistema.")
+
+    if df_existente.empty:
+        st.warning("No hay alumnos registrados en el sistema.")
     else:
-        df_c1 = df_existente[df_existente["Tipo_Registro"] == "INICIAL"]
-        df_c2 = df_existente[df_existente["Tipo_Registro"] == "REVISION"]
-        
-        st.markdown("### 🗂️ Estatus de Atletas Activos")
-        
-        h1, h2, h3, h4, h5 = st.columns([1.5, 2, 2.5, 2, 1.5])
-        with h1: st.markdown("**ID Atleta**")
-        with h2: st.markdown("**Nombre**")
-        with h3: st.markdown("**Inicio -> Meta**")
-        with h4: st.markdown("**Métrica de Avance**")
-        with h5: st.markdown("**Acciones**")
+        df_c1 = df_existente[df_existente["Tipo_Registro"] == "INICIAL"].copy()
+        df_c2 = df_existente[df_existente["Tipo_Registro"] == "REVISION"].copy()
+
+        st.markdown("### 🗂️ Atletas Activos")
+        cols = st.columns([1.5, 2, 2.5, 2, 1.5])
+        for col, label in zip(cols, ["ID Atleta", "Nombre", "Inicio → Meta", "Avance", "Acciones"]):
+            col.markdown(f"**{label}**")
         st.markdown("---")
-        
+
         ids_unicos = df_c1["ID_Alumno"].replace("", pd.NA).dropna().unique()
-        
+
         for id_al in ids_unicos:
             datos_al = df_c1[df_c1["ID_Alumno"] == id_al].iloc[0]
-            revs_al = df_c2[df_c2["ID_Alumno"] == id_al]
-            
+            revs_al  = df_c2[df_c2["ID_Alumno"] == id_al]
+
             clase_barra = "barra-gris"
-            texto_barra = "Esperando Reporte"
-            
+            texto_barra = "Esperando reporte"
+
             if not revs_al.empty:
-                estado = str(revs_al.iloc[-1].get("Estado_Calculado", "AVANCE")).upper()
-                if "AVANCE" in estado:
-                    clase_barra = "barra-verde"
-                    texto_barra = "Progresando"
-                elif "LENTO" in estado:
-                    clase_barra = "barra-amarilla"
-                    texto_barra = "Avance Estancado"
-                elif "RETROCESO" in estado:
-                    clase_barra = "barra-roja"
-                    texto_barra = "Retroceso Activo"
-            
+                estado = str(revs_al.iloc[-1].get("Estado_Calculado", "")).upper()
+                if "AVANCE"    in estado: clase_barra, texto_barra = "barra-verde",    "Progresando"
+                elif "LENTO"   in estado: clase_barra, texto_barra = "barra-amarilla", "Avance lento"
+                elif "RETRO"   in estado: clase_barra, texto_barra = "barra-roja",     "Retroceso"
+
             c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 2, 1.5])
-            with c1: st.write(f"`{id_al}`")
-            with c2: st.write(str(datos_al.get("Nombre completo", "Alumno")).title())
-            with c3: st.write(f"{datos_al.get('Peso actual', '--')} -> {datos_al.get('Peso objetivo', '--')}")
-            with c4: 
-                st.markdown(f"<div style='font-size:12px; font-weight:bold; color:#AAAAAA;'>{texto_barra}</div><div class='barra-base'><div class='{clase_barra}'></div></div>", unsafe_allow_html=True)
-            with c5:
-                if st.button("Ver Expediente", key=f"btn_{id_al}"):
-                    st.session_state.alumno_seleccionado = id_al
-        
+            c1.write(f"`{id_al}`")
+            c2.write(str(datos_al.get("Nombre completo", "Atleta")).title())
+            c3.write(f"{datos_al.get('Peso actual','--')} → {datos_al.get('Peso objetivo','--')}")
+            c4.markdown(
+                f"<div style='font-size:12px;font-weight:bold;color:#AAAAAA;'>{texto_barra}</div>"
+                f"<div class='barra-base'><div class='{clase_barra}'></div></div>",
+                unsafe_allow_html=True,
+            )
+            if c5.button("Ver Expediente", key=f"btn_{id_al}"):
+                st.session_state.alumno_seleccionado = id_al
+
         st.markdown("---")
-        
+
         if "alumno_seleccionado" in st.session_state:
-            id_sel = st.session_state.alumno_seleccionado
-            st.markdown(f"### 📋 Expediente Técnico: `{id_sel}`")
-            
+            id_sel  = st.session_state.alumno_seleccionado
             d_brutos = df_c1[df_c1["ID_Alumno"] == id_sel].iloc[0]
-            d_norm = normalizar_datos_alumno(d_brutos)
-            m_calc = calcular_motores_automatizados(d_norm)
-            r_df = df_c2[df_c2["ID_Alumno"] == id_sel]
-            
+            d_norm   = normalizar_datos_alumno(d_brutos)
+            m_calc   = calcular_metabolismo(d_norm)
+            r_df     = df_c2[df_c2["ID_Alumno"] == id_sel]
+
+            st.markdown(f"### 📋 Expediente: `{id_sel}`")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("IMC",   f"{m_calc['imc']}")
+            col2.metric("TMB",   f"{m_calc['tmb']} kcal")
+            col3.metric("TDEE",  f"{m_calc['tdee']} kcal")
+            col4.metric("Meta",  f"{m_calc['cals']} kcal")
+
             try:
                 pdf_bytes = generar_pdf_mm247(d_norm, m_calc, r_df, id_sel)
                 st.download_button(
-                    label=f"🖨️ Descargar Ficha Técnica PDF",
+                    label="🖨️ Descargar Ficha Técnica PDF",
                     data=pdf_bytes,
-                    file_name=f"Ficha_Tecnica_MM247_{id_sel}.pdf",
-                    mime="application/pdf"
+                    file_name=f"Ficha_MM247_{id_sel}.pdf",
+                    mime="application/pdf",
                 )
             except Exception as err:
                 st.error(f"Error al compilar el PDF: {err}")
 
-elif admin_pass != "" and admin_pass != "MM247_Admin":
+elif admin_pass and admin_pass != CONFIG["admin_password"]:
     st.error("🔑 Clave de acceso inválida.")
 
+# ─── VISTA CLIENTE ────────────────────────────────────────────────────────────
 else:
-    # -------------------------------------------------------------------------
-    # VISTA CLIENTE (PROGRESIVA Y DINÁMICA)
-    # -------------------------------------------------------------------------
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>SISTEMA DE ALTA INTENSIDAD Y DISCIPLINA</div>", unsafe_allow_html=True)
-    
-    # Inicializar el estado de sesión para guardar datos y controlar los pasos
-    if 'step' not in st.session_state: st.session_state.step = 1
-    if 'db' not in st.session_state: st.session_state.db = {}
 
-    # Función auxiliar para buscar el índice de un valor guardado en un selectbox
-    def g_idx(lista, clave, def_val=0):
-        val = st.session_state.db.get(clave)
-        return lista.index(val) if val in lista else def_val
+    if "step" not in st.session_state: st.session_state.step = 1
+    if "db"   not in st.session_state: st.session_state.db   = {}
 
-    tab_nuevo, tab_revision = st.tabs(["📝 Iniciar Expediente Nuevo", "🔄 Registrar Mi Avance (ID Requerido)"])
+    tab_nuevo, tab_revision = st.tabs([
+        "📝 Iniciar Expediente Nuevo",
+        "🔄 Registrar Mi Avance (ID Requerido)",
+    ])
 
-    # --- MÓDULO 1: FORMULARIO MAESTRO (SISTEMA DE MISIONES) ---
+    # ── FORMULARIO MAESTRO (6 Misiones) ──────────────────────────────────
     with tab_nuevo:
-        st.info("🔥 Bienvenido al ecosistema MM247. Completa las misiones para activar el registro.")
-        
-        # Barra de progreso
-        st.progress(st.session_state.step / 6)
-        st.markdown(f"<h4 style='text-align:center; color:#A0A0A0;'>MISIÓN {st.session_state.step} DE 6</h4>", unsafe_allow_html=True)
-        
-        # --- MISIÓN 1 ---
+        st.info("🔥 Bienvenido al ecosistema MM247. Completa las 6 misiones para activar tu expediente.")
+        st.progress(st.session_state.step / CONFIG["total_misiones"])
+        st.markdown(
+            f"<h4 style='text-align:center;color:#A0A0A0;'>"
+            f"MISIÓN {st.session_state.step} DE {CONFIG['total_misiones']}</h4>",
+            unsafe_allow_html=True,
+        )
+
+        # ── M1: Datos fisiológicos ──────────────────────────────────────
         if st.session_state.step == 1:
             with st.form("form_m1"):
                 st.markdown("<div class='section-header'>1. DATOS FISIOLÓGICOS Y DEMOGRÁFICOS</div>", unsafe_allow_html=True)
                 col1, col2 = st.columns(2)
-                
-                ops_edad = [f"{i} años" for i in range(14, 81)]
-                ops_sexo = ["Masculino", "Femenino"]
-                ops_est = [f"{i} cm" for i in range(120, 221)]
-                ops_peso = [f"{i} kg" for i in range(40, 161)]
-                ops_ocup = ["Sedentaria", "Ligera", "Activa", "Estudiante"]
-                ops_hor = ["Turno Matutino", "Turno Vespertino", "Turno Nocturno", "Horario Variable"]
-                ops_ciu = ["México", "Estados Unidos", "España", "Latinoamérica / Otro"]
-                ops_obj = ["Perder grasa", "Ganar masa muscular", "Recomposición corporal", "Aumentar fuerza", "Mejorar salud general"]
-                ops_tiem = ["1-3 meses", "3-6 meses", "6-12 meses", "Más de 1 año"]
+
+                ops_edad  = [f"{i} años" for i in range(14, 81)]
+                ops_sexo  = ["Masculino", "Femenino"]
+                ops_est   = [f"{i} cm"   for i in range(120, 221)]
+                ops_peso  = [f"{i} kg"   for i in range(40, 161)]
+                ops_ocup  = ["Sedentaria", "Ligera", "Activa", "Estudiante"]
+                ops_hor   = ["Turno Matutino", "Turno Vespertino", "Turno Nocturno", "Horario Variable"]
+                ops_ciu   = ["México", "Estados Unidos", "España", "Latinoamérica / Otro"]
+                ops_obj   = ["Perder grasa", "Ganar masa muscular", "Recomposición corporal",
+                             "Aumentar fuerza", "Mejorar salud general"]
+                ops_tiem  = ["1-3 meses", "3-6 meses", "6-12 meses", "Más de 1 año"]
 
                 with col1:
-                    v_nombre = st.text_input("Nombre completo (Tu identidad en el sistema):", value=st.session_state.db.get('Nombre completo', ''))
-                    v_edad = st.selectbox("Edad:", ops_edad, index=g_idx(ops_edad, 'Edad', 11))
-                    v_sexo = st.selectbox("Sexo asignado al nacer:", ops_sexo, index=g_idx(ops_sexo, 'Sexo', 0))
-                    v_estatura = st.selectbox("Estatura base:", ops_est, index=g_idx(ops_est, 'Estatura', 55))
-                    v_peso_actual = st.selectbox("Peso corporal actual:", ops_peso, index=g_idx(ops_peso, 'Peso actual', 40))
+                    v_nombre  = st.text_input("Nombre completo:", value=st.session_state.db.get("Nombre completo", ""))
+                    v_edad    = st.selectbox("Edad:", ops_edad,  index=g_idx(ops_edad,  "Edad",     11))
+                    v_sexo    = st.selectbox("Sexo:", ops_sexo,  index=g_idx(ops_sexo,  "Sexo",      0))
+                    v_est     = st.selectbox("Estatura:", ops_est, index=g_idx(ops_est, "Estatura", 55))
+                    v_peso    = st.selectbox("Peso actual:", ops_peso, index=g_idx(ops_peso, "Peso actual", 40))
                 with col2:
-                    v_peso_obj = st.selectbox("Peso corporal objetivo:", ops_peso, index=g_idx(ops_peso, 'Peso objetivo', 35))
-                    v_ocupacion = st.selectbox("Ocupación de rutina:", ops_ocup, index=g_idx(ops_ocup, 'Ocupación', 0))
-                    v_horario = st.selectbox("Horario diario habitual:", ops_hor, index=g_idx(ops_hor, 'Horario laboral', 0))
-                    v_ciudad = st.selectbox("Zona geográfica:", ops_ciu, index=g_idx(ops_ciu, 'Ciudad / País', 0))
-                    v_contacto = st.text_input("WhatsApp de contacto:", value=st.session_state.db.get('Número de contacto', '55'))
-                    v_correo = st.text_input("Correo electrónico:", value=st.session_state.db.get('Correo electrónico', ''))
-                    
+                    v_peso_obj = st.selectbox("Peso objetivo:", ops_peso, index=g_idx(ops_peso, "Peso objetivo", 35))
+                    v_ocup     = st.selectbox("Ocupación:", ops_ocup, index=g_idx(ops_ocup, "Ocupación", 0))
+                    v_hor      = st.selectbox("Horario:", ops_hor,  index=g_idx(ops_hor,  "Horario laboral", 0))
+                    v_ciu      = st.selectbox("País/Zona:", ops_ciu, index=g_idx(ops_ciu, "Ciudad / País", 0))
+                    v_tel      = st.text_input("WhatsApp:", value=st.session_state.db.get("Número de contacto", "55"))
+                    v_mail     = st.text_input("Email:",    value=st.session_state.db.get("Correo electrónico", ""))
+
                 st.markdown("<div class='section-header'>2. ENFOQUE PRINCIPAL</div>", unsafe_allow_html=True)
-                v_objetivo = st.selectbox("¿Cuál es tu meta prioritaria de transformación?", ops_obj, index=g_idx(ops_obj, 'Objetivo principal', 0))
-                v_tiempoloro = st.selectbox("¿En cuánto tiempo proyectas ver los primeros resultados?", ops_tiem, index=g_idx(ops_tiem, 'Tiempo deseado', 0))
-                v_compromiso = st.slider("Tu nivel de disciplina real para este proceso (1 al 10):", 1, 10, st.session_state.db.get('Compromiso', 10))
-                
+                v_obj    = st.selectbox("Meta prioritaria:", ops_obj, index=g_idx(ops_obj, "Objetivo principal", 0))
+                v_tiemp  = st.selectbox("Tiempo para primeros resultados:", ops_tiem, index=g_idx(ops_tiem, "Tiempo deseado", 0))
+                v_comp   = st.slider("Nivel de disciplina (1-10):", 1, 10, st.session_state.db.get("Compromiso", 10))
+
                 if st.form_submit_button("Siguiente: Misión 2 ➡️"):
                     if not v_nombre.strip():
-                        st.error("❌ El campo de Nombre Completo es obligatorio para avanzar.")
+                        st.error("❌ El nombre es obligatorio.")
+                    elif not v_tel.strip():
+                        st.error("❌ El WhatsApp de contacto es obligatorio.")
+                    elif not v_mail.strip():
+                        st.error("❌ El Correo electrónico es obligatorio.")
                     else:
-                        st.session_state.db.update({'Nombre completo': v_nombre, 'Edad': v_edad, 'Sexo': v_sexo, 'Estatura': v_estatura, 'Peso actual': v_peso_actual, 'Peso objetivo': v_peso_obj, 'Ocupación': v_ocupacion, 'Horario laboral': v_horario, 'Ciudad / País': v_ciudad, 'Número de contacto': v_contacto, 'Correo electrónico': v_correo, 'Objetivo principal': v_objetivo, 'Tiempo deseado': v_tiempoloro, 'Compromiso': v_compromiso})
-                        st.session_state.step = 2
-                        st.rerun()
+                        guardar_y_navegar({
+                            "Nombre completo": v_nombre, "Edad": v_edad, "Sexo": v_sexo,
+                            "Estatura": v_est, "Peso actual": v_peso, "Peso objetivo": v_peso_obj,
+                            "Ocupación": v_ocup, "Horario laboral": v_hor, "Ciudad / País": v_ciu,
+                            "Número de contacto": v_tel, "Correo electrónico": v_mail,
+                            "Objetivo principal": v_obj, "Tiempo deseado": v_tiemp, "Compromiso": v_comp,
+                        }, 2)
 
-        # --- MISIÓN 2 ---
+        # ── M2: Antecedentes de entrenamiento ───────────────────────────
         elif st.session_state.step == 2:
             with st.form("form_m2"):
-                st.success("La constancia es la clave de la hipertrofia. Cuéntanos tu experiencia.")
+                st.success("La constancia es la clave de la hipertrofia.")
                 st.markdown("<div class='section-header'>3. ANTECEDENTES DE ENTRENAMIENTO</div>", unsafe_allow_html=True)
-                
+
                 ops_t_ent = ["Nunca", "Menos de 6 meses", "De 6 meses a 1 año", "1 a 3 años", "Más de 3 años"]
                 ops_d_sem = ["3 días por semana", "4 días por semana", "5 días por semana"]
                 ops_t_ses = ["Menos de 45 minutos", "De 45 a 75 minutos", "Más de 75 minutos"]
-                ops_s_n = ["Sí", "No"]
-                
-                v_tiempo_entrenando = st.selectbox("Tiempo entrenando de forma ininterrumpida:", ops_t_ent, index=g_idx(ops_t_ent, 'Tiempo entrenando', 0))
-                v_tipo_entreno = st.multiselect("Sistemas deportivos practicados con anterioridad:", ["Gimnasio", "Calistenia", "Crossfit", "Deportes", "Funcional", "Ninguno"], default=st.session_state.db.get('Tipo entreno', ["Gimnasio"]))
-                v_dias_semana = st.selectbox("¿Cuántos días a la semana estarás en las trincheras?", ops_d_sem, index=g_idx(ops_d_sem, 'Días entrenar', 1))
-                v_tiempo_sesion = st.selectbox("Disponibilidad de tiempo por sesión:", ops_t_ses, index=g_idx(ops_t_ses, 'Tiempo por sesión', 1))
-                v_entrena_act = st.selectbox("¿Te encuentras entrenando actualmente?", ops_s_n, index=g_idx(ops_s_n, 'Entrena actualmente', 0))
-                v_coach_antes = st.selectbox("¿Has tenido entrenadores personales previos?", ops_s_n, index=g_idx(ops_s_n, 'Coach anterior', 1))
-                
-                c1, c2 = st.columns(2)
-                btn_back = c1.form_submit_button("⬅️ Atrás")
-                btn_next = c2.form_submit_button("Siguiente: Misión 3 ➡️")
-                
-                if btn_back or btn_next:
-                    st.session_state.db.update({'Tiempo entrenando': v_tiempo_entrenando, 'Tipo entreno': v_tipo_entreno, 'Días entrenar': v_dias_semana, 'Tiempo por sesión': v_tiempo_sesion, 'Entrena actualmente': v_entrena_act, 'Coach anterior': v_coach_antes})
-                    if btn_back: st.session_state.step = 1
-                    if btn_next: st.session_state.step = 3
-                    st.rerun()
 
-        # --- MISIÓN 3 ---
+                v_t_ent   = st.selectbox("Tiempo entrenando:", ops_t_ent, index=g_idx(ops_t_ent, "Tiempo entrenando", 0))
+                v_tipo    = st.multiselect("Sistemas practicados:", ["Gimnasio", "Calistenia", "Crossfit", "Deportes", "Funcional", "Ninguno"],
+                                           default=st.session_state.db.get("Tipo entreno", ["Gimnasio"]))
+                v_dias    = st.selectbox("Días/semana disponibles:", ops_d_sem, index=g_idx(ops_d_sem, "Días entrenar", 1))
+                v_sesion  = st.selectbox("Tiempo por sesión:", ops_t_ses, index=g_idx(ops_t_ses, "Tiempo por sesión", 1))
+                v_act     = st.selectbox("¿Entrenas actualmente?", ["Sí", "No"], index=g_idx(["Sí", "No"], "Entrena actualmente", 0))
+                v_coach   = st.selectbox("¿Tuviste entrenador previo?", ["Sí", "No"], index=g_idx(["Sí", "No"], "Coach anterior", 1))
+
+                c1, c2 = st.columns(2)
+                b_back = c1.form_submit_button("⬅️ Atrás")
+                b_next = c2.form_submit_button("Siguiente: Misión 3 ➡️")
+                datos_m2 = {"Tiempo entrenando": v_t_ent, "Tipo entreno": v_tipo,
+                            "Días entrenar": v_dias, "Tiempo por sesión": v_sesion,
+                            "Entrena actualmente": v_act, "Coach anterior": v_coach}
+                
+                if b_back: 
+                    guardar_y_navegar(datos_m2, 1)
+                if b_next: 
+                    if len(v_tipo) == 0:
+                        st.error("❌ Selecciona al menos un sistema deportivo practicado (o elige 'Ninguno').")
+                    else:
+                        guardar_y_navegar(datos_m2, 3)
+
+        # ── M3: Clínica y biomecánica ───────────────────────────────────
         elif st.session_state.step == 3:
             with st.form("form_m3"):
-                st.error("⚠️ El dolor articular no es negociable. Reporta cualquier lesión para ajustar tu carga mecánica.")
+                st.error("⚠️ Reporta lesiones — ajustamos la carga mecánica por tu seguridad.")
                 st.markdown("<div class='section-header'>4. CONDICIÓN CLÍNICA Y LESIONES</div>", unsafe_allow_html=True)
-                
-                ops_les = ["Ninguna", "Rodilla / Desgaste / Tendinitis", "Hombro / Manguito rotador", "Espalda Baja / Lumbalgia", "Cervicales", "Muñeca / Tobillo"]
-                ops_cir = ["No", "Sí, en miembros inferiores", "Sí, en miembros superiores / columna"]
-                ops_dol = ["No", "Sí, al hacer presses", "Sí, al hacer sentadillas", "Sí, dolor lumbar constante"]
-                ops_med = ["No", "Sí, para presión / glucosa", "Sí, antiinflamatorios"]
-                ops_con = ["Ninguna", "Diabetes", "Hipertensión", "Problemas de Tiroides / Hormonales", "Hernia Discal / Umbilical"]
-                ops_pro = ["No", "Sí, cargas sobre la columna", "Sí, flexiones profundas"]
-                
-                v_lesion = st.selectbox("¿Sufres de alguna lesión o dolor recurrente?", ops_les, index=g_idx(ops_les, 'Lesión actual', 0))
-                v_cirugias = st.selectbox("¿Cuentas con cirugías o intervenciones médicas?", ops_cir, index=g_idx(ops_cir, 'Cirugías', 0))
-                v_dolor_frec = st.selectbox("¿Sientes molestias agudas al ejecutar cargas pesadas?", ops_dol, index=g_idx(ops_dol, 'Dolor frecuente', 0))
-                v_medica = st.selectbox("¿Consumes medicamentos de prescripción diaria?", ops_med, index=g_idx(ops_med, 'Medicamentos', 0))
-                v_cond_diag = st.selectbox("¿Tienes alguna patología crónica diagnosticada?", ops_con, index=g_idx(ops_con, 'Condición médica', 0))
-                v_restriccion = st.selectbox("¿Tienes prohibiciones médicas explícitas?", ["No", "Sí"], index=g_idx(["No", "Sí"], 'Restricciones', 0))
-                v_prohibido = st.selectbox("¿Te han prohibido cargas pesadas sobre la columna (carga axial)?:", ops_pro, index=g_idx(ops_pro, 'Prohibido ejercicio', 0))
-                
+
+                ops_les = ["Ninguna", "Rodilla / Tendinitis", "Hombro / Manguito", "Espalda Baja / Lumbalgia", "Cervicales", "Muñeca / Tobillo"]
+                ops_con = ["Ninguna", "Diabetes", "Hipertensión", "Tiroides / Hormonal", "Hernia Discal / Umbilical"]
+                ops_pro = ["No", "Sí, cargas sobre columna", "Sí, flexiones profundas"]
+
+                v_lesion  = st.selectbox("Lesión o dolor recurrente:", ops_les, index=g_idx(ops_les, "Lesión actual", 0))
+                v_cir     = st.selectbox("Cirugías previas:", ["No", "Sí, miembros inferiores", "Sí, miembros superiores / columna"],
+                                         index=g_idx(["No", "Sí, miembros inferiores", "Sí, miembros superiores / columna"], "Cirugías", 0))
+                v_dolor   = st.selectbox("Molestias al levantar carga:", ["No", "Sí, al hacer presses", "Sí, en sentadillas", "Sí, lumbar constante"],
+                                         index=g_idx(["No", "Sí, al hacer presses", "Sí, en sentadillas", "Sí, lumbar constante"], "Dolor frecuente", 0))
+                v_med     = st.selectbox("Medicamentos de prescripción:", ["No", "Sí, presión/glucosa", "Sí, antiinflamatorios"],
+                                         index=g_idx(["No", "Sí, presión/glucosa", "Sí, antiinflamatorios"], "Medicamentos", 0))
+                v_cond    = st.selectbox("Patología crónica:", ops_con, index=g_idx(ops_con, "Condición médica", 0))
+                v_proh    = st.selectbox("Prohibición médica de carga axial:", ops_pro, index=g_idx(ops_pro, "Prohibido ejercicio", 0))
+
                 st.markdown("<div class='section-header'>5. AUTO-EVALUACIÓN BIOMECÁNICA</div>", unsafe_allow_html=True)
-                v_molestias_mov = st.multiselect("¿Limitaciones o dolor en movimientos básicos?:", ["Sentadilla", "Press de pecho", "Peso muerto", "Press militar", "Ninguno"], default=st.session_state.db.get('Molestias movimientos', ["Ninguno"]))
-                v_movilidad = st.selectbox("¿Cómo evalúas tu flexibilidad general?", ["Mala / Muy rígido", "Regular", "Buena"], index=g_idx(["Mala / Muy rígido", "Regular", "Buena"], 'Movilidad', 1))
-                v_lim_mov = st.selectbox("¿Notas acortamientos evidentes de movimiento?", ["No", "Sí, en tobillos/cadera", "Sí, en hombros"], index=g_idx(["No", "Sí, en tobillos/cadera", "Sí, en hombros"], 'Limitaciones movilidad', 0))
-                v_sentado = st.selectbox("¿Cuántas horas pasas sentado al día?", ["Sí, más de 6 horas", "Moderado (3 a 6 horas)", "No"], index=g_idx(["Sí, más de 6 horas", "Moderado (3 a 6 horas)", "No"], 'Horas sentado', 1))
-                v_postura = st.selectbox("¿Desviaciones posturales conocidas?", ["No", "Sí, hombros adelantados", "Sí, hiperlordosis lumbar"], index=g_idx(["No", "Sí, hombros adelantados", "Sí, hiperlordosis lumbar"], 'Mala postura', 0))
-                v_debil = st.selectbox("¿Tu eslabón muscular más débil?:", ["Tren Inferior", "Tren Superior", "Zona Media / Core", "Espalda"], index=g_idx(["Tren Inferior", "Tren Superior", "Zona Media / Core", "Espalda"], 'Parte débil', 0))
-                v_desarrollado = st.selectbox("¿Grupo muscular con mejor genética?:", ["Ninguno", "Piernas", "Pectoral / Brazos", "Espalda"], index=g_idx(["Ninguno", "Piernas", "Pectoral / Brazos", "Espalda"], 'Músculo desarrollado', 0))
-                v_equilibrio = st.selectbox("¿Problemas de coordinación mecánica?:", ["No", "Sí"], index=g_idx(["No", "Sí"], 'Equilibrio', 0))
+                v_molest  = st.multiselect("Dolor en movimientos básicos:", ["Sentadilla", "Press pecho", "Peso muerto", "Press militar", "Ninguno"],
+                                           default=st.session_state.db.get("Molestias movimientos", ["Ninguno"]))
+                v_movil   = st.selectbox("Flexibilidad general:", ["Mala / Muy rígido", "Regular", "Buena"],
+                                         index=g_idx(["Mala / Muy rígido", "Regular", "Buena"], "Movilidad", 1))
+                v_postura = st.selectbox("Desviaciones posturales:", ["No", "Sí, hombros adelantados", "Sí, hiperlordosis"],
+                                         index=g_idx(["No", "Sí, hombros adelantados", "Sí, hiperlordosis"], "Mala postura", 0))
+                v_debil   = st.selectbox("Eslabón muscular más débil:", ["Tren Inferior", "Tren Superior", "Core", "Espalda"],
+                                         index=g_idx(["Tren Inferior", "Tren Superior", "Core", "Espalda"], "Parte débil", 0))
 
                 c1, c2 = st.columns(2)
-                btn_back = c1.form_submit_button("⬅️ Atrás")
-                btn_next = c2.form_submit_button("Siguiente: Misión 4 ➡️")
+                b_back = c1.form_submit_button("⬅️ Atrás")
+                b_next = c2.form_submit_button("Siguiente: Misión 4 ➡️")
+                datos_m3 = {"Lesión actual": v_lesion, "Cirugías": v_cir, "Dolor frecuente": v_dolor,
+                            "Medicamentos": v_med, "Condición médica": v_cond, "Prohibido ejercicio": v_proh,
+                            "Molestias movimientos": v_molest, "Movilidad": v_movil,
+                            "Mala postura": v_postura, "Parte débil": v_debil}
                 
-                if btn_back or btn_next:
-                    st.session_state.db.update({'Lesión actual': v_lesion, 'Cirugías': v_cirugias, 'Dolor frecuente': v_dolor_frec, 'Medicamentos': v_medica, 'Condición médica': v_cond_diag, 'Restricciones': v_restriccion, 'Prohibido ejercicio': v_prohibido, 'Molestias movimientos': v_molestias_mov, 'Movilidad': v_movilidad, 'Limitaciones movilidad': v_lim_mov, 'Horas sentado': v_sentado, 'Mala postura': v_postura, 'Parte débil': v_debil, 'Músculo desarrollado': v_desarrollado, 'Equilibrio': v_equilibrio})
-                    if btn_back: st.session_state.step = 2
-                    if btn_next: st.session_state.step = 4
-                    st.rerun()
+                if b_back: 
+                    guardar_y_navegar(datos_m3, 2)
+                if b_next: 
+                    if len(v_molest) == 0:
+                        st.error("❌ Selecciona si tienes dolor en movimientos básicos (o elige 'Ninguno').")
+                    else:
+                        guardar_y_navegar(datos_m3, 4)
 
-        # --- MISIÓN 4 ---
+        # ── M4: Morfología y hábitos ────────────────────────────────────
         elif st.session_state.step == 4:
             with st.form("form_m4"):
                 st.warning("El músculo crece fuera del gimnasio. Evalúa tu recuperación.")
-                st.markdown("<div class='section-header'>6. MORFOLOGÍA Y ESTRUCTURA</div>", unsafe_allow_html=True)
-                
-                v_fisico = st.selectbox("¿Con qué somatotipo te identificas?", ["Delgado / Ectomorfo", "Atlético / Mesomorfo", "Robusto / Endomorfo", "Sobrepeso"], index=g_idx(["Delgado / Ectomorfo", "Atlético / Mesomorfo", "Robusto / Endomorfo", "Sobrepeso"], 'Consideración física', 1))
-                v_acumula_grasa = st.selectbox("¿Dónde tiendes a acumular tejido graso?:", ["Abdomen / Zona lumbar", "Piernas y Cadera", "Distribución General"], index=g_idx(["Abdomen / Zona lumbar", "Piernas y Cadera", "Distribución General"], 'Acumula grasa', 0))
-                v_gana_musculo = st.selectbox("¿Facilidad para construir masa muscular?", ["Muy difícil", "Ritmo Normal", "Fácil"], index=g_idx(["Muy difícil", "Ritmo Normal", "Fácil"], 'Facilidad músculo', 1))
-                v_gana_grasa = st.selectbox("¿Velocidad de aumento de grasa en periodos libres?", ["Muy fácil", "Ritmo Normal", "Difícil"], index=g_idx(["Muy fácil", "Ritmo Normal", "Difícil"], 'Facilidad grasa', 1))
-                
-                st.markdown("<div class='section-header'>7. CALIDAD DE HÁBITOS Y DESCANSO</div>", unsafe_allow_html=True)
-                v_horas_sueno = st.selectbox("Promedio de horas de sueño por noche:", ["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"], index=g_idx(["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"], 'Horas sueño', 2))
-                v_calif_sueno = st.selectbox("Calidad percibida de tu descanso nocturno:", ["Malo", "Regular", "Excelente"], index=g_idx(["Malo", "Regular", "Excelente"], 'Calificación descanso', 1))
-                v_estres_diario = st.selectbox("Nivel de estrés mental / laboral cotidiano:", ["Bajo / Controlado", "Medio", "Alto"], index=g_idx(["Bajo / Controlado", "Medio", "Alto"], 'Nivel de estrés', 1))
-                v_num_comidas = st.selectbox("¿Cuántas comidas sólidas realizas al día?", ["2 comidas", "3 comidas", "4 comidas", "5 comidas o más"], index=g_idx(["2 comidas", "3 comidas", "4 comidas", "5 comidas o más"], 'Comidas al día', 2))
-                v_litros_agua = st.selectbox("Consumo diario estimado de agua:", ["Menos de 1.5 Litros", "Entre 1.5 y 3 Litros", "Más de 3 Litros"], index=g_idx(["Menos de 1.5 Litros", "Entre 1.5 y 3 Litros", "Más de 3 Litros"], 'Agua diaria', 1))
-                v_alcohol = st.selectbox("Frecuencia de consumo de alcohol:", ["No / Nunca", "Solo Ocasional", "Frecuente fines de semana"], index=g_idx(["No / Nunca", "Solo Ocasional", "Frecuente fines de semana"], 'Alcohol', 1))
-                v_fuma = st.selectbox("¿Consumes tabaco?", ["No", "Sí"], index=g_idx(["No", "Sí"], 'Fuma', 0))
-                v_pasos = st.selectbox("Estimación diaria de movimiento (Pasos/NEAT):", ["Menos de 5k", "5k a 10k", "Más de 10k"], index=g_idx(["Menos de 5k", "5k a 10k", "Más de 10k"], 'Pasos día', 1))
-                v_nivel_actividad = st.selectbox("Nivel de actividad física fuera del gimnasio:", ["Sedentario", "Poco activo", "Moderadamente activo", "Muy activo"], index=g_idx(["Sedentario", "Poco activo", "Moderadamente activo", "Muy activo"], 'Nivel de actividad', 2))
+                st.markdown("<div class='section-header'>6. MORFOLOGÍA Y HÁBITOS DE VIDA</div>", unsafe_allow_html=True)
+
+                ops_soma  = ["Delgado / Ectomorfo", "Atlético / Mesomorfo", "Robusto / Endomorfo", "Sobrepeso"]
+                ops_act   = ["Sedentario", "Poco activo", "Moderadamente activo", "Muy activo"]
+
+                v_soma    = st.selectbox("Somatotipo:", ops_soma, index=g_idx(ops_soma, "Consideración física", 1))
+                v_grasa   = st.selectbox("Zona de acumulación grasa:", ["Abdomen / Lumbar", "Piernas y Cadera", "General"],
+                                         index=g_idx(["Abdomen / Lumbar", "Piernas y Cadera", "General"], "Acumula grasa", 0))
+                v_sueno   = st.selectbox("Horas de sueño:", ["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"],
+                                         index=g_idx(["4-5 horas", "6 horas", "7-8 horas", "Más de 8 horas"], "Horas sueño", 2))
+                v_estres  = st.selectbox("Estrés diario:", ["Bajo / Controlado", "Medio", "Alto"],
+                                         index=g_idx(["Bajo / Controlado", "Medio", "Alto"], "Nivel de estrés", 1))
+                v_agua    = st.selectbox("Agua diaria:", ["Menos de 1.5 L", "1.5 a 3 L", "Más de 3 L"],
+                                         index=g_idx(["Menos de 1.5 L", "1.5 a 3 L", "Más de 3 L"], "Agua diaria", 1))
+                v_alcohol = st.selectbox("Alcohol:", ["No / Nunca", "Ocasional", "Frecuente fines de semana"],
+                                         index=g_idx(["No / Nunca", "Ocasional", "Frecuente fines de semana"], "Alcohol", 1))
+                v_fuma    = st.selectbox("Tabaco:", ["No", "Sí"], index=g_idx(["No", "Sí"], "Fuma", 0))
+                v_act_niv = st.selectbox("Actividad fuera del gym:", ops_act, index=g_idx(ops_act, "Nivel de actividad", 2))
 
                 c1, c2 = st.columns(2)
-                btn_back = c1.form_submit_button("⬅️ Atrás")
-                btn_next = c2.form_submit_button("Siguiente: Misión 5 ➡️")
+                b_back = c1.form_submit_button("⬅️ Atrás")
+                b_next = c2.form_submit_button("Siguiente: Misión 5 ➡️")
+                datos_m4 = {"Consideración física": v_soma, "Acumula grasa": v_grasa,
+                            "Horas sueño": v_sueno, "Nivel de estrés": v_estres,
+                            "Agua diaria": v_agua, "Alcohol": v_alcohol,
+                            "Fuma": v_fuma, "Nivel de actividad": v_act_niv}
                 
-                if btn_back or btn_next:
-                    st.session_state.db.update({'Consideración física': v_fisico, 'Acumula grasa': v_acumula_grasa, 'Facilidad músculo': v_gana_musculo, 'Facilidad grasa': v_gana_grasa, 'Horas sueño': v_horas_sueno, 'Calificación descanso': v_calif_sueno, 'Nivel de estrés': v_estres_diario, 'Comidas al día': v_num_comidas, 'Agua diaria': v_litros_agua, 'Alcohol': v_alcohol, 'Fuma': v_fuma, 'Pasos día': v_pasos, 'Nivel de actividad': v_nivel_actividad})
-                    if btn_back: st.session_state.step = 3
-                    if btn_next: st.session_state.step = 5
-                    st.rerun()
+                if b_back: guardar_y_navegar(datos_m4, 3)
+                if b_next: guardar_y_navegar(datos_m4, 5)
 
-        # --- MISIÓN 5 ---
+        # ── M5: Menú nutricional ─────────────────────────────────────────
         elif st.session_state.step == 5:
             with st.form("form_m5"):
-                st.info("Selecciona el combustible que formará tu dieta estructurada. Mantente apegado al plan.")
-                st.markdown("<div class='section-header'>8. MENÚ DE SELECCIÓN CONTROLADA</div>", unsafe_allow_html=True)
-                
-                v_menu_prots = st.multiselect("🥩 FUENTES DE PROTEÍNA:", ["Pechuga de Pollo", "Bisteck de Res magro", "Lomo de Cerdo", "Claras de Huevo", "Atún en agua", "Filete de Pescado"], default=st.session_state.db.get('Menu_Proteinas', ["Pechuga de Pollo", "Claras de Huevo"]))
-                v_menu_carbs = st.multiselect("🍞 CARBOHIDRATOS COMPLEJOS:", ["Arroz Blanco", "Avena en Hojuelas", "Camote asado", "Papa cocida", "Tortilla de Maíz"], default=st.session_state.db.get('Menu_Carbohidratos', ["Arroz Blanco", "Avena en Hojuelas"]))
-                v_menu_grasas = st.multiselect("🥑 GRASAS SALUDABLES:", ["Aguacate", "Almendras naturales", "Crema de Cacahuete"], default=st.session_state.db.get('Menu_Grasas', ["Aguacate"]))
-                v_menu_frutas = st.multiselect("🍎 FRUTAS:", ["Plátano", "Manzana", "Fresas / Berries"], default=st.session_state.db.get('Menu_Frutas', ["Plátano", "Manzana"]))
-                v_menu_verds = st.multiselect("🥦 VERDURAS:", ["Brócoli", "Espinacas", "Lechuga / Pepino"], default=st.session_state.db.get('Menu_Verduras', ["Brócoli", "Espinacas"]))
-                
-                st.markdown("<div class='section-header'>9. PERFIL NUTRICIONAL</div>", unsafe_allow_html=True)
-                v_obj_nutri = st.selectbox("Preferencia alimenticia actual:", ["Bajar porcentaje de grasa", "Aumento de masa magra"], index=g_idx(["Bajar porcentaje de grasa", "Aumento de masa magra"], 'Objetivo nutricional', 0))
-                v_alergias = st.text_input("¿Tienes alergias alimentarias graves?", placeholder="Ej: Cacahuates...", value=st.session_state.db.get('Alergias alimenticias', ''))
-                v_intolerancia = st.text_input("¿Padeces intolerancias digestivas?", placeholder="Ej: Lactosa...", value=st.session_state.db.get('Intolerancias', ''))
-                v_tipo_alimentacion = st.selectbox("Estructura dietética:", ["Omnívoro", "Vegetariano"], index=g_idx(["Omnívoro", "Vegetariano"], 'Tipo alimentación', 0))
-                v_no_gustan = st.text_input("Alimentos que rechazas rotundamente:", placeholder="Ej: Pescado, cebolla...", value=st.session_state.db.get('Alimentos no gustan', ''))
-                v_comer_fuera = st.selectbox("¿Sueles comer en restaurantes?", ["Nunca", "1-2 veces por semana"], index=g_idx(["Nunca", "1-2 veces por semana"], 'Comer fuera', 0)) # Added index check just in case
-                v_presupuesto = st.selectbox("Presupuesto para tu plan nutricional:", ["Básico / Económico", "Estándar flexible"], index=g_idx(["Básico / Económico", "Estándar flexible"], 'Presupuesto', 1))
-                v_horarios_fijos = st.selectbox("¿Necesitas horarios estrictos para comer?", ["Sí", "No"], index=g_idx(["Sí", "No"], 'Horarios fijos', 1))
-                v_cocinar = st.selectbox("¿Cocinas tus propios alimentos?", ["Sí", "No"], index=g_idx(["Sí", "No"], 'Cocinar', 0))
+                st.info("Elige el combustible de tu plan. Mantente apegado.")
+                st.markdown("<div class='section-header'>7. MENÚ DE SELECCIÓN CONTROLADA</div>", unsafe_allow_html=True)
+
+                v_prots   = st.multiselect("🥩 Proteínas:", ["Pechuga de Pollo", "Bisteck de Res magro", "Lomo de Cerdo",
+                                            "Claras de Huevo", "Atún en agua", "Filete de Pescado"],
+                                           default=st.session_state.db.get("Menu_Proteinas", ["Pechuga de Pollo", "Claras de Huevo"]))
+                v_carbs   = st.multiselect("🍞 Carbohidratos:", ["Arroz Blanco", "Avena", "Camote", "Papa cocida", "Tortilla de Maíz"],
+                                           default=st.session_state.db.get("Menu_Carbohidratos", ["Arroz Blanco", "Avena"]))
+                v_grasas  = st.multiselect("🥑 Grasas saludables:", ["Aguacate", "Almendras", "Crema de Cacahuete"],
+                                           default=st.session_state.db.get("Menu_Grasas", ["Aguacate"]))
+                v_frutas  = st.multiselect("🍎 Frutas:", ["Plátano", "Manzana", "Fresas / Berries"],
+                                           default=st.session_state.db.get("Menu_Frutas", ["Plátano", "Manzana"]))
+                v_verds   = st.multiselect("🥦 Verduras:", ["Brócoli", "Espinacas", "Lechuga / Pepino"],
+                                           default=st.session_state.db.get("Menu_Verduras", ["Brócoli", "Espinacas"]))
+
+                st.markdown("<div class='section-header'>8. PERFIL NUTRICIONAL</div>", unsafe_allow_html=True)
+                v_alerg   = st.text_input("Alergias alimentarias:", value=st.session_state.db.get("Alergias alimenticias", ""))
+                v_intol   = st.text_input("Intolerancias digestivas:", value=st.session_state.db.get("Intolerancias", ""))
+                v_tipo_al = st.selectbox("Estructura dietética:", ["Omnívoro", "Vegetariano"],
+                                         index=g_idx(["Omnívoro", "Vegetariano"], "Tipo alimentación", 0))
+                v_no_gust = st.text_input("Alimentos que rechazas:", value=st.session_state.db.get("Alimentos no gustan", ""))
 
                 c1, c2 = st.columns(2)
-                btn_back = c1.form_submit_button("⬅️ Atrás")
-                btn_next = c2.form_submit_button("Siguiente: Misión 6 ➡️")
+                b_back = c1.form_submit_button("⬅️ Atrás")
+                b_next = c2.form_submit_button("Siguiente: Misión 6 ➡️")
+                datos_m5 = {"Menu_Proteinas": v_prots, "Menu_Carbohidratos": v_carbs,
+                            "Menu_Grasas": v_grasas, "Menu_Frutas": v_frutas, "Menu_Verduras": v_verds,
+                            "Alergias alimenticias": v_alerg, "Intolerancias": v_intol,
+                            "Tipo alimentación": v_tipo_al, "Alimentos no gustan": v_no_gust}
                 
-                if btn_back or btn_next:
-                    st.session_state.db.update({'Menu_Proteinas': v_menu_prots, 'Menu_Carbohidratos': v_menu_carbs, 'Menu_Grasas': v_menu_grasas, 'Menu_Frutas': v_menu_frutas, 'Menu_Verduras': v_menu_verds, 'Objetivo nutricional': v_obj_nutri, 'Alergias alimenticias': v_alergias, 'Intolerancias': v_intolerancia, 'Tipo alimentación': v_tipo_alimentacion, 'Alimentos no gustan': v_no_gustan})
-                    if btn_back: st.session_state.step = 4
-                    if btn_next: st.session_state.step = 6
-                    st.rerun()
+                if b_back: 
+                    guardar_y_navegar(datos_m5, 4)
+                if b_next: 
+                    if len(v_prots) == 0: st.error("❌ Elige al menos una fuente de PROTEÍNAS.")
+                    elif len(v_carbs) == 0: st.error("❌ Elige al menos una fuente de CARBOHIDRATOS.")
+                    elif len(v_grasas) == 0: st.error("❌ Elige al menos una fuente de GRASAS.")
+                    elif len(v_frutas) == 0: st.error("❌ Elige al menos una FRUTA.")
+                    elif len(v_verds) == 0: st.error("❌ Elige al menos una VERDURA.")
+                    else:
+                        guardar_y_navegar(datos_m5, 6)
 
-        # --- MISIÓN 6 ---
+        # ── M6: Logística y psicometría ──────────────────────────────────
         elif st.session_state.step == 6:
             with st.form("form_m6"):
-                st.markdown("<div class='section-header'>10. DISPONIBILIDAD LOGÍSTICA</div>", unsafe_allow_html=True)
-                v_donde_entrena = st.selectbox("¿Dónde entrenarás?", ["Gimnasio comercial completo", "Casa con equipo"], index=g_idx(["Gimnasio comercial completo", "Casa con equipo"], 'Donde entrenará', 0))
-                v_equipo = st.multiselect("¿De qué equipamiento dispones?", ["Mancuernas", "Barras y Discos", "Poleas"], default=st.session_state.db.get('Equipo disponible', ["Mancuernas", "Barras y Discos"]))
-                v_lim_space = st.selectbox("¿Limitaciones de espacio físico?", ["No", "Sí"], index=g_idx(["No", "Sí"], 'Limitación espacio', 0))
-                
-                st.markdown("<div class='section-header'>11. METAS DE ENFOQUE Y FILTROS</div>", unsafe_allow_html=True)
-                v_partes_mejorar = st.selectbox("Sector muscular prioritario a desarrollar:", ["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda", "Brazos", "Abdomen / Definición"], index=g_idx(["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda", "Brazos", "Abdomen / Definición"], 'Partes mejorar', 2))
-                v_dificultad = st.text_input("¿Cuál ha sido tu mayor obstáculo en el pasado?", value=st.session_state.db.get('Dificultades físicas', ''))
-                v_odia_ex = st.text_input("¿Qué ejercicio odias y prefieres evitar?", value=st.session_state.db.get('Ejercicio odia', ''))
-                v_disfruta_ex = st.text_input("¿Con qué ejercicio sientes mayor conexión o bombeo?", value=st.session_state.db.get('Ejercicio disfruta', ''))
-                v_impide_progresar = st.text_area("¿Qué saboteó tu avance en intentos anteriores?", value=st.session_state.db.get('Impedido progresar', ''))
-                
-                st.markdown("<div class='section-header'>12. ESCALAS PSICOMÉTRICAS (1 AL 10)</div>", unsafe_allow_html=True)
-                v_p_disciplina = st.slider("Tu nivel de Disciplina Actual:", 1, 10, st.session_state.db.get('P_Disciplina', 8))
-                v_p_estres = st.slider("Carga de Estrés mental:", 1, 10, st.session_state.db.get('P_Estres', 5))
-                v_p_sueno = st.slider("Capacidad de descansar profundo:", 1, 10, st.session_state.db.get('P_Sueno', 8))
-                v_p_motivacion = st.slider("Fuego interno / Motivación:", 1, 10, st.session_state.db.get('P_Motivacion', 9))
-                v_p_energia = st.slider("Energía vital diaria:", 1, 10, st.session_state.db.get('P_Energia', 7))
-                v_p_hambre = st.slider("Ansiedad por comida fuera de dieta:", 1, 10, st.session_state.db.get('P_Hambre', 5))
-                v_p_recup = st.slider("Velocidad de recuperación muscular:", 1, 10, st.session_state.db.get('P_Recup', 7))
-                v_prioridad = st.selectbox("Prioridad central de tu entrenamiento:", ["Salud", "Estética", "Rendimiento"], index=g_idx(["Salud", "Estética", "Rendimiento"], 'Prioridad', 1))
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                c1, c2 = st.columns(2)
-                btn_back = c1.form_submit_button("⬅️ Atrás")
-                enviar_maestro = c2.form_submit_button("🚀 REGISTRAR EXPEDIENTE")
-                
-                if btn_back:
-                    st.session_state.db.update({'Donde entrenará': v_donde_entrena, 'Equipo disponible': v_equipo, 'Limitación espacio': v_lim_space, 'Partes mejorar': v_partes_mejorar, 'Dificultades físicas': v_dificultad, 'Ejercicio odia': v_odia_ex, 'Ejercicio disfruta': v_disfruta_ex, 'Impedido progresar': v_impide_progresar, 'P_Disciplina': v_p_disciplina, 'P_Estres': v_p_estres, 'P_Sueno': v_p_sueno, 'P_Motivacion': v_p_motivacion, 'P_Energia': v_p_energia, 'P_Hambre': v_p_hambre, 'P_Recup': v_p_recup, 'Prioridad': v_prioridad})
-                    st.session_state.step = 5
-                    st.rerun()
-                    
-                if enviar_maestro:
-                    # Guardamos la última info
-                    st.session_state.db.update({'Donde entrenará': v_donde_entrena, 'Equipo disponible': v_equipo, 'Limitación espacio': v_lim_space, 'Partes mejorar': v_partes_mejorar, 'Dificultades físicas': v_dificultad, 'Ejercicio odia': v_odia_ex, 'Ejercicio disfruta': v_disfruta_ex, 'Impedido progresar': v_impide_progresar, 'P_Disciplina': v_p_disciplina, 'P_Estres': v_p_estres, 'P_Sueno': v_p_sueno, 'P_Motivacion': v_p_motivacion, 'P_Energia': v_p_energia, 'P_Hambre': v_p_hambre, 'P_Recup': v_p_recup, 'Prioridad': v_prioridad})
-                    
-                    nombre_final = st.session_state.db.get("Nombre completo", "")
-                    if not nombre_final.strip():
-                        st.error("❌ Ocurrió un error. El nombre está vacío.")
-                    else:
-                        id_nuevo_alumno = generar_id_unico(nombre_final)
-                        d = st.session_state.db
-                        
-                        payload = {
-                            "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Tipo_Registro": "INICIAL",
-                            "ID_Alumno": id_nuevo_alumno,
-                            "Nombre completo": str(d.get("Nombre completo")).title(), "Edad": str(d.get("Edad")), "Sexo": str(d.get("Sexo")), "Estatura": str(d.get("Estatura")), "Peso actual": str(d.get("Peso actual")),
-                            "Peso objetivo": str(d.get("Peso objetivo")), "Ocupación": str(d.get("Ocupación")), "Horario laboral": str(d.get("Horario laboral")), "Ciudad / País": str(d.get("Ciudad / País")), "Número de contacto": str(d.get("Número de contacto")), "Correo electrónico": str(d.get("Correo electrónico")),
-                            "Objetivo principal": str(d.get("Objetivo principal")), "Tiempo deseado": str(d.get("Tiempo deseado")), "Compromiso": str(d.get("Compromiso")), "Tiempo entrenando": str(d.get("Tiempo entrenando")), "Tipo entreno": ",".join(d.get("Tipo entreno", [])),
-                            "Días entrenar": str(d.get("Días entrenar")), "Tiempo por sesión": str(d.get("Tiempo por sesión")), "Entrena actualmente": str(d.get("Entrena actualmente")), "Coach anterior": str(d.get("Coach anterior")), "Lesión actual": str(d.get("Lesión actual")),
-                            "Cirugías": str(d.get("Cirugías")), "Dolor frecuente": str(d.get("Dolor frecuente")), "Medicamentos": str(d.get("Medicamentos")), "Condición médica": str(d.get("Condición médica")), "Restricciones": str(d.get("Restricciones")), "Prohibido ejercicio": str(d.get("Prohibido ejercicio")),
-                            "Molestias movimientos": ",".join(d.get("Molestias movimientos", [])), "Movilidad": str(d.get("Movilidad")), "Limitaciones movilidad": str(d.get("Limitaciones movilidad")), "Horas sentado": str(d.get("Horas sentado")), "Mala postura": str(d.get("Mala postura")),
-                            "Parte débil": str(d.get("Parte débil")), "Músculo desarrollado": str(d.get("Músculo desarrollado")), "Equilibrio": str(d.get("Equilibrio")), "Consideración física": str(d.get("Consideración física")), "Acumula grasa": str(d.get("Acumula grasa")),
-                            "Facilidad músculo": str(d.get("Facilidad músculo")), "Facilidad grasa": str(d.get("Facilidad grasa")), "Horas sueño": str(d.get("Horas sueño")), "Calificación descanso": str(d.get("Calificación descanso")), "Nivel de estrés": str(d.get("Nivel de estrés")),
-                            "Comidas al día": str(d.get("Comidas al día")), "Agua diaria": str(d.get("Agua diaria")), "Alcohol": str(d.get("Alcohol")), "Fuma": str(d.get("Fuma")), "Pasos día": str(d.get("Pasos día")), "Nivel de actividad": str(d.get("Nivel de actividad")),
-                            "Objetivo nutricional": str(d.get("Objetivo nutricional")), "Alergias alimenticias": str(d.get("Alergias alimenticias")), "Intolerancias": str(d.get("Intolerancias")), "Tipo alimentación": str(d.get("Tipo alimentación")), "Alimentos no gustan": str(d.get("Alimentos no gustan")),
-                            "Donde entrenará": str(d.get("Donde entrenará")), "Equipo disponible": ",".join(d.get("Equipo disponible", [])), "Limitación espacio": str(d.get("Limitación espacio")), "Partes mejorar": str(d.get("Partes mejorar")), "Dificultades físicas": str(d.get("Dificultades físicas")),
-                            "Ejercicio odia": str(d.get("Ejercicio odia")), "Ejercicio disfruta": str(d.get("Ejercicio disfruta")), "Impedido progresar": str(d.get("Impedido progresar")), "P_Disciplina": str(d.get("P_Disciplina")), "P_Estres": str(d.get("P_Estres")),
-                            "P_Sueno": str(d.get("P_Sueno")), "P_Motivacion": str(d.get("P_Motivacion")), "P_Energia": str(d.get("P_Energia")), "P_Hambre": str(d.get("P_Hambre")), "P_Recup": str(d.get("P_Recup")), "Prioridad": str(d.get("Prioridad")),
-                            "Menu_Proteinas": ",".join(d.get("Menu_Proteinas", [])), "Menu_Carbohidratos": ",".join(d.get("Menu_Carbohidratos", [])), "Menu_Grasas": ",".join(d.get("Menu_Grasas", [])), "Menu_Frutas": ",".join(d.get("Menu_Frutas", [])), "Menu_Verduras": ",".join(d.get("Menu_Verduras", [])),
-                            "Propuesta General": "", "Balance Energético": "", "Rutina Biomecánica": ""
-                        }
-                        
-                        with st.spinner("Sincronizando expediente con el servidor principal..."):
-                            try:
-                                response = requests.post(WEBHOOK_URL, json=payload)
-                                if response.status_code == 200 and "success" in response.text:
-                                    st.markdown(f"<div class='id-box'>✅ ¡EXPEDIENTE GUARDADO CON ÉXITO!<br><br>TU ID ÚNICO DE ATLETA ES:<br><span style='font-size:36px; color:#4CAF50;'>{id_nuevo_alumno}</span><br><br><small style='color:#DDD; font-weight:normal;'>Guárdalo. Lo usarás para evaluar tu progreso periódicamente en la pestaña de revisión.</small></div>", unsafe_allow_html=True)
-                                    st.balloons()
-                                    # Reiniciamos el formulario para el siguiente usuario
-                                    st.session_state.step = 1
-                                    st.session_state.db = {}
-                                else: st.error(f"Error en servidor: {response.text}")
-                            except Exception as api_err: st.error(f"Fallo de comunicación: {api_err}")
+                st.markdown("<div class='section-header'>9. LOGÍSTICA DE ENTRENAMIENTO</div>", unsafe_allow_html=True)
 
-    # --- MÓDULO 2: REVISIÓN DE AVANCE (CLIENTE) ---
+                v_lugar   = st.selectbox("¿Dónde entrenas?", ["Gimnasio comercial completo", "Casa con equipo"],
+                                         index=g_idx(["Gimnasio comercial completo", "Casa con equipo"], "Donde entrenará", 0))
+                v_equipo  = st.multiselect("Equipo disponible:", ["Mancuernas", "Barras y Discos", "Poleas"],
+                                           default=st.session_state.db.get("Equipo disponible", ["Mancuernas", "Barras y Discos"]))
+                v_partes  = st.selectbox("Músculo prioritario:", ["Glúteos / Femorales", "Cuádriceps",
+                                          "Hombros y Espalda", "Brazos", "Abdomen / Definición"],
+                                         index=g_idx(["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda",
+                                                      "Brazos", "Abdomen / Definición"], "Partes mejorar", 2))
+                v_impide  = st.text_area("¿Qué saboteó tu avance antes?", value=st.session_state.db.get("Impedido progresar", ""))
+                v_odia    = st.text_input("Ejercicio que odias:", value=st.session_state.db.get("Ejercicio odia", ""))
+                v_gusta   = st.text_input("Ejercicio favorito:", value=st.session_state.db.get("Ejercicio disfruta", ""))
+
+                st.markdown("<div class='section-header'>10. ESCALAS PSICOMÉTRICAS</div>", unsafe_allow_html=True)
+                v_disc = st.slider("Disciplina:", 1, 10, st.session_state.db.get("P_Disciplina", 8))
+                v_estr = st.slider("Estrés mental:", 1, 10, st.session_state.db.get("P_Estres", 5))
+                v_suen = st.slider("Calidad de sueño:", 1, 10, st.session_state.db.get("P_Sueno", 8))
+                v_moti = st.slider("Motivación:", 1, 10, st.session_state.db.get("P_Motivacion", 9))
+                v_ener = st.slider("Energía diaria:", 1, 10, st.session_state.db.get("P_Energia", 7))
+                v_hamb = st.slider("Ansiedad por comida:", 1, 10, st.session_state.db.get("P_Hambre", 5))
+                v_recu = st.slider("Recuperación muscular:", 1, 10, st.session_state.db.get("P_Recup", 7))
+                v_prio = st.selectbox("Prioridad de entrenamiento:", ["Salud", "Estética", "Rendimiento"],
+                                      index=g_idx(["Salud", "Estética", "Rendimiento"], "Prioridad", 1))
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                b_back  = c1.form_submit_button("⬅️ Atrás")
+                b_envia = c2.form_submit_button("🚀 REGISTRAR EXPEDIENTE")
+
+                datos_m6 = {"Donde entrenará": v_lugar, "Equipo disponible": v_equipo,
+                            "Partes mejorar": v_partes, "Impedido progresar": v_impide,
+                            "Ejercicio odia": v_odia, "Ejercicio disfruta": v_gusta,
+                            "P_Disciplina": v_disc, "P_Estres": v_estr, "P_Sueno": v_suen,
+                            "P_Motivacion": v_moti, "P_Energia": v_ener, "P_Hambre": v_hamb,
+                            "P_Recup": v_recu, "Prioridad": v_prio}
+
+                if b_back:
+                    guardar_y_navegar(datos_m6, 5)
+
+                if b_envia:
+                    if len(v_equipo) == 0:
+                        st.error("❌ Selecciona el equipo de entrenamiento del que dispones.")
+                    elif not v_impide.strip() or not v_odia.strip() or not v_gusta.strip():
+                        st.error("❌ Responde las preguntas de texto sobre tus obstáculos y ejercicios (o escribe 'Ninguno').")
+                    else:
+                        st.session_state.db.update(datos_m6)
+                        nombre_final = st.session_state.db.get("Nombre completo", "").strip()
+                        
+                        id_nuevo = generar_id_unico(nombre_final)
+                        d = st.session_state.db
+
+                        payload = {
+                            "Fecha":            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "Tipo_Registro":    "INICIAL",
+                            "ID_Alumno":        id_nuevo,
+                            "Nombre completo":  str(d.get("Nombre completo")).title(),
+                            "Edad":             str(d.get("Edad")),
+                            "Sexo":             str(d.get("Sexo")),
+                            "Estatura":         str(d.get("Estatura")),
+                            "Peso actual":      str(d.get("Peso actual")),
+                            "Peso objetivo":    str(d.get("Peso objetivo")),
+                            "Ocupación":        str(d.get("Ocupación")),
+                            "Horario laboral":  str(d.get("Horario laboral")),
+                            "Ciudad / País":    str(d.get("Ciudad / País")),
+                            "Número de contacto": str(d.get("Número de contacto")),
+                            "Correo electrónico": str(d.get("Correo electrónico")),
+                            "Objetivo principal": str(d.get("Objetivo principal")),
+                            "Tiempo deseado":   str(d.get("Tiempo deseado")),
+                            "Compromiso":       str(d.get("Compromiso")),
+                            "Tiempo entrenando": str(d.get("Tiempo entrenando")),
+                            "Tipo entreno":     ",".join(d.get("Tipo entreno", [])),
+                            "Días entrenar":    str(d.get("Días entrenar")),
+                            "Tiempo por sesión": str(d.get("Tiempo por sesión")),
+                            "Entrena actualmente": str(d.get("Entrena actualmente")),
+                            "Coach anterior":   str(d.get("Coach anterior")),
+                            "Lesión actual":    str(d.get("Lesión actual")),
+                            "Cirugías":         str(d.get("Cirugías")),
+                            "Dolor frecuente":  str(d.get("Dolor frecuente")),
+                            "Medicamentos":     str(d.get("Medicamentos")),
+                            "Condición médica": str(d.get("Condición médica")),
+                            "Prohibido ejercicio": str(d.get("Prohibido ejercicio")),
+                            "Molestias movimientos": ",".join(d.get("Molestias movimientos", [])),
+                            "Movilidad":        str(d.get("Movilidad")),
+                            "Mala postura":     str(d.get("Mala postura")),
+                            "Parte débil":      str(d.get("Parte débil")),
+                            "Consideración física": str(d.get("Consideración física")),
+                            "Acumula grasa":    str(d.get("Acumula grasa")),
+                            "Horas sueño":      str(d.get("Horas sueño")),
+                            "Nivel de estrés":  str(d.get("Nivel de estrés")),
+                            "Agua diaria":      str(d.get("Agua diaria")),
+                            "Alcohol":          str(d.get("Alcohol")),
+                            "Fuma":             str(d.get("Fuma")),
+                            "Nivel de actividad": str(d.get("Nivel de actividad")),
+                            "Alergias alimenticias": str(d.get("Alergias alimenticias")),
+                            "Intolerancias":    str(d.get("Intolerancias")),
+                            "Tipo alimentación": str(d.get("Tipo alimentación")),
+                            "Alimentos no gustan": str(d.get("Alimentos no gustan")),
+                            "Donde entrenará":  str(d.get("Donde entrenará")),
+                            "Equipo disponible": ",".join(d.get("Equipo disponible", [])),
+                            "Partes mejorar":   str(d.get("Partes mejorar")),
+                            "Impedido progresar": str(d.get("Impedido progresar")),
+                            "Ejercicio odia":   str(d.get("Ejercicio odia")),
+                            "Ejercicio disfruta": str(d.get("Ejercicio disfruta")),
+                            "P_Disciplina":     str(d.get("P_Disciplina")),
+                            "P_Estres":         str(d.get("P_Estres")),
+                            "P_Sueno":          str(d.get("P_Sueno")),
+                            "P_Motivacion":     str(d.get("P_Motivacion")),
+                            "P_Energia":        str(d.get("P_Energia")),
+                            "P_Hambre":         str(d.get("P_Hambre")),
+                            "P_Recup":          str(d.get("P_Recup")),
+                            "Prioridad":        str(d.get("Prioridad")),
+                            "Menu_Proteinas":   ",".join(d.get("Menu_Proteinas", [])),
+                            "Menu_Carbohidratos": ",".join(d.get("Menu_Carbohidratos", [])),
+                            "Menu_Grasas":      ",".join(d.get("Menu_Grasas", [])),
+                            "Menu_Frutas":      ",".join(d.get("Menu_Frutas", [])),
+                            "Menu_Verduras":    ",".join(d.get("Menu_Verduras", [])),
+                        }
+
+                        with st.spinner("Sincronizando expediente..."):
+                            try:
+                                resp = requests.post(CONFIG["webhook_url"], json=payload, timeout=10)
+                                if resp.status_code == 200 and "success" in resp.text.lower():
+                                    st.markdown(
+                                        f"<div class='id-box'>"
+                                        f"✅ ¡EXPEDIENTE ACTIVADO!<br><br>"
+                                        f"TU ID DE ATLETA:<br>"
+                                        f"<span style='font-size:32px;color:#4CAF50;'>{id_nuevo}</span><br><br>"
+                                        f"<small style='color:#DDD;font-weight:normal;'>"
+                                        f"Guárdalo. Lo necesitarás para reportar tu avance.</small>"
+                                        f"</div>",
+                                        unsafe_allow_html=True,
+                                    )
+                                    st.balloons()
+                                    st.session_state.step = 1
+                                    st.session_state.db   = {}
+                                else:
+                                    st.error(f"Error en servidor: {resp.text[:200]}")
+                            except requests.exceptions.Timeout:
+                                st.error("⏱️ El servidor tardó demasiado. Intenta de nuevo.")
+                            except Exception as e:
+                                st.error(f"Error de conexión: {e}")
+
+    # ── MÓDULO REVISIÓN DE AVANCE ─────────────────────────────────────────
     with tab_revision:
-        st.info("La constancia se mide en datos. Ingresa tu ID para reportar tu estado actual a tu entrenador.")
-        
-        with st.form("form_revision_c2", clear_on_submit=True):
-            id_ingresado = st.text_input("Tu ID de Atleta (Ej: MM247-2026-0001):").strip().upper()
-            st.markdown("<div class='section-header'>1. Evaluación Corporal</div>", unsafe_allow_html=True)
+        st.info("La constancia se mide en datos. Ingresa tu ID y reporta tu estado.")
+
+        with st.form("form_revision", clear_on_submit=True):
+            id_ing = st.text_input("Tu ID de Atleta (Ej: MM247-2026-JGR-A3F2B1):").strip().upper()
+
+            st.markdown("<div class='section-header'>1. Métricas Corporales</div>", unsafe_allow_html=True)
             col1, col2 = st.columns(2)
-            with col1: peso_rev = st.number_input("Peso Actual en Ayunas (kg):", min_value=30.0, value=70.0, step=0.1)
-            with col2: cintura_rev = st.number_input("Contorno de Cintura (cm):", min_value=40.0, value=80.0, step=0.5)
-            
-            st.markdown("<div class='section-header'>2. Métricas de Progreso y Apego</div>", unsafe_allow_html=True)
-            adherencia = st.radio("Nivel de cumplimiento de dieta y macros:", ["Cumplimiento Total (Excelente)", "Cumplimiento Parcial (Aceptable)", "Cumplimiento Bajo (Mal apego)"])
-            fuerza = st.radio("Nivel de fuerza reportado en entrenamientos:", ["Incrementé los pesos o repeticiones", "Me mantuve estable", "Me sentí más débil / fatigado"])
-            sueno_c2 = st.slider("Calidad del sueño esta semana (1-10):", 1, 10, 8)
-            comentarios = st.text_area("Reporte de campo: Dudas, dolores, o sensaciones de la semana:")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            btn_enviar_c2 = st.form_submit_button("🚀 ENVIAR REPORTE DE CAMPO")
-            
-            if btn_enviar_c2:
-                if not id_ingresado:
-                    st.error("❌ El ID de Atleta es obligatorio.")
-                elif df_existente.empty or id_ingresado not in df_existente["ID_Alumno"].values:
-                    st.error("❌ El ID ingresado no está registrado en el sistema. Verifica mayúsculas y guiones.")
+            peso_rev    = col1.number_input("Peso en ayunas (kg):", min_value=30.0, value=70.0, step=0.1)
+            cintura_rev = col2.number_input("Cintura (cm):",        min_value=40.0, value=80.0, step=0.5)
+
+            st.markdown("<div class='section-header'>2. Adherencia y Rendimiento</div>", unsafe_allow_html=True)
+            adherencia = st.radio("Cumplimiento de dieta esta semana:", [
+                "Cumplimiento Total (Excelente)",
+                "Cumplimiento Parcial (Aceptable)",
+                "Cumplimiento Bajo (Mal apego)",
+            ])
+            fuerza = st.radio("Rendimiento en entrenamientos:", [
+                "Incrementé pesos o repeticiones",
+                "Me mantuve estable",
+                "Me sentí más débil / fatigado",
+            ])
+            sueno_rev   = st.slider("Calidad de sueño esta semana (1-10):", 1, 10, 8)
+            comentarios = st.text_area("Observaciones, dudas o sensaciones:")
+
+            if st.form_submit_button("🚀 ENVIAR REPORTE"):
+                if not id_ing:
+                    st.error("❌ El ID es obligatorio.")
+                elif df_existente.empty or id_ing not in df_existente["ID_Alumno"].values:
+                    st.error("❌ ID no encontrado. Verifica mayúsculas y guiones.")
                 else:
                     puntos = 0
-                    if adherencia == "Cumplimiento Total (Excelente)": puntos += 2
+                    if adherencia == "Cumplimiento Total (Excelente)":   puntos += 2
                     elif adherencia == "Cumplimiento Parcial (Aceptable)": puntos += 1
-                    
-                    if fuerza == "Incrementé los pesos o repeticiones": puntos += 2
-                    elif fuerza == "Me mantuve estable": puntos += 1
-                    
-                    estado_calculado = "AVANCE"
-                    if puntos <= 2: estado_calculado = "RETROCESO"
-                    elif puntos == 3: estado_calculado = "LENTO"
 
-                    payload_c2 = {
-                        "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "Tipo_Registro": "REVISION",
-                        "ID_Alumno": id_ingresado,
-                        "Peso_Revision": str(peso_rev),
-                        "Cintura_Revision": str(cintura_rev),
-                        "Adherencia_Dieta": adherencia,
-                        "Progreso_Fuerza": fuerza,
-                        "Energia_SNC": str(sueno_c2),
+                    if fuerza == "Incrementé pesos o repeticiones": puntos += 2
+                    elif fuerza == "Me mantuve estable":            puntos += 1
+
+                    if   puntos >= 3: estado_calc = "AVANCE"
+                    elif puntos == 2: estado_calc = "LENTO"
+                    else:             estado_calc = "RETROCESO"
+
+                    payload_rev = {
+                        "Fecha":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Tipo_Registro":        "REVISION",
+                        "ID_Alumno":            id_ing,
+                        "Peso_Revision":        str(peso_rev),
+                        "Cintura_Revision":     str(cintura_rev),
+                        "Adherencia_Dieta":     adherencia,
+                        "Progreso_Fuerza":      fuerza,
+                        "Energia_SNC":          str(sueno_rev),
                         "Comentarios_Evolucion": comentarios,
-                        "Estado_Calculado": estado_calculado
+                        "Estado_Calculado":     estado_calc,
                     }
-                    
-                    with st.spinner("Evaluando métricas..."):
+
+                    with st.spinner("Registrando métricas..."):
                         try:
-                            requests.post(WEBHOOK_URL, json=payload_c2)
-                            st.success("✅ Evaluación registrada correctamente en el sistema. Mantén el enfoque.")
+                            requests.post(CONFIG["webhook_url"], json=payload_rev, timeout=10)
+                            color_fb = {"AVANCE": "🟢", "LENTO": "🟡", "RETROCESO": "🔴"}
+                            st.success(
+                                f"{color_fb[estado_calc]} Evaluación registrada. "
+                                f"Estado del sistema: **{estado_calc}**. Mantén el enfoque."
+                            )
+                        except requests.exceptions.Timeout:
+                            st.error("⏱️ Timeout. Intenta de nuevo.")
                         except Exception as e:
-                            st.error(f"Error de red al enviar: {e}")
+                            st.error(f"Error: {e}")
