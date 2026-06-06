@@ -106,44 +106,72 @@ st.set_page_config(
 )
 
 # =============================================================================
-# 2. ESTILOS CSS
+# 2. ESTILOS CSS (ESTILO MODERNO, AMIGABLE Y DINÁMICO)
 # =============================================================================
 st.markdown("""
 <style>
-.stApp { background-color: #0E0E0E; color: #FFFFFF; }
-.main-title { font-size: 50px; font-weight: 900; color: #FFFFFF; text-align: center;
-              letter-spacing: 2px; margin-bottom: 0px; text-transform: uppercase; }
-.subtitle { font-size: 16px; color: #A0A0A0; text-align: center; margin-bottom: 35px;
+/* Fondo principal */
+.stApp { background-color: #0F172A; color: #F1F5F9; }
+
+/* Títulos y Subtítulos */
+.main-title { 
+    font-size: 50px; font-weight: 800; 
+    background: -webkit-linear-gradient(45deg, #38BDF8, #8B5CF6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-align: center; letter-spacing: 1px; margin-bottom: 0px; text-transform: uppercase; 
+}
+.subtitle { font-size: 16px; color: #94A3B8; text-align: center; margin-bottom: 35px;
             text-transform: uppercase; letter-spacing: 3px; }
-.section-header { font-size: 22px; font-weight: 900; color: #FFFFFF; margin-top: 30px;
-                  margin-bottom: 15px; border-bottom: 2px solid #D32F2F;
-                  padding-bottom: 8px; text-transform: uppercase; }
-.id-box { background: linear-gradient(135deg, #1B5E20 0%, #000000 100%);
-          border-left: 5px solid #4CAF50; padding: 20px; border-radius: 8px;
-          font-size: 18px; color: #FFFFFF; text-align: center; font-weight: bold;
-          margin-top: 20px; box-shadow: 0 4px 15px rgba(76,175,80,0.3); }
+
+/* Encabezados de sección */
+.section-header { 
+    font-size: 20px; font-weight: 700; color: #38BDF8; margin-top: 30px;
+    margin-bottom: 15px; border-bottom: 1px solid #334155;
+    padding-bottom: 5px; text-transform: uppercase; 
+}
+
+/* Panel de Formulario */
+div[data-testid="stForm"] { 
+    background: #1E293B; padding: 30px; border-radius: 16px;
+    border: 1px solid #334155; box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+}
+
+/* Caja de ID (Verde Esmeralda) */
+.id-box { 
+    background: linear-gradient(135deg, #065F46 0%, #064E3B 100%);
+    border-left: 5px solid #34D399; padding: 25px; border-radius: 12px;
+    color: #ECFDF5; text-align: center; font-weight: bold; margin-top: 20px; 
+}
+
+/* Botones con Degradado */
 div.stButton > button, div[data-testid="stForm"] button {
-    background: linear-gradient(90deg, #D32F2F 0%, #B71C1C 100%);
-    color: white; width: 100%; border-radius: 6px; font-weight: 900;
-    height: 55px; border: none; text-transform: uppercase; letter-spacing: 1px;
-    transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(211,47,47,0.4); }
+    background: linear-gradient(90deg, #3B82F6 0%, #8B5CF6 100%);
+    color: white; width: 100%; border-radius: 8px; font-weight: 700;
+    height: 50px; border: none; text-transform: uppercase; letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+}
 div.stButton > button:hover, div[data-testid="stForm"] button:hover {
-    transform: translateY(-2px); box-shadow: 0 6px 20px rgba(211,47,47,0.6); }
-div[data-testid="stForm"] { background: #181818; padding: 30px; border-radius: 12px;
-    border: 1px solid #333333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-.stTextInput>div>div>input { background-color: #2D2D2D !important; color: white !important; }
-.stSelectbox>div>div { background-color: #2D2D2D !important; color: white !important; }
-.stTextArea>div>div>textarea { background-color: #2D2D2D !important; color: white !important; }
-.barra-base { height:12px; border-radius:6px; width:100%; background:#333333; margin-top:5px; }
-.barra-verde { background:#4CAF50; height:12px; border-radius:6px; box-shadow:0 0 10px #4CAF50; }
-.barra-roja  { background:#D32F2F; height:12px; border-radius:6px; box-shadow:0 0 10px #D32F2F; }
-.barra-amarilla { background:#FBC02D; height:12px; border-radius:6px; box-shadow:0 0 10px #FBC02D; }
-.barra-gris  { background:#757575; height:12px; border-radius:6px; }
-.stProgress > div > div > div > div { background-color: #D32F2F; }
+    transform: translateY(-2px); filter: brightness(1.2);
+}
+
+/* Inputs y Selectores */
+.stTextInput>div>div>input, .stSelectbox>div>div, .stTextArea>div>div>textarea { 
+    background-color: #0F172A !important; color: white !important; border: 1px solid #475569 !important; border-radius: 8px;
+}
+
+/* Barras de Progreso */
+.barra-base { height:10px; border-radius:5px; width:100%; background:#334155; margin-top:5px; }
+.barra-verde { background:#10B981; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(16, 185, 129, 0.5); }
+.barra-roja  { background:#F43F5E; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(244, 63, 94, 0.5); }
+.barra-amarilla { background:#F59E0B; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(245, 158, 11, 0.5); }
+.barra-gris  { background:#94A3B8; height:10px; border-radius:5px; }
+.stProgress > div > div > div > div { background-color: #38BDF8; }
+
+/* Tabs */
 .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { background-color:#222222; border-radius:4px 4px 0 0;
-    padding:10px 20px; color:#AAAAAA; font-weight:bold; }
-.stTabs [aria-selected="true"] { background-color:#D32F2F; color:white !important; }
+.stTabs [data-baseweb="tab"] { background-color:#1E293B; color:#94A3B8; border-radius:8px 8px 0 0; }
+.stTabs [aria-selected="true"] { background-color:#38BDF8 !important; color:#0F172A !important; font-weight:bold; }
 </style>
 """, unsafe_allow_html=True)
 
