@@ -65,8 +65,11 @@ st.markdown("""
     div.stButton > button { background: linear-gradient(90deg, #D32F2F 0%, #B71C1C 100%); color: white; width: 100%; border-radius: 6px; font-weight: 900; height: 55px; border: none; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(211, 47, 47, 0.4); }
     div.stButton > button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(211, 47, 47, 0.6); }
     
-    /* Tarjetas/Tabs de Preguntas */
+    /* Tarjetas/Tabs de Preguntas y legibilidad */
     div[data-testid="stForm"] { background: #181818; padding: 30px; border-radius: 12px; border: 1px solid #333333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    .stTextInput>div>div>input { background-color: #2D2D2D !important; color: white !important; }
+    .stSelectbox>div>div { background-color: #2D2D2D !important; color: white !important; }
+    .stTextArea>div>div>textarea { background-color: #2D2D2D !important; color: white !important; }
     
     /* Barras de Admin */
     .barra-base { height: 12px; border-radius: 6px; width: 100%; background: #333333; margin-top: 5px;}
@@ -204,7 +207,6 @@ def generar_pdf_mm247(norm, mot, revs_df, id_al):
         pdf.line(10, 45, 206, 45)
         pdf.ln(10)
 
-    # (Lógica PDF intacta según tu código base)
     draw_header("HOJA 1: PERFIL CLINICO Y DIAGNOSTICO")
     pdf.set_font('Arial', 'B', 12)
     pdf.cell(0, 10, limpiar("1. DATOS GENERALES Y METRICAS DE INICIO"), 0, 1)
@@ -443,15 +445,14 @@ else:
     st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>SISTEMA DE ALTA INTENSIDAD Y DISCIPLINA</div>", unsafe_allow_html=True)
     
-    # Navegación del cliente estructurada en pestañas para evitar menús laterales
     tab_nuevo, tab_revision = st.tabs(["📝 Iniciar Expediente Nuevo", "🔄 Registrar Mi Avance (ID Requerido)"])
 
     # --- MÓDULO 1: FORMULARIO MAESTRO (GAMIFICADO) ---
     with tab_nuevo:
         st.info("🔥 Bienvenido al ecosistema MM247. Para construir músculo de calidad, necesitamos datos precisos. Completa las siguientes misiones.")
         
+        # EL FORMULARIO ENVUELVE TODO PARA EVITAR EL "ENTER"
         with st.form("formulario_maestro_mm247_cerrado", clear_on_submit=False):
-            # Transformamos las pestañas en "Misiones" para gamificar el proceso
             m1, m2, m3, m4, m5, m6 = st.tabs([
                 "🧬 Misión 1: Identidad", 
                 "⚔️ Misión 2: Batallas Previas", 
@@ -544,10 +545,10 @@ else:
                 
                 st.markdown("<div class='section-header'>9. PERFIL NUTRICIONAL</div>", unsafe_allow_html=True)
                 f_obj_nutri = st.selectbox("Preferencia alimenticia actual:", ["Bajar porcentaje de grasa", "Aumento de masa magra"])
-                f_alergias = st.selectbox("¿Alergias alimentarias graves?", ["Ninguna", "Frutos secos", "Mariscos"])
-                f_intolerancia = st.selectbox("¿Intolerancias digestivas?", ["Ninguna", "Lactosa", "Gluten"])
+                f_alergias = st.text_input("¿Tienes alergias alimentarias graves?", placeholder="Ej: Cacahuates, mariscos... (Escribe 'Ninguna' si no aplica)")
+                f_intolerancia = st.text_input("¿Padeces intolerancias digestivas?", placeholder="Ej: Lactosa, gluten, síndrome de intestino irritable...")
                 f_tipo_alimentacion = st.selectbox("Estructura dietética:", ["Omnívoro", "Vegetariano"])
-                f_no_gustan = st.selectbox("Alimentos que rechazas rotundamente:", ["Ninguno", "Pescados"])
+                f_no_gustan = st.text_input("Alimentos que rechazas rotundamente:", placeholder="Ej: Pescado, cebolla, brócoli, champiñones...")
                 f_comer_fuera = st.selectbox("¿Sueles comer en restaurantes?", ["Nunca", "1-2 veces por semana"])
                 f_presupuesto = st.selectbox("Presupuesto para tu plan nutricional:", ["Básico / Económico", "Estándar flexible"])
                 f_horarios_fijos = st.selectbox("¿Necesitas horarios estrictos para comer?", ["Sí", "No"])
@@ -561,10 +562,10 @@ else:
                 
                 st.markdown("<div class='section-header'>11. METAS DE ENFOQUE Y FILTROS</div>", unsafe_allow_html=True)
                 f_partes_mejorar = st.selectbox("Sector muscular prioritario a desarrollar:", ["Glúteos / Femorales", "Cuádriceps", "Hombros y Espalda", "Brazos", "Abdomen / Definición"])
-                f_dificultad = st.selectbox("Mayor obstáculo que has enfrentado antes:", ["Falta de constancia", "Estancamiento en cargas"])
-                f_odia_ex = st.selectbox("Ejercicio que definitivamente rechazas:", ["Ninguno", "Sentadilla Libre"])
-                f_disfruta_ex = st.selectbox("Ejercicio con mejor conexión mente-músculo:", ["Prensa de piernas", "Extensiones"])
-                f_impide_progresar = st.selectbox("¿Qué saboteó tu avance en el pasado?", ["Falta de tiempo/Trabajo", "Planes aburridos o genéricos"])
+                f_dificultad = st.text_input("¿Cuál ha sido tu mayor obstáculo en el pasado?", placeholder="Ej: Me rindo a los 2 meses, me estanco en los pesos, me aburro...")
+                f_odia_ex = st.text_input("¿Qué ejercicio odias y prefieres evitar?", placeholder="Ej: Sentadilla libre, burpees, dominadas... (O 'Ninguno')")
+                f_disfruta_ex = st.text_input("¿Con qué ejercicio sientes mayor conexión o bombeo?", placeholder="Ej: Hip Thrust, Prensa, Curl de bíceps, Jalón al pecho...")
+                f_impide_progresar = st.text_area("¿Qué saboteó tu avance en intentos anteriores?", placeholder="Ej: Exceso de trabajo, malas dietas, falta de tiempo, estrés...")
                 
                 st.markdown("<div class='section-header'>12. ESCALAS PSICOMÉTRICAS (1 AL 10)</div>", unsafe_allow_html=True)
                 f_p_disciplina = st.slider("Tu nivel de Disciplina Actual:", 1, 10, 8)
@@ -577,6 +578,7 @@ else:
                 f_prioridad = st.selectbox("Prioridad central de tu entrenamiento:", ["Salud", "Estética", "Rendimiento"])
                 
                 st.markdown("<br>", unsafe_allow_html=True)
+                # Botón dentro del st.form, evitará que el Enter mande los datos antes de tiempo
                 enviar_maestro = st.form_submit_button("🚀 REGISTRAR EXPEDIENTE EN LA BASE DE DATOS MM247")
                 
             if enviar_maestro:
@@ -617,57 +619,56 @@ else:
     # --- MÓDULO 2: REVISIÓN DE AVANCE (CLIENTE) ---
     with tab_revision:
         st.info("La constancia se mide en datos. Ingresa tu ID para reportar tu estado actual a tu entrenador.")
-        id_ingresado = st.text_input("Tu ID de Atleta (Ej: MM247-2026-0001):").strip().upper()
         
-        if id_ingresado:
-            if not df_existente.empty and id_ingresado in df_existente["ID_Alumno"].values:
-                st.success("Identidad Verificada. Ingresa tus métricas de esta semana:")
-                
-                with st.form("form_revision_c2", clear_on_submit=True):
-                    st.markdown("<div class='section-header'>1. Evaluación Corporal</div>", unsafe_allow_html=True)
-                    col1, col2 = st.columns(2)
-                    with col1: peso_rev = st.number_input("Peso Actual en Ayunas (kg):", min_value=30.0, value=70.0, step=0.1)
-                    with col2: cintura_rev = st.number_input("Contorno de Cintura (cm):", min_value=40.0, value=80.0, step=0.5)
+        with st.form("form_revision_c2", clear_on_submit=True):
+            id_ingresado = st.text_input("Tu ID de Atleta (Ej: MM247-2026-0001):").strip().upper()
+            st.markdown("<div class='section-header'>1. Evaluación Corporal</div>", unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            with col1: peso_rev = st.number_input("Peso Actual en Ayunas (kg):", min_value=30.0, value=70.0, step=0.1)
+            with col2: cintura_rev = st.number_input("Contorno de Cintura (cm):", min_value=40.0, value=80.0, step=0.5)
+            
+            st.markdown("<div class='section-header'>2. Métricas de Progreso y Apego</div>", unsafe_allow_html=True)
+            adherencia = st.radio("Nivel de cumplimiento de dieta y macros:", ["Cumplimiento Total (Excelente)", "Cumplimiento Parcial (Aceptable)", "Cumplimiento Bajo (Mal apego)"])
+            fuerza = st.radio("Nivel de fuerza reportado en entrenamientos:", ["Incrementé los pesos o repeticiones", "Me mantuve estable", "Me sentí más débil / fatigado"])
+            sueno_c2 = st.slider("Calidad del sueño esta semana (1-10):", 1, 10, 8)
+            comentarios = st.text_area("Reporte de campo: Dudas, dolores, o sensaciones de la semana:")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_enviar_c2 = st.form_submit_button("🚀 ENVIAR REPORTE DE CAMPO")
+            
+            if btn_enviar_c2:
+                if not id_ingresado:
+                    st.error("❌ El ID de Atleta es obligatorio.")
+                elif df_existente.empty or id_ingresado not in df_existente["ID_Alumno"].values:
+                    st.error("❌ El ID ingresado no está registrado en el sistema. Verifica mayúsculas y guiones.")
+                else:
+                    puntos = 0
+                    if adherencia == "Cumplimiento Total (Excelente)": puntos += 2
+                    elif adherencia == "Cumplimiento Parcial (Aceptable)": puntos += 1
                     
-                    st.markdown("<div class='section-header'>2. Métricas de Progreso y Apego</div>", unsafe_allow_html=True)
-                    adherencia = st.radio("Nivel de cumplimiento de dieta y macros:", ["Cumplimiento Total (Excelente)", "Cumplimiento Parcial (Aceptable)", "Cumplimiento Bajo (Mal apego)"])
-                    fuerza = st.radio("Nivel de fuerza reportado en entrenamientos:", ["Incrementé los pesos o repeticiones", "Me mantuve estable", "Me sentí más débil / fatigado"])
-                    sueno_c2 = st.slider("Calidad del sueño esta semana (1-10):", 1, 10, 8)
-                    comentarios = st.text_area("Reporte de campo: Dudas, dolores, o sensaciones de la semana:")
+                    if fuerza == "Incrementé los pesos o repeticiones": puntos += 2
+                    elif fuerza == "Me mantuve estable": puntos += 1
                     
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    btn_enviar_c2 = st.form_submit_button("🚀 ENVIAR REPORTE DE CAMPO")
-                    
-                    if btn_enviar_c2:
-                        puntos = 0
-                        if adherencia == "Cumplimiento Total (Excelente)": puntos += 2
-                        elif adherencia == "Cumplimiento Parcial (Aceptable)": puntos += 1
-                        
-                        if fuerza == "Incrementé los pesos o repeticiones": puntos += 2
-                        elif fuerza == "Me mantuve estable": puntos += 1
-                        
-                        estado_calculado = "AVANCE"
-                        if puntos <= 2: estado_calculado = "RETROCESO"
-                        elif puntos == 3: estado_calculado = "LENTO"
+                    estado_calculado = "AVANCE"
+                    if puntos <= 2: estado_calculado = "RETROCESO"
+                    elif puntos == 3: estado_calculado = "LENTO"
 
-                        payload_c2 = {
-                            "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "Tipo_Registro": "REVISION",
-                            "ID_Alumno": id_ingresado,
-                            "Peso_Revision": str(peso_rev),
-                            "Cintura_Revision": str(cintura_rev),
-                            "Adherencia_Dieta": adherencia,
-                            "Progreso_Fuerza": fuerza,
-                            "Energia_SNC": str(sueno_c2),
-                            "Comentarios_Evolucion": comentarios,
-                            "Estado_Calculado": estado_calculado
-                        }
-                        
-                        with st.spinner("Evaluando métricas..."):
-                            try:
-                                requests.post(WEBHOOK_URL, json=payload_c2)
-                                st.success("✅ Evaluación registrada correctamente en el sistema. Mantén el enfoque.")
-                            except Exception as e:
-                                st.error(f"Error de red al enviar: {e}")
-            else:
-                st.error("❌ El ID ingresado no está registrado en el sistema. Verifica mayúsculas y guiones.")
+                    payload_c2 = {
+                        "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "Tipo_Registro": "REVISION",
+                        "ID_Alumno": id_ingresado,
+                        "Peso_Revision": str(peso_rev),
+                        "Cintura_Revision": str(cintura_rev),
+                        "Adherencia_Dieta": adherencia,
+                        "Progreso_Fuerza": fuerza,
+                        "Energia_SNC": str(sueno_c2),
+                        "Comentarios_Evolucion": comentarios,
+                        "Estado_Calculado": estado_calculado
+                    }
+                    
+                    with st.spinner("Evaluando métricas..."):
+                        try:
+                            requests.post(WEBHOOK_URL, json=payload_c2)
+                            st.success("✅ Evaluación registrada correctamente en el sistema. Mantén el enfoque.")
+                        except Exception as e:
+                            st.error(f"Error de red al enviar: {e}")
