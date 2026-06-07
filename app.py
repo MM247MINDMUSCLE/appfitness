@@ -21,7 +21,7 @@ import uuid
 CONFIG = {
     "page_title": "MINDMUSCLE247",
     "page_icon": "💪",
-    "webhook_url": "https://script.google.com/macros/s/AKfycbwTFbvXjNq9pEUBefEyL715AWyvHR2PpxotzRSPBpMeE5AVWNewO9AcqZ3PeXxmu_s0/exec",
+    "webhook_url": "https://script.google.com/macros/s/AKfycbx5vDCKmqpe-vsZ2fan0ZQoesLjajIHHHXHOZLtG7-w6-ts3uUl1WkZVHnPnn0F3Cbn/exec",
     "sheet_url": "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
     "admin_password": "MM247_Admin",
     "total_misiones": 6,
@@ -106,7 +106,7 @@ st.set_page_config(
 )
 
 # =============================================================================
-# 2. ESTILOS CSS (ESTILO MODERNO, AMIGABLE Y DINÁMICO)
+# 2. ESTILOS CSS (DISEÑO PROFESIONAL "DARK MODE" VIBRANTE)
 # =============================================================================
 st.markdown("""
 <style>
@@ -152,7 +152,7 @@ div.stButton > button, div[data-testid="stForm"] button {
     transition: all 0.3s ease;
 }
 div.stButton > button:hover, div[data-testid="stForm"] button:hover {
-    transform: translateY(-2px); filter: brightness(1.2);
+    transform: translateY(-2px); filter: brightness(1.2); box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
 }
 
 /* Inputs y Selectores */
@@ -160,7 +160,7 @@ div.stButton > button:hover, div[data-testid="stForm"] button:hover {
     background-color: #0F172A !important; color: white !important; border: 1px solid #475569 !important; border-radius: 8px;
 }
 
-/* Barras de Progreso */
+/* Barras de Progreso y Medidores */
 .barra-base { height:10px; border-radius:5px; width:100%; background:#334155; margin-top:5px; }
 .barra-verde { background:#10B981; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(16, 185, 129, 0.5); }
 .barra-roja  { background:#F43F5E; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(244, 63, 94, 0.5); }
@@ -170,7 +170,7 @@ div.stButton > button:hover, div[data-testid="stForm"] button:hover {
 
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { background-color:#1E293B; color:#94A3B8; border-radius:8px 8px 0 0; }
+.stTabs [data-baseweb="tab"] { background-color:#1E293B; color:#94A3B8; border-radius:8px 8px 0 0; border: none; }
 .stTabs [aria-selected="true"] { background-color:#38BDF8 !important; color:#0F172A !important; font-weight:bold; }
 </style>
 """, unsafe_allow_html=True)
@@ -319,16 +319,19 @@ def calcular_metabolismo(datos: dict) -> dict:
 def _limpiar(texto: str) -> str:
     return str(texto).encode("latin-1", "replace").decode("latin-1")
 
+
 def _tiene_lesion(norm: dict) -> bool:
     lesion = norm.get("Lesión actual", "Ninguna").lower()
     prohibido = norm.get("Prohibido ejercicio", "No").lower()
     return lesion != "ninguna" or prohibido != "no"
+
 
 def _dias_entrenamiento(norm: dict) -> int:
     try:
         return int(str(norm.get("Días entrenar", "4")).strip()[0])
     except Exception:
         return 4
+
 
 def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) -> bytes:
     pdf = FPDF("P", "mm", "Letter")
@@ -1009,6 +1012,7 @@ else:
                                         unsafe_allow_html=True,
                                     )
                                     st.balloons()
+                                    st.cache_data.clear() # Limpia caché para que el Admin lo vea al instante
                                     st.session_state.step = 1
                                     st.session_state.db   = {}
                                 else:
@@ -1076,12 +1080,16 @@ else:
 
                     with st.spinner("Registrando métricas..."):
                         try:
-                            requests.post(CONFIG["webhook_url"], json=payload_rev, timeout=10)
-                            color_fb = {"AVANCE": "🟢", "LENTO": "🟡", "RETROCESO": "🔴"}
-                            st.success(
-                                f"{color_fb[estado_calc]} Evaluación registrada. "
-                                f"Estado del sistema: **{estado_calc}**. Mantén el enfoque."
-                            )
+                            resp = requests.post(CONFIG["webhook_url"], json=payload_rev, timeout=10)
+                            if resp.status_code == 200 and "success" in resp.text.lower():
+                                st.cache_data.clear() # Limpia caché para que el Admin lo vea al instante
+                                color_fb = {"AVANCE": "🟢", "LENTO": "🟡", "RETROCESO": "🔴"}
+                                st.success(
+                                    f"{color_fb[estado_calc]} Evaluación registrada. "
+                                    f"Estado del sistema: **{estado_calc}**. Mantén el enfoque."
+                                )
+                            else:
+                                st.error(f"Error en servidor: {resp.text[:200]}")
                         except requests.exceptions.Timeout:
                             st.error("⏱️ Timeout. Intenta de nuevo.")
                         except Exception as e:
