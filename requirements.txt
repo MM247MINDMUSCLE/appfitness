@@ -1,7 +1,4 @@
 streamlit
 pandas
-qrcode
-pillow
-plotly
-st-gsheets-connection
-fpdf2
+fpdf
+requests
