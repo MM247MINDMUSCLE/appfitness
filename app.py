@@ -4,7 +4,7 @@
           SISTEMA DIGITAL CORE MM247 — MIND MUSCLE ECOSYSTEM
    EVALUACIÓN METABÓLICA, CONTROL BIOMECÁNICO Y AUDITORÍA DE ADHERENCIA
    
-   VERSIÓN 2.1 — ARQUITECTURA REFACTORIZADA CON VALIDACIÓN ESTRICTA
+   VERSIÓN 3.0 — REDISEÑO LIGHT MODE, AVATARES 3D Y AUDITORÍA CLÍNICA
 ================================================================================
 """
 
@@ -20,19 +20,17 @@ import uuid
 # =============================================================================
 CONFIG = {
     "page_title": "MINDMUSCLE247",
-    "page_icon": "💪",
+    "page_icon": "🟩",
     "webhook_url": "https://script.google.com/macros/s/AKfycbx5vDCKmqpe-vsZ2fan0ZQoesLjajIHHHXHOZLtG7-w6-ts3uUl1WkZVHnPnn0F3Cbn/exec",
     "sheet_url": "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
     "admin_password": "MM247_Admin",
     "total_misiones": 6,
-    # Factor de actividad para TDEE según nivel reportado
     "factores_actividad": {
         "Sedentario":            1.20,
         "Poco activo":           1.375,
         "Moderadamente activo":  1.55,
         "Muy activo":            1.725,
     },
-    # Ejercicios por día según músculo objetivo y lesión
     "rutinas": {
         "Empuje": {
             "sin_lesion": [
@@ -106,81 +104,101 @@ st.set_page_config(
 )
 
 # =============================================================================
-# 2. ESTILOS CSS (DISEÑO PROFESIONAL "DARK MODE" VIBRANTE)
+# 2. ESTILOS CSS (DISEÑO LIGHT MODE + VERDE ESMERALDA)
 # =============================================================================
 st.markdown("""
 <style>
 /* Fondo principal */
-.stApp { background-color: #0F172A; color: #F1F5F9; }
+.stApp { background-color: #F8F9FA; color: #333333; }
 
 /* Títulos y Subtítulos */
 .main-title { 
     font-size: 50px; font-weight: 800; 
-    background: -webkit-linear-gradient(45deg, #38BDF8, #8B5CF6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: #2C3E50;
     text-align: center; letter-spacing: 1px; margin-bottom: 0px; text-transform: uppercase; 
 }
-.subtitle { font-size: 16px; color: #94A3B8; text-align: center; margin-bottom: 35px;
+.subtitle { font-size: 16px; color: #7F8C8D; text-align: center; margin-bottom: 35px;
             text-transform: uppercase; letter-spacing: 3px; }
 
 /* Encabezados de sección */
 .section-header { 
-    font-size: 20px; font-weight: 700; color: #38BDF8; margin-top: 30px;
-    margin-bottom: 15px; border-bottom: 1px solid #334155;
+    font-size: 20px; font-weight: 700; color: #50C878; margin-top: 30px;
+    margin-bottom: 15px; border-bottom: 2px solid #E5E7EB;
     padding-bottom: 5px; text-transform: uppercase; 
 }
 
 /* Panel de Formulario */
 div[data-testid="stForm"] { 
-    background: #1E293B; padding: 30px; border-radius: 16px;
-    border: 1px solid #334155; box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+    background: #FFFFFF; padding: 30px; border-radius: 16px;
+    border: 1px solid #E5E7EB; box-shadow: 0 4px 20px rgba(0,0,0,0.05); 
+}
+
+/* Tarjetas de Métricas (Metric Cards) */
+.metric-card {
+    background-color: #FFFFFF; padding: 20px; border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #50C878;
+    margin-bottom: 20px; border-top: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB;
 }
 
 /* Caja de ID (Verde Esmeralda) */
 .id-box { 
-    background: linear-gradient(135deg, #065F46 0%, #064E3B 100%);
-    border-left: 5px solid #34D399; padding: 25px; border-radius: 12px;
-    color: #ECFDF5; text-align: center; font-weight: bold; margin-top: 20px; 
+    background: linear-gradient(135deg, #50C878 0%, #3CB371 100%);
+    border-left: 5px solid #2E8B57; padding: 25px; border-radius: 12px;
+    color: #FFFFFF; text-align: center; font-weight: bold; margin-top: 20px; 
 }
 
-/* Botones con Degradado */
+/* Botones con Degradado Esmeralda */
 div.stButton > button, div[data-testid="stForm"] button {
-    background: linear-gradient(90deg, #3B82F6 0%, #8B5CF6 100%);
+    background: linear-gradient(90deg, #50C878 0%, #3CB371 100%);
     color: white; width: 100%; border-radius: 8px; font-weight: 700;
     height: 50px; border: none; text-transform: uppercase; letter-spacing: 0.5px;
     transition: all 0.3s ease;
 }
 div.stButton > button:hover, div[data-testid="stForm"] button:hover {
-    transform: translateY(-2px); filter: brightness(1.2); box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
-}
-
-/* Inputs y Selectores */
-.stTextInput>div>div>input, .stSelectbox>div>div, .stTextArea>div>div>textarea { 
-    background-color: #0F172A !important; color: white !important; border: 1px solid #475569 !important; border-radius: 8px;
+    transform: translateY(-2px); filter: brightness(1.1); box-shadow: 0 8px 20px rgba(80, 200, 120, 0.4);
+    color: white;
 }
 
 /* Barras de Progreso y Medidores */
-.barra-base { height:10px; border-radius:5px; width:100%; background:#334155; margin-top:5px; }
-.barra-verde { background:#10B981; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(16, 185, 129, 0.5); }
-.barra-roja  { background:#F43F5E; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(244, 63, 94, 0.5); }
+.barra-base { height:10px; border-radius:5px; width:100%; background:#E5E7EB; margin-top:5px; }
+.barra-verde { background:#50C878; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(80, 200, 120, 0.5); }
+.barra-roja  { background:#EF4444; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(239, 68, 68, 0.5); }
 .barra-amarilla { background:#F59E0B; height:10px; border-radius:5px; box-shadow:0 0 10px rgba(245, 158, 11, 0.5); }
 .barra-gris  { background:#94A3B8; height:10px; border-radius:5px; }
-.stProgress > div > div > div > div { background-color: #38BDF8; }
+.stProgress > div > div > div > div { background-color: #50C878; }
 
 /* Tabs */
 .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { background-color:#1E293B; color:#94A3B8; border-radius:8px 8px 0 0; border: none; }
-.stTabs [aria-selected="true"] { background-color:#38BDF8 !important; color:#0F172A !important; font-weight:bold; }
+.stTabs [data-baseweb="tab"] { background-color:#FFFFFF; color:#7F8C8D; border-radius:8px 8px 0 0; border: 1px solid #E5E7EB; border-bottom: none; }
+.stTabs [aria-selected="true"] { background-color:#50C878 !important; color:#FFFFFF !important; font-weight:bold; border-color: #50C878; }
 </style>
 """, unsafe_allow_html=True)
 
 # =============================================================================
+# 2.5 LÓGICA DE AVATARES 3D (READY PLAYER ME)
+# ==========================================
+def obtener_avatar_url(estatus):
+    """
+    Retorna la URL del avatar 3D dependiendo del estatus del alumno.
+    (Utilizamos un ID base que puedes sustituir más adelante por uno dinámico)
+    """
+    base_url = "https://models.readyplayer.me/648b28f7f9037c9521369ec9.png"
+    
+    if estatus == "AVANCE":
+        # Pose de victoria, cámara cercana, sonrisa
+        return f"{base_url}?pose=A&camera=portrait&blendShape=smile"
+    elif estatus == "RETROCESO":
+        # Pose neutral/reposo, cuerpo entero para análisis
+        return f"{base_url}?pose=T&camera=fullbody"
+    else:
+        # Estándar para Lento/Mantenimiento
+        return f"{base_url}?camera=portrait"
+
+# =============================================================================
 # 3. CAPA DE DATOS — cacheada para no hacer HTTP en cada recarga
 # =============================================================================
-@st.cache_data(ttl=60)  # refresca cada 60 segundos
+@st.cache_data(ttl=60)
 def cargar_base_datos() -> pd.DataFrame:
-    """Carga el Google Sheet y normaliza columnas básicas."""
     try:
         url = f"{CONFIG['sheet_url']}&nocache={datetime.datetime.now().timestamp()}"
         df = pd.read_csv(url)
@@ -193,9 +211,7 @@ def cargar_base_datos() -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-
 def generar_id_unico(nombre: str) -> str:
-    """Genera ID único usando UUID4 — sin riesgo de colisión."""
     iniciales = "".join([p[0].upper() for p in str(nombre).strip().split() if p])[:3]
     if not iniciales:
         iniciales = "MM"
@@ -203,13 +219,10 @@ def generar_id_unico(nombre: str) -> str:
     sufijo = str(uuid.uuid4().hex)[:6].upper()
     return f"MM247-{anio}-{iniciales}-{sufijo}"
 
-
 # =============================================================================
 # 4. MOTOR DE NORMALIZACIÓN
 # =============================================================================
 def normalizar_datos_alumno(datos_raw: pd.Series) -> dict:
-    """Extrae campos del registro crudo usando búsqueda por palabras clave."""
-
     def buscar(keywords: list, defecto: str = "", idx_respaldo: int = None) -> str:
         for col in datos_raw.index:
             col_l = str(col).lower().strip()
@@ -248,17 +261,14 @@ def normalizar_datos_alumno(datos_raw: pd.Series) -> dict:
         "Menu_Verduras":      buscar(["menu_verduras", "verduras"],             "Brócoli"),
     }
 
-
 # =============================================================================
 # 5. MOTOR METABÓLICO
 # =============================================================================
 def _parse_float(valor: str, defecto: float) -> float:
-    """Convierte string a float limpiando unidades comunes."""
     try:
         return float(str(valor).replace("kg", "").replace("cm", "").replace("años", "").strip().split()[0])
     except Exception:
         return defecto
-
 
 def calcular_metabolismo(datos: dict) -> dict:
     peso     = _parse_float(datos.get("Peso actual",        "80"),  80.0)
@@ -312,26 +322,22 @@ def calcular_metabolismo(datos: dict) -> dict:
         "estatura":    estatura,
     }
 
-
 # =============================================================================
-# 6. MOTOR DE PDF
+# 6. MOTOR DE PDF (ACTUALIZADO A DISEÑO ESMERALDA Y HOJA 4 CLÍNICA)
 # =============================================================================
 def _limpiar(texto: str) -> str:
     return str(texto).encode("latin-1", "replace").decode("latin-1")
-
 
 def _tiene_lesion(norm: dict) -> bool:
     lesion = norm.get("Lesión actual", "Ninguna").lower()
     prohibido = norm.get("Prohibido ejercicio", "No").lower()
     return lesion != "ninguna" or prohibido != "no"
 
-
 def _dias_entrenamiento(norm: dict) -> int:
     try:
         return int(str(norm.get("Días entrenar", "4")).strip()[0])
     except Exception:
         return 4
-
 
 def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) -> bytes:
     pdf = FPDF("P", "mm", "Letter")
@@ -341,26 +347,27 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
 
     def header(titulo: str):
         pdf.add_page()
-        pdf.set_fill_color(17, 17, 17)
+        pdf.set_fill_color(80, 200, 120) # Verde Esmeralda
         pdf.rect(0, 0, 216, 30, "F")
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", "B", 24)
-        pdf.set_xy(10, 8);  pdf.cell(100, 10, "MIND MUSCLE",  0, 0, "L")
+        pdf.set_xy(10, 8);  pdf.cell(100, 10, "MIND MUSCLE 247",  0, 0, "L")
         pdf.set_font("Arial", "B", 12)
         pdf.set_xy(160, 12); pdf.cell(45, 10, "CONFIDENCIAL", 0, 0, "R")
-        pdf.set_text_color(200, 200, 200)
+        pdf.set_text_color(240, 255, 240)
         pdf.set_font("Arial", "", 10)
         pdf.set_xy(10, 18);  pdf.cell(100, 10, f"ID: {id_al}", 0, 0, "L")
-        pdf.set_text_color(17, 17, 17)
+        pdf.set_text_color(44, 62, 80) # Gris Oscuro
         pdf.set_font("Arial", "B", 14)
         pdf.set_xy(10, 35);  pdf.cell(196, 10, _limpiar(titulo), 0, 1, "C")
-        pdf.set_draw_color(0, 0, 0); pdf.set_line_width(0.5)
+        pdf.set_draw_color(229, 231, 235); pdf.set_line_width(0.5)
         pdf.line(10, 45, 206, 45); pdf.ln(10)
 
     def fila_dato(label: str, valor: str, col_w: int = 98):
         pdf.set_font("Arial", "B", 10); pdf.cell(col_w, 7, _limpiar(label), 1, 0, "L")
         pdf.set_font("Arial", "",  10); pdf.cell(col_w, 7, _limpiar(valor), 1, 1, "L")
 
+    # --- HOJA 1 ---
     header("HOJA 1: PERFIL CLÍNICO Y DIAGNÓSTICO")
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, _limpiar("1. DATOS GENERALES"), 0, 1)
@@ -380,12 +387,12 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
     pdf.ln(8)
 
     pdf.set_font("Arial", "B", 12)
-    pdf.set_text_color(204, 0, 0)
+    pdf.set_text_color(239, 68, 68) # Rojo suave para alertas
     pdf.cell(0, 10, _limpiar("3. ALERTAS BIOMECÁNICAS"), 0, 1)
-    pdf.set_fill_color(255, 240, 240); pdf.set_draw_color(204, 0, 0)
+    pdf.set_fill_color(254, 242, 242); pdf.set_draw_color(239, 68, 68)
     pdf.rect(10, pdf.get_y(), 196, 32, "FD")
     pdf.set_xy(15, pdf.get_y() + 4)
-    pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 10)
+    pdf.set_text_color(51, 51, 51); pdf.set_font("Arial", "", 10)
     for linea in [
         f"Lesión / Condición : {norm['Lesión actual']} / {norm['Condición médica']}",
         f"Restricción de mov.: {norm['Prohibido ejercicio']}",
@@ -394,6 +401,7 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
     ]:
         pdf.set_x(15); pdf.cell(0, 6, _limpiar(f"• {linea}"), 0, 1)
 
+    # --- HOJA 2 ---
     header("HOJA 2: PROGRAMACIÓN SEMANAL DE ENTRENAMIENTO")
     estado_protocolo = "ADAPTADO" if con_lesion else "ESTÁNDAR"
     pdf.set_font("Arial", "B", 11)
@@ -411,10 +419,10 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
 
     for i, bloque in enumerate(bloques[:num_dias]):
         ejercicios = CONFIG["rutinas"][bloque][modo]
-        pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(80, 200, 120); pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(196, 8, _limpiar(nombres_bloque[i]), 0, 1, "L", fill=True)
-        pdf.set_fill_color(238, 238, 238); pdf.set_text_color(17, 17, 17)
+        pdf.set_fill_color(243, 244, 246); pdf.set_text_color(51, 51, 51)
         for txt, w in [("EJERCICIO", 90), ("SERIES", 26), ("REPS", 40), ("DESCANSO", 40)]:
             pdf.cell(w, 7, _limpiar(txt), 1, 0, "C", fill=True)
         pdf.ln()
@@ -426,6 +434,7 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
             pdf.cell(40, 7, _limpiar(desc),   1, 1, "C")
         pdf.ln(6)
 
+    # --- HOJA 3 ---
     header("HOJA 3: PROTOCOLO NUTRICIONAL")
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, _limpiar("1. MÉTRICAS METABÓLICAS"), 0, 1)
@@ -437,11 +446,11 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
 
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, _limpiar("2. MACRONUTRIENTES DIARIOS (Regla MM247: 2g Prot · 1g Grasa / kg)"), 0, 1)
-    pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
+    pdf.set_fill_color(80, 200, 120); pdf.set_text_color(255, 255, 255)
     for h, w in [("PROTEÍNA", 49), ("CARBOHIDRATOS", 49), ("GRASAS", 49), ("CALORÍAS", 49)]:
         pdf.cell(w, 8, _limpiar(h), 1, 0, "C", fill=True)
     pdf.ln()
-    pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "B", 13)
+    pdf.set_text_color(51, 51, 51); pdf.set_font("Arial", "B", 13)
     for val, w in [(f"{mot['prot']}g", 49), (f"{mot['carbs']}g", 49),
                    (f"{mot['grasa']}g", 49), (f"{mot['cals']} kcal", 49)]:
         pdf.cell(w, 10, _limpiar(val), 1, 0, "C")
@@ -457,7 +466,7 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
     k_c = round(mot["cals"]  / 4, 0)
 
     for comida in comidas:
-        pdf.set_fill_color(238, 238, 238); pdf.set_font("Arial", "B", 11)
+        pdf.set_fill_color(243, 244, 246); pdf.set_font("Arial", "B", 11)
         pdf.cell(196, 8, _limpiar(comida), 0, 1, "L", fill=True)
         pdf.set_font("Arial", "B", 10)
         pdf.cell(0, 6, _limpiar(f"  {k_c} kcal  |  {p_c}g Prot  |  {c_c}g Carbs  |  {g_c}g Grasa"), 0, 1)
@@ -468,78 +477,88 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
         pdf.cell(0, 6, _limpiar(f"  Verduras  : {norm['Menu_Verduras']}"), 0, 1)
         pdf.ln(3)
 
+    # --- HOJA 4 (AMPLIADA Y ESPECIALIZADA) ---
     if len(revs_df) > 0:
-        header("HOJA 4: AUDITORÍA DE RESULTADOS Y PLAN DE ACCIÓN")
+        header("HOJA 4: AUDITORÍA CLÍNICA Y PLAN DE ACCIÓN")
         ult = revs_df.iloc[-1]
-        try:
-            peso_actual = float(str(ult.get("Peso_Revision", mot["peso"])).replace(",", "."))
-        except Exception:
-            peso_actual = mot["peso"]
+        
+        try: peso_actual = float(str(ult.get("Peso_Revision", mot["peso"])).replace(",", "."))
+        except: peso_actual = mot["peso"]
+        
+        try: grasa_actual = float(str(ult.get("Grasa_Revision", 0)).replace(",", "."))
+        except: grasa_actual = 0.0
+        
+        try: cintura_actual = float(str(ult.get("Cintura_Revision", 0)).replace(",", "."))
+        except: cintura_actual = 0.0
 
         dif_peso = round(peso_actual - mot["peso"], 1)
         estado   = str(ult.get("Estado_Calculado", "AVANCE")).upper()
 
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, _limpiar("1. COMPARATIVO DE MÉTRICAS"), 0, 1)
-        pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
-        for h, w in [("MÉTRICA", 60), ("INICIAL", 45), ("ACTUAL", 45), ("DELTA", 46)]:
+        pdf.cell(0, 10, _limpiar("1. COMPARATIVO BIOMÉTRICO EXHAUSTIVO"), 0, 1)
+        pdf.set_fill_color(80, 200, 120); pdf.set_text_color(255, 255, 255)
+        for h, w in [("MÉTRICA", 60), ("BASE (INICIO)", 45), ("ACTUAL", 45), ("DELTA (+/-)", 46)]:
             pdf.cell(w, 8, _limpiar(h), 1, 0, "C", fill=True)
         pdf.ln()
 
-        pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 11)
-        pdf.cell(60, 8, "Peso Corporal",   1, 0, "C")
+        pdf.set_text_color(51, 51, 51); pdf.set_font("Arial", "", 11)
+        
+        # Fila Peso
+        pdf.cell(60, 8, "Peso Corporal", 1, 0, "C")
         pdf.cell(45, 8, f"{mot['peso']} kg", 1, 0, "C")
         pdf.cell(45, 8, f"{peso_actual} kg", 1, 0, "C")
-        if dif_peso <= 0: pdf.set_text_color(34, 197, 94)
-        else:             pdf.set_text_color(239, 68, 68)
+        pdf.set_text_color(34, 197, 94) if dif_peso <= 0 else pdf.set_text_color(239, 68, 68)
         pdf.cell(46, 8, f"{dif_peso:+.1f} kg", 1, 1, "C")
+        pdf.set_text_color(51, 51, 51)
+        
+        # Fila Grasa
+        if grasa_actual > 0:
+            pdf.cell(60, 8, "% Grasa Corporal", 1, 0, "C")
+            pdf.cell(45, 8, "-- %", 1, 0, "C")
+            pdf.cell(45, 8, f"{grasa_actual} %", 1, 0, "C")
+            pdf.cell(46, 8, "Reportado", 1, 1, "C")
+            
+        # Fila Cintura
+        if cintura_actual > 0:
+            pdf.cell(60, 8, "Perimetro Cintura", 1, 0, "C")
+            pdf.cell(45, 8, "-- cm", 1, 0, "C")
+            pdf.cell(45, 8, f"{cintura_actual} cm", 1, 0, "C")
+            pdf.cell(46, 8, "Reportado", 1, 1, "C")
 
-        pdf.set_text_color(17, 17, 17)
-        pdf.cell(60, 8, "Adherencia",          1, 0, "C")
-        pdf.cell(45, 8, "N/A",                 1, 0, "C")
-        pdf.cell(45, 8, str(ult.get("Adherencia_Dieta", "--"))[:20], 1, 0, "C")
-        pdf.cell(46, 8, "Reportado",           1, 1, "C")
+        pdf.ln(8)
+        
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, _limpiar("2. CUESTIONARIO DIAGNÓSTICO (PSICOMETRÍA)"), 0, 1)
+        pdf.set_font("Arial", "", 11)
+        pdf.cell(0, 6, _limpiar(f"• Calidad de Sueño (1-10): {ult.get('Calidad_Sueno', '--')}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"• Nivel de Energía: {ult.get('Energia', '--')}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"• Control de Hambre: {ult.get('Hambre', '--')}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"• Adherencia Reportada: {ult.get('Adherencia_Dieta', '--')}"), 0, 1)
+        pdf.cell(0, 6, _limpiar(f"• Progresión de Fuerza: {ult.get('Progreso_Fuerza', '--')}"), 0, 1)
+        pdf.ln(8)
 
-        pdf.cell(60, 8, "Progreso Fuerza",     1, 0, "C")
-        pdf.cell(45, 8, "N/A",                 1, 0, "C")
-        pdf.cell(45, 8, str(ult.get("Progreso_Fuerza", "--"))[:20], 1, 0, "C")
-        pdf.cell(46, 8, "Reportado",           1, 1, "C")
-        pdf.ln(12)
-
-        color_map = {"AVANCE": (34, 197, 94), "LENTO": (234, 179, 8), "RETROCESO": (239, 68, 68)}
+        color_map = {"AVANCE": (80, 200, 120), "LENTO": (245, 158, 11), "RETROCESO": (239, 68, 68)}
         fill_color = color_map.get(estado, (100, 100, 100))
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, _limpiar("2. DIAGNÓSTICO Y DICTAMEN"), 0, 1)
+        pdf.cell(0, 10, _limpiar("3. DICTAMEN Y PLAN DE ACCIÓN"), 0, 1)
         pdf.set_fill_color(*fill_color); pdf.set_text_color(255, 255, 255)
         pdf.cell(100, 12, _limpiar(f"ESTATUS SISTEMA: {estado}"), 0, 1, "C", fill=True)
         pdf.ln(6)
 
-        pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 11)
-        dictamen = {
-            "AVANCE":    "El sistema confirma progresión sostenida. Mantener protocolo vigente. Revisar sobrecarga progresiva en ejercicios principales.",
-            "LENTO":     "Avance subóptimo detectado. Revisar adherencia nutricional y calidad del sueño. Considerar ajuste calórico de ±100 kcal.",
-            "RETROCESO": "ALERTA: Se detecta retroceso. Auditar fugas calóricas, consistencia del entrenamiento y nivel de estrés. Agendar revisión urgente.",
-        }.get(estado, "Continuar monitoreo y reportar en la próxima revisión.")
+        pdf.set_text_color(51, 51, 51); pdf.set_font("Arial", "", 11)
+        # Tomar los comentarios del coach si existen, si no, el default automático.
+        dictamen = str(ult.get("Comentarios_Coach", ""))
+        if not dictamen or dictamen.lower() == "nan":
+            dictamen = {
+                "AVANCE":    "El sistema confirma progresión sostenida. Mantener protocolo vigente. Revisar sobrecarga progresiva en ejercicios principales.",
+                "LENTO":     "Avance subóptimo detectado. Revisar adherencia nutricional y calidad del sueño. Considerar ajuste calórico de ±100 kcal.",
+                "RETROCESO": "ALERTA: Se detecta retroceso. Auditar fugas calóricas, consistencia del entrenamiento y nivel de estrés. Agendar revisión urgente.",
+            }.get(estado, "Continuar monitoreo y reportar en la próxima revisión.")
 
         pdf.set_fill_color(248, 248, 248)
         pdf.rect(10, pdf.get_y(), 196, 22, "F")
         pdf.set_xy(15, pdf.get_y() + 4)
         pdf.multi_cell(186, 6, _limpiar(dictamen))
-
-        if len(revs_df) > 1:
-            pdf.ln(8)
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, _limpiar(f"3. HISTORIAL DE {len(revs_df)} REVISIONES"), 0, 1)
-            pdf.set_fill_color(17, 17, 17); pdf.set_text_color(255, 255, 255)
-            for h, w in [("FECHA", 50), ("PESO", 40), ("ADHERENCIA", 60), ("ESTADO", 46)]:
-                pdf.cell(w, 7, _limpiar(h), 1, 0, "C", fill=True)
-            pdf.ln()
-            pdf.set_text_color(17, 17, 17); pdf.set_font("Arial", "", 9)
-            for _, row in revs_df.iterrows():
-                pdf.cell(50, 6, _limpiar(str(row.get("Fecha", ""))[:19]),             1, 0, "C")
-                pdf.cell(40, 6, _limpiar(f"{row.get('Peso_Revision', '--')} kg"),     1, 0, "C")
-                pdf.cell(60, 6, _limpiar(str(row.get("Adherencia_Dieta", "--"))[:25]),1, 0, "C")
-                pdf.cell(46, 6, _limpiar(str(row.get("Estado_Calculado", "--"))),     1, 1, "C")
 
     return pdf.output(dest="S").encode("latin-1", "ignore")
 
@@ -606,7 +625,7 @@ if admin_pass == CONFIG["admin_password"]:
             c2.write(str(datos_al.get("Nombre completo", "Atleta")).title())
             c3.write(f"{datos_al.get('Peso actual','--')} → {datos_al.get('Peso objetivo','--')}")
             c4.markdown(
-                f"<div style='font-size:12px;font-weight:bold;color:#AAAAAA;'>{texto_barra}</div>"
+                f"<div style='font-size:12px;font-weight:bold;color:#7F8C8D;'>{texto_barra}</div>"
                 f"<div class='barra-base'><div class='{clase_barra}'></div></div>",
                 unsafe_allow_html=True,
             )
@@ -653,15 +672,15 @@ else:
 
     tab_nuevo, tab_revision = st.tabs([
         "📝 Iniciar Expediente Nuevo",
-        "🔄 Registrar Mi Avance (ID Requerido)",
+        "🔄 Registrar Mi Avance (Auditoría)",
     ])
 
     # ── FORMULARIO MAESTRO (6 Misiones) ──────────────────────────────────
     with tab_nuevo:
-        st.info("🔥 Bienvenido al ecosistema MM247. Completa las 6 misiones para activar tu expediente.")
+        st.info("🟩 Bienvenido al ecosistema MM247. Completa las 6 misiones para activar tu expediente.")
         st.progress(st.session_state.step / CONFIG["total_misiones"])
         st.markdown(
-            f"<h4 style='text-align:center;color:#A0A0A0;'>"
+            f"<h4 style='text-align:center;color:#7F8C8D;'>"
             f"MISIÓN {st.session_state.step} DE {CONFIG['total_misiones']}</h4>",
             unsafe_allow_html=True,
         )
@@ -1005,8 +1024,8 @@ else:
                                         f"<div class='id-box'>"
                                         f"✅ ¡EXPEDIENTE ACTIVADO!<br><br>"
                                         f"TU ID DE ATLETA:<br>"
-                                        f"<span style='font-size:32px;color:#4CAF50;'>{id_nuevo}</span><br><br>"
-                                        f"<small style='color:#DDD;font-weight:normal;'>"
+                                        f"<span style='font-size:32px;color:#FFFFFF;'>{id_nuevo}</span><br><br>"
+                                        f"<small style='color:#E5E7EB;font-weight:normal;'>"
                                         f"Guárdalo. Lo necesitarás para reportar tu avance.</small>"
                                         f"</div>",
                                         unsafe_allow_html=True,
@@ -1022,58 +1041,72 @@ else:
                             except Exception as e:
                                 st.error(f"Error de conexión: {e}")
 
-    # ── MÓDULO REVISIÓN DE AVANCE ─────────────────────────────────────────
+    # ── MÓDULO REVISIÓN DE AVANCE (NUEVO DISEÑO CON AVATAR) ───────────────
     with tab_revision:
-        st.info("La constancia se mide en datos. Ingresa tu ID y reporta tu estado.")
+        st.info("La constancia se mide en datos. Ingresa tu ID y reporta tu estado clínico.")
 
         with st.form("form_revision", clear_on_submit=True):
             id_ing = st.text_input("Tu ID de Atleta (Ej: MM247-2026-JGR-A3F2B1):").strip().upper()
 
-            st.markdown("<div class='section-header'>1. Métricas Corporales</div>", unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            peso_rev    = col1.number_input("Peso en ayunas (kg):", min_value=30.0, value=70.0, step=0.1)
-            cintura_rev = col2.number_input("Cintura (cm):",        min_value=40.0, value=80.0, step=0.5)
+            col_v, col_t = st.columns([1, 2], gap="large")
+            
+            with col_v:
+                st.markdown("<div class='section-header'>Evidencia Visual</div>", unsafe_allow_html=True)
+                st.file_uploader("Subir Foto INICIO", type=['png', 'jpg', 'jpeg'])
+                st.file_uploader("Subir Foto AUDITORÍA ACTUAL", type=['png', 'jpg', 'jpeg'])
+                
+            with col_t:
+                st.markdown("<div class='section-header'>1. Cuestionario Clínico</div>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                with c1:
+                    sueno_rev = st.slider("Calidad de sueño esta semana (1-10):", 1, 10, 8)
+                    energia_rev = st.select_slider("Nivel de Energía Post-Entreno:", options=["Agotado", "Normal", "Óptimo"])
+                with c2:
+                    hambre_rev = st.select_slider("Ansiedad por comida:", options=["Alta", "Controlada", "Baja"])
+                    adherencia = st.radio("Cumplimiento de dieta:", ["Cumplimiento Total (Excelente)", "Cumplimiento Parcial (Aceptable)", "Cumplimiento Bajo (Mal apego)"])
+                
+                fuerza = st.radio("Rendimiento en fuerza:", ["Incrementé pesos o repeticiones", "Me mantuve estable", "Me sentí más débil / fatigado"])
 
-            st.markdown("<div class='section-header'>2. Adherencia y Rendimiento</div>", unsafe_allow_html=True)
-            adherencia = st.radio("Cumplimiento de dieta esta semana:", [
-                "Cumplimiento Total (Excelente)",
-                "Cumplimiento Parcial (Aceptable)",
-                "Cumplimiento Bajo (Mal apego)",
-            ])
-            fuerza = st.radio("Rendimiento en entrenamientos:", [
-                "Incrementé pesos o repeticiones",
-                "Me mantuve estable",
-                "Me sentí más débil / fatigado",
-            ])
-            sueno_rev   = st.slider("Calidad de sueño esta semana (1-10):", 1, 10, 8)
-            comentarios = st.text_area("Observaciones, dudas o sensaciones:")
+                st.markdown("<div class='section-header'>2. Métricas Corporales</div>", unsafe_allow_html=True)
+                m1, m2, m3 = st.columns(3)
+                peso_rev    = m1.number_input("Peso (kg):", min_value=30.0, value=70.0, step=0.1)
+                grasa_rev   = m2.number_input("% Grasa:", min_value=0.0, value=15.0, step=0.1)
+                cintura_rev = m3.number_input("Cintura (cm):", min_value=40.0, value=80.0, step=0.5)
 
-            if st.form_submit_button("🚀 ENVIAR REPORTE"):
+                comentarios = st.text_area("Observaciones, dudas o sensaciones para tu Coach:")
+
+            if st.form_submit_button("🚀 ENVIAR AUDITORÍA"):
                 if not id_ing:
                     st.error("❌ El ID es obligatorio.")
                 elif df_existente.empty or id_ing not in df_existente["ID_Alumno"].values:
                     st.error("❌ ID no encontrado. Verifica mayúsculas y guiones.")
                 else:
+                    # Lógica para Avatar Dinámico
                     puntos = 0
-                    if adherencia == "Cumplimiento Total (Excelente)":   puntos += 2
+                    if adherencia == "Cumplimiento Total (Excelente)": puntos += 2
                     elif adherencia == "Cumplimiento Parcial (Aceptable)": puntos += 1
-
                     if fuerza == "Incrementé pesos o repeticiones": puntos += 2
-                    elif fuerza == "Me mantuve estable":            puntos += 1
+                    elif fuerza == "Me mantuve estable": puntos += 1
 
-                    if   puntos >= 3: estado_calc = "AVANCE"
+                    if puntos >= 3: estado_calc = "AVANCE"
                     elif puntos == 2: estado_calc = "LENTO"
-                    else:             estado_calc = "RETROCESO"
+                    else: estado_calc = "RETROCESO"
+
+                    # Generamos el Avatar según el dictamen automático
+                    avatar_url = obtener_avatar_url(estado_calc)
 
                     payload_rev = {
                         "Fecha":                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Tipo_Registro":        "REVISION",
                         "ID_Alumno":            id_ing,
                         "Peso_Revision":        str(peso_rev),
+                        "Grasa_Revision":       str(grasa_rev),
                         "Cintura_Revision":     str(cintura_rev),
                         "Adherencia_Dieta":     adherencia,
                         "Progreso_Fuerza":      fuerza,
-                        "Energia_SNC":          str(sueno_rev),
+                        "Calidad_Sueno":        str(sueno_rev),
+                        "Energia":              energia_rev,
+                        "Hambre":               hambre_rev,
                         "Comentarios_Evolucion": comentarios,
                         "Estado_Calculado":     estado_calc,
                     }
@@ -1082,15 +1115,15 @@ else:
                         try:
                             resp = requests.post(CONFIG["webhook_url"], json=payload_rev, timeout=10)
                             if resp.status_code == 200 and "success" in resp.text.lower():
-                                st.cache_data.clear() # Limpia caché para que el Admin lo vea al instante
+                                st.cache_data.clear()
                                 color_fb = {"AVANCE": "🟢", "LENTO": "🟡", "RETROCESO": "🔴"}
                                 st.success(
                                     f"{color_fb[estado_calc]} Evaluación registrada. "
-                                    f"Estado del sistema: **{estado_calc}**. Mantén el enfoque."
+                                    f"Estado del sistema: **{estado_calc}**."
                                 )
+                                # Mostramos el avatar como retroalimentación visual al enviar
+                                st.image(avatar_url, caption=f"Tu Proyección Actual: {estado_calc}", width=250)
                             else:
                                 st.error(f"Error en servidor: {resp.text[:200]}")
-                        except requests.exceptions.Timeout:
-                            st.error("⏱️ Timeout. Intenta de nuevo.")
                         except Exception as e:
                             st.error(f"Error: {e}")
