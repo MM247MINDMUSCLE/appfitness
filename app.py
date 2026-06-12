@@ -21,7 +21,7 @@ import os
 # 0. CONFIGURACIÓN CENTRAL (CONFIG) Y RUTINAS
 # =============================================================================
 CONFIG = {
-    "page_title": "MINDMUSCLE247",
+    "page_title": "MM247",
     "page_icon": "🟩",
     "webhook_url": "https://script.google.com/macros/s/AKfycbx5vDCKmqpe-vsZ2fan0ZQoesLjajIHHHXHOZLtG7-w6-ts3uUl1WkZVHnPnn0F3Cbn/exec",
     "sheet_url": "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
@@ -103,7 +103,7 @@ CONFIG = {
 st.set_page_config(page_title=CONFIG["page_title"], page_icon=CONFIG["page_icon"], layout="wide")
 
 # =============================================================================
-# 2. ESTILOS CSS ANIMADOS (DISEÑO LIGHT MODE + VERDE ESMERALDA)
+# 2. ESTILOS CSS ANIMADOS
 # =============================================================================
 st.markdown("""
 <style>
@@ -114,10 +114,18 @@ st.markdown("""
 /* Fondo y textos base */
 .stApp { background-color: #F8F9FA; color: #333333; }
 
-/* Títulos y Subtítulos */
+/* Corrección de visibilidad de Labels en Modo Oscuro */
+label[data-testid="stWidgetLabel"] p, div[data-testid="stForm"] label p { color: #2C3E50 !important; font-weight: 700 !important; }
+
+/* Títulos y Subtítulos (Diseño MM247 con Mancuerna de fondo) */
+.main-title-container { text-align: center; position: relative; margin-bottom: 0px; animation: fadeIn 0.8s ease-out; }
+.main-title-bg { 
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+    font-size: 80px; opacity: 0.05; z-index: 0; 
+}
 .main-title { 
-    font-size: 50px; font-weight: 800; color: #2C3E50; text-align: center; 
-    letter-spacing: 1px; margin-bottom: 0px; text-transform: uppercase; animation: fadeIn 0.8s ease-out;
+    font-size: 60px; font-weight: 900; color: #2C3E50; position: relative; 
+    z-index: 1; letter-spacing: 2px; text-transform: uppercase; margin: 0;
 }
 .subtitle { font-size: 16px; color: #7F8C8D; text-align: center; margin-bottom: 35px; text-transform: uppercase; letter-spacing: 3px; animation: fadeIn 1s ease-out; }
 
@@ -168,13 +176,15 @@ div.stButton > button:hover, div[data-testid="stForm"] button:hover {
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# 2.5 LÓGICA DE AVATARES 3D (DICTAMEN)
+# 2.5 LÓGICA DE AVATARES (SISTEMA DINÁMICO ROBUSTO)
 # =============================================================================
-def obtener_avatar_url(estatus):
-    # Modelos genéricos de Ready Player Me para demostración visual de estados
-    if estatus == "AVANCE": return "https://models.readyplayer.me/648b28f7f9037c9521369ec9.png?pose=A&camera=portrait&blendShape=smile"
-    elif estatus == "RETROCESO": return "https://models.readyplayer.me/648b28f7f9037c9521369ec9.png?pose=T&camera=portrait&blendShape=sad"
-    else: return "https://models.readyplayer.me/648b28f7f9037c9521369ec9.png?camera=portrait"
+def obtener_avatar_url(estatus, nombre="Atleta"):
+    nom_formateado = str(nombre).replace(" ", "+")
+    if estatus == "AVANCE": bg = "50C878"
+    elif estatus == "RETROCESO": bg = "EF4444"
+    else: bg = "F59E0B"
+    # Generador de Avatar garantizado que no se cae
+    return f"https://ui-avatars.com/api/?name={nom_formateado}&background={bg}&color=fff&size=256&font-size=0.4&bold=true&rounded=true"
 
 # =============================================================================
 # 3. CAPA DE DATOS (NORMALIZACIÓN EXACTA)
@@ -322,7 +332,6 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
     pdf.set_auto_page_break(auto=True, margin=15)
     con_lesion = _tiene_lesion(norm)
     
-    # Determinar si aplica inducción
     t_ent = norm.get("Tiempo entrenando", "Menos de 6 meses")
     aplica_induccion = "Nunca" in t_ent or "Menos de 6 meses" in t_ent
     num_dias = int(str(norm.get("Días entrenar", "4")).strip()[0]) if str(norm.get("Días entrenar", "4")).strip()[0].isdigit() else 4
@@ -333,7 +342,7 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
         pdf.rect(0, 0, 216, 30, "F")
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", "B", 24)
-        pdf.set_xy(10, 8);  pdf.cell(100, 10, "MIND MUSCLE 247",  0, 0, "L")
+        pdf.set_xy(10, 8);  pdf.cell(100, 10, "MM247",  0, 0, "L")
         pdf.set_font("Arial", "B", 12)
         pdf.set_xy(160, 12); pdf.cell(45, 10, "CONFIDENCIAL", 0, 0, "R")
         pdf.set_text_color(240, 255, 240)
@@ -536,7 +545,12 @@ df_existente = cargar_base_datos()
 
 # ─── VISTA ADMINISTRADOR (DASHBOARD) ─────────────────────────────────────────
 if admin_pass == CONFIG["admin_password"]:
-    st.markdown("<div class='main-title'>DASHBOARD MAESTRO MM247</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class='main-title-container'>
+        <div class='main-title-bg'>🏋️‍♂️</div>
+        <div class='main-title'>MM247</div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>CONTROL CLÍNICO, CRUCES Y AVATARES 3D</div>", unsafe_allow_html=True)
 
     if df_existente.empty:
@@ -574,7 +588,8 @@ if admin_pass == CONFIG["admin_password"]:
                 # Renderizado de Avatar y Status
                 c_av, c_st = st.columns([1, 2])
                 with c_av:
-                    st.image(obtener_avatar_url(estado_actual if not r_df.empty else "AVANCE"), width=150)
+                    nombre_atleta = d_norm.get("Nombre completo", "Atleta")
+                    st.image(obtener_avatar_url(estado_actual if not r_df.empty else "AVANCE", nombre_atleta), width=150)
                 with c_st:
                     if estado_actual == "AVANCE": st.markdown(f"<div class='status-avance'>ESTADO: {estado_actual}<br>El sistema reporta sobrecarga positiva y buena adherencia.</div>", unsafe_allow_html=True)
                     elif estado_actual == "RETROCESO": st.markdown(f"<div class='status-retroceso'>ESTADO: {estado_actual}<br>Alerta de estancamiento. Revisar plan de acción en PDF.</div>", unsafe_allow_html=True)
@@ -589,7 +604,17 @@ if admin_pass == CONFIG["admin_password"]:
                 mB.markdown(f"<div class='metric-card'><div class='metric-title'>Cintura</div><div class='metric-value'>{cintura_act} cm</div><div style='color: {'#e74c3c' if cintura_act > m_calc['cintura'] else '#2ecc71'}; font-weight:bold;'>{cintura_act - m_calc['cintura']:+.1f} cm</div></div>", unsafe_allow_html=True)
                 mC.markdown(f"<div class='metric-card'><div class='metric-title'>TDEE Prescrito</div><div class='metric-value'>{m_calc['cals']}</div><div style='color: #7f8c8d;'>kcal/día</div></div>", unsafe_allow_html=True)
 
-                st.info("📸 **Evidencia Visual:** Las fotografías de Frente, Perfil y Espalda del Q1 y Q2 se consolidan en el Drive Central (Sincronización vía Webhook).")
+                # =============================================================
+                # NUEVO: VISUALIZACIÓN DE IMÁGENES DEL Q1 (PLACEHOLDERS DE DRIVE)
+                # =============================================================
+                st.markdown("#### 📸 Evidencia Visual (Registro Q1)")
+                st.info("Las imágenes almacenadas en el sistema central para evaluación y cruce físico.")
+                img_col1, img_col2, img_col3 = st.columns(3)
+                
+                # Usamos placeholders de estructura anatómica para mostrar dónde irían las fotos
+                img_col1.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Frente+Q1", caption="Foto: Frente", use_container_width=True)
+                img_col2.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Perfil+Q1", caption="Foto: Perfil", use_container_width=True)
+                img_col3.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Espalda+Q1", caption="Foto: Espalda", use_container_width=True)
 
                 try:
                     pdf_bytes = generar_pdf_mm247(d_norm, m_calc, r_df, id_sel)
@@ -602,7 +627,12 @@ elif admin_pass and admin_pass != CONFIG["admin_password"]:
 
 # ─── VISTA CLIENTE (FORMULARIOS Q1 Y Q2) ─────────────────────────────────────
 else:
-    st.markdown("<div class='main-title'>MINDMUSCLE247</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class='main-title-container'>
+        <div class='main-title-bg'>🏋️‍♂️</div>
+        <div class='main-title'>MM247</div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("<div class='subtitle'>LÍNEA BASE (Q1) Y AUDITORÍA DE AVANCE (Q2)</div>", unsafe_allow_html=True)
 
     if "step" not in st.session_state: st.session_state.step = 1
@@ -701,7 +731,6 @@ else:
                     
                     id_nuevo = generar_id_unico(d.get("Nombre completo", "Atleta"))
                     
-                    # Estructura estricta basada en el listado acordado
                     payload = {
                         "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "Tipo_Registro": "INICIAL", "ID_Alumno": id_nuevo,
@@ -765,7 +794,6 @@ else:
                 if not id_ing: st.error("El ID es obligatorio para cruzar los datos.")
                 elif df_existente.empty or id_ing not in df_existente["ID_Alumno"].values: st.error("ID no encontrado en Q1.")
                 else:
-                    # Lógica de Dictamen Clínico
                     puntos = 0
                     if f_rev >= 7 and "Sí" in sobrecarga: puntos += 2
                     if "100%" in adherencia or "80-90%" in adherencia: puntos += 1
@@ -788,6 +816,6 @@ else:
                             if resp.status_code == 200:
                                 st.cache_data.clear()
                                 st.success(f"Dictamen Clínico Generado: **{estado_calc}**.")
-                                st.image(obtener_avatar_url(estado_calc), width=200)
+                                st.image(obtener_avatar_url(estado_calc, "Registro Exitoso"), width=200)
                             else: st.error("Error conectando con la base.")
                         except Exception as e: st.error(f"Error: {e}")
