@@ -327,7 +327,7 @@ def _limpiar(texto: str) -> str:
 def _tiene_lesion(norm: dict) -> bool:
     return norm.get("Lesión actual", "Ninguna").lower() != "ninguna" or norm.get("Prohibido ejercicio", "No").lower() != "no"
 
-def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) -> bytes:
+def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str, admin_data: dict = None) -> bytes:
     pdf = FPDF("P", "mm", "Letter")
     pdf.set_auto_page_break(auto=True, margin=15)
     con_lesion = _tiene_lesion(norm)
@@ -384,6 +384,18 @@ def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) 
         f"Recuperación Base : {norm['Recuperacion_Base']}",
     ]:
         pdf.set_x(15); pdf.cell(0, 6, _limpiar(f"• {linea}"), 0, 1)
+    pdf.ln(8)
+
+    # NUEVO: DIAGNÓSTICO ADMINISTRADOR INTEGRADO
+    if admin_data and (admin_data.get("diagnostico") or admin_data.get("tiempo")):
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, _limpiar("3. DIAGNÓSTICO TÉCNICO (USO EXCLUSIVO ADMINISTRADOR)"), 0, 1)
+        if admin_data.get("diagnostico"):
+            pdf.set_font("Arial", "B", 10); pdf.cell(196, 7, "Diagnóstico Inicial:", 1, 1, "L")
+            pdf.set_font("Arial", "", 10); pdf.multi_cell(196, 7, _limpiar(admin_data["diagnostico"]), 1, "L")
+        if admin_data.get("tiempo"):
+            fila_dato("Tiempo en Modo Inicial", admin_data["tiempo"], col_w=196)
+        pdf.ln(8)
 
     # --- HOJA 2: PROGRAMACIÓN ---
     header("HOJA 2: PROGRAMACIÓN NEUROMUSCULAR")
@@ -604,20 +616,21 @@ if admin_pass == CONFIG["admin_password"]:
                 mB.markdown(f"<div class='metric-card'><div class='metric-title'>Cintura</div><div class='metric-value'>{cintura_act} cm</div><div style='color: {'#e74c3c' if cintura_act > m_calc['cintura'] else '#2ecc71'}; font-weight:bold;'>{cintura_act - m_calc['cintura']:+.1f} cm</div></div>", unsafe_allow_html=True)
                 mC.markdown(f"<div class='metric-card'><div class='metric-title'>TDEE Prescrito</div><div class='metric-value'>{m_calc['cals']}</div><div style='color: #7f8c8d;'>kcal/día</div></div>", unsafe_allow_html=True)
 
-                # =============================================================
-                # NUEVO: VISUALIZACIÓN DE IMÁGENES DEL Q1 (PLACEHOLDERS DE DRIVE)
-                # =============================================================
                 st.markdown("#### 📸 Evidencia Visual (Registro Q1)")
                 st.info("Las imágenes almacenadas en el sistema central para evaluación y cruce físico.")
                 img_col1, img_col2, img_col3 = st.columns(3)
                 
-                # Usamos placeholders de estructura anatómica para mostrar dónde irían las fotos
                 img_col1.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Frente+Q1", caption="Foto: Frente", use_container_width=True)
                 img_col2.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Perfil+Q1", caption="Foto: Perfil", use_container_width=True)
                 img_col3.image("https://dummyimage.com/200x300/2C3E50/ffffff.png&text=Espalda+Q1", caption="Foto: Espalda", use_container_width=True)
 
+                st.markdown("#### 🛡️ Diagnóstico y Modo Inicial (Solo Administrador)")
+                diag_admin = st.text_area("Diagnóstico inicial del cliente:", help="Evaluación clínica y biomecánica exclusiva del administrador.")
+                tiempo_admin = st.text_input("Tiempo que se mantendrá en Modo Inicial:", help="Ejemplo: 4 semanas")
+
                 try:
-                    pdf_bytes = generar_pdf_mm247(d_norm, m_calc, r_df, id_sel)
+                    admin_datos = {"diagnostico": diag_admin.strip(), "tiempo": tiempo_admin.strip()}
+                    pdf_bytes = generar_pdf_mm247(d_norm, m_calc, r_df, id_sel, admin_datos)
                     st.download_button("🖨️ GENERAR Y DESCARGAR EXPEDIENTE PDF", data=pdf_bytes, file_name=f"MM247_Clinica_{id_sel}.pdf", mime="application/pdf")
                 except Exception as err:
                     st.error(f"Error generando PDF: {err}")
