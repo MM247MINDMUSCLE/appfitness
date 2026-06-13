@@ -526,10 +526,351 @@ def generar_plan_accion(norm: dict, ult_rev: pd.Series, estado: str) -> list:
 # =============================================================================
 # 6. AVATAR
 # =============================================================================
+# 6. MOTOR DE AVATAR INTELIGENTE
+# =============================================================================
 def obtener_avatar_url(estatus: str, nombre: str = "Atleta") -> str:
+    """Avatar básico de fallback."""
     nom = str(nombre).replace(" ", "+")
     bg = {"AVANCE": "50C878", "RETROCESO": "EF4444"}.get(estatus, "F59E0B")
     return f"https://ui-avatars.com/api/?name={nom}&background={bg}&color=fff&size=256&font-size=0.4&bold=true&rounded=true"
+
+
+def construir_avatar_q1(norm: dict, mot: dict) -> str:
+    """
+    Genera un avatar SVG animado personalizado para Dashboard Q1.
+    Diferencia: género, complexión (IMC), estatura, objetivo, lesiones.
+    """
+    sexo     = str(norm.get("Sexo", "Masculino"))
+    imc      = mot.get("imc", 22.0)
+    estatura = mot.get("estatura", 175.0)
+    objetivo = str(norm.get("Objetivo principal", ""))
+    lesion   = str(norm.get("Lesión actual", "Ninguna"))
+    nivel    = str(norm.get("Tiempo entrenando", "Menos de 6 meses"))
+    nombre   = str(norm.get("Nombre completo", "Atleta"))
+
+    # ── Paleta por género ──────────────────────────────────────────────────
+    es_mujer = "Femen" in sexo or "femen" in sexo
+    skin_color   = "#F5C5A3" if not es_mujer else "#F0B090"
+    hair_color   = "#3D2B1F" if not es_mujer else "#6B3A2A"
+    outfit_color = "#1A3D24" if not es_mujer else "#7C3D8A"
+    outfit_alt   = "#50C878" if not es_mujer else "#C084FC"
+    accent       = "#50C878"
+
+    # ── Complexión según IMC ────────────────────────────────────────────────
+    if imc < 18.5:
+        torso_w, torso_h = 36, 48   # delgado
+        brazo_w = 7
+    elif imc < 25:
+        torso_w, torso_h = 44, 52   # normal
+        brazo_w = 9
+    elif imc < 30:
+        torso_w, torso_h = 54, 56   # sobrepeso
+        brazo_w = 12
+    else:
+        torso_w, torso_h = 62, 58   # obeso
+        brazo_w = 15
+
+    # Si objetivo es ganar músculo → silueta más ancha en hombros
+    if any(k in objetivo for k in ("Ganar", "muscular", "Volumen")):
+        torso_w = min(torso_w + 8, 70)
+        brazo_w = min(brazo_w + 2, 16)
+
+    # ── Proporciones por estatura ───────────────────────────────────────────
+    if estatura < 160:
+        escala = 0.88
+    elif estatura < 175:
+        escala = 1.0
+    else:
+        escala = 1.10
+
+    # ── Posición y dimensiones base ─────────────────────────────────────────
+    cx        = 100
+    cabeza_r  = int(22 * escala)
+    cabeza_y  = int(50 * escala)
+    torso_x   = cx - torso_w // 2
+    torso_y   = cabeza_y + cabeza_r + 4
+    torso_w_s = torso_w
+    torso_h_s = int(torso_h * escala)
+    pierna_y  = torso_y + torso_h_s
+    pierna_h  = int(52 * escala)
+    pie_y     = pierna_y + pierna_h
+
+    # ── Indicadores de lesión ───────────────────────────────────────────────
+    lesion_svg = ""
+    if "Rodilla" in lesion:
+        lesion_svg = f'<circle cx="{cx-8}" cy="{pierna_y + pierna_h//2}" r="6" fill="#EF4444" opacity="0.85"><animate attributeName="r" values="5;8;5" dur="1.2s" repeatCount="indefinite"/></circle>'
+    elif "Hombro" in lesion:
+        lesion_svg = f'<circle cx="{torso_x - 4}" cy="{torso_y + 8}" r="6" fill="#EF4444" opacity="0.85"><animate attributeName="r" values="5;8;5" dur="1.2s" repeatCount="indefinite"/></circle>'
+    elif "Espalda" in lesion or "Cervical" in lesion:
+        lesion_svg = f'<circle cx="{cx}" cy="{torso_y + 12}" r="6" fill="#EF4444" opacity="0.85"><animate attributeName="r" values="5;8;5" dur="1.2s" repeatCount="indefinite"/></circle>'
+
+    # ── Nivel de entrenamiento → estrella o trofeo ──────────────────────────
+    nivel_badge = ""
+    if "Más de 3" in nivel:
+        nivel_badge = f'<text x="{cx+28}" y="{cabeza_y - 10}" font-size="16" text-anchor="middle">🏆</text>'
+    elif "1 a 3" in nivel or "6 meses" in nivel:
+        nivel_badge = f'<text x="{cx+28}" y="{cabeza_y - 10}" font-size="14" text-anchor="middle">⭐</text>'
+
+    # ── Cabello mujer vs hombre ─────────────────────────────────────────────
+    cabello_svg = ""
+    if es_mujer:
+        cabello_svg = f'''
+        <ellipse cx="{cx}" cy="{cabeza_y - cabeza_r + 4}" rx="{cabeza_r + 6}" ry="{cabeza_r // 2}" fill="{hair_color}"/>
+        <rect x="{cx - cabeza_r - 4}" y="{cabeza_y - cabeza_r//2}" width="10" height="{cabeza_r + 16}" rx="5" fill="{hair_color}"/>
+        <rect x="{cx + cabeza_r - 6}" y="{cabeza_y - cabeza_r//2}" width="10" height="{cabeza_r + 16}" rx="5" fill="{hair_color}"/>
+        '''
+    else:
+        cabello_svg = f'<ellipse cx="{cx}" cy="{cabeza_y - cabeza_r + 6}" rx="{cabeza_r}" ry="{cabeza_r // 2 + 2}" fill="{hair_color}"/>'
+
+    # ── Ropa mujer (leggings + top) vs hombre (pantalón + camiseta) ─────────
+    if es_mujer:
+        ropa_svg = f'''
+        <rect x="{torso_x + 4}" y="{torso_y}" width="{torso_w_s - 8}" height="{torso_h_s // 2}" rx="6" fill="{outfit_alt}"/>
+        <rect x="{torso_x}" y="{torso_y + torso_h_s//2}" width="{torso_w_s}" height="{torso_h_s//2}" rx="4" fill="{outfit_color}"/>
+        <rect x="{cx - torso_w_s//4}" y="{pierna_y}" width="{torso_w_s//4 - 2}" height="{pierna_h}" rx="6" fill="{outfit_color}"/>
+        <rect x="{cx + 2}" y="{pierna_y}" width="{torso_w_s//4 - 2}" height="{pierna_h}" rx="6" fill="{outfit_color}"/>
+        '''
+    else:
+        ropa_svg = f'''
+        <rect x="{torso_x}" y="{torso_y}" width="{torso_w_s}" height="{torso_h_s}" rx="6" fill="{outfit_color}"/>
+        <line x1="{cx}" y1="{torso_y}" x2="{cx}" y2="{torso_y + torso_h_s}" stroke="{outfit_alt}" stroke-width="2"/>
+        <rect x="{cx - torso_w_s//4}" y="{pierna_y}" width="{torso_w_s//4 - 2}" height="{pierna_h}" rx="6" fill="#2C2C2C"/>
+        <rect x="{cx + 2}" y="{pierna_y}" width="{torso_w_s//4 - 2}" height="{pierna_h}" rx="6" fill="#2C2C2C"/>
+        '''
+
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="320" viewBox="0 0 200 320">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#1A3D24;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0D1F14;stop-opacity:1"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="200" height="320" fill="url(#bgGrad)" rx="16"/>
+
+  <!-- Anillo de estado pulsante -->
+  <circle cx="{cx}" cy="{cabeza_y}" r="{cabeza_r + 10}" fill="none" stroke="{accent}" stroke-width="2" opacity="0.5">
+    <animate attributeName="r" values="{cabeza_r+8};{cabeza_r+14};{cabeza_r+8}" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.5;0.1;0.5" dur="2s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Sombra suave cuerpo -->
+  <ellipse cx="{cx}" cy="{pie_y + 8}" rx="28" ry="8" fill="#000" opacity="0.2"/>
+
+  <!-- Cabello -->
+  {cabello_svg}
+
+  <!-- Cabeza -->
+  <circle cx="{cx}" cy="{cabeza_y}" r="{cabeza_r}" fill="{skin_color}"/>
+
+  <!-- Ojos -->
+  <circle cx="{cx - 7}" cy="{cabeza_y - 3}" r="3" fill="#2C2C2C"/>
+  <circle cx="{cx + 7}" cy="{cabeza_y - 3}" r="3" fill="#2C2C2C"/>
+  <circle cx="{cx - 6}" cy="{cabeza_y - 4}" r="1" fill="#fff"/>
+  <circle cx="{cx + 8}" cy="{cabeza_y - 4}" r="1" fill="#fff"/>
+
+  <!-- Sonrisa -->
+  <path d="M {cx-6} {cabeza_y+6} Q {cx} {cabeza_y+12} {cx+6} {cabeza_y+6}" stroke="#555" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+
+  <!-- Ropa y cuerpo -->
+  {ropa_svg}
+
+  <!-- Brazos -->
+  <rect x="{torso_x - brazo_w - 2}" y="{torso_y + 4}" width="{brazo_w}" height="{torso_h_s - 10}" rx="5" fill="{skin_color}"/>
+  <rect x="{torso_x + torso_w_s + 2}" y="{torso_y + 4}" width="{brazo_w}" height="{torso_h_s - 10}" rx="5" fill="{skin_color}"/>
+
+  <!-- Pies -->
+  <ellipse cx="{cx - torso_w_s//4 + torso_w_s//8 - 1}" cy="{pie_y + 5}" rx="10" ry="5" fill="#1A1A2E"/>
+  <ellipse cx="{cx + torso_w_s//8 + 2}" cy="{pie_y + 5}" rx="10" ry="5" fill="#1A1A2E"/>
+
+  <!-- Indicador de lesión -->
+  {lesion_svg}
+
+  <!-- Badge nivel -->
+  {nivel_badge}
+
+  <!-- ID en parte inferior -->
+  <text x="{cx}" y="305" font-size="9" fill="{accent}" text-anchor="middle" font-family="monospace" letter-spacing="1">{nombre[:12].upper()}</text>
+</svg>'''
+    return svg
+
+
+def construir_avatar_q2(norm: dict, mot: dict, ult_rev: dict, estado: str) -> str:
+    """
+    Avatar Q2 que refleja avance/retroceso con cambios visuales dinámicos.
+    Compara Q1 vs Q2: peso, cintura, fuerza, adherencia.
+    """
+    sexo     = str(norm.get("Sexo", "Masculino"))
+    imc      = mot.get("imc", 22.0)
+    nombre   = str(norm.get("Nombre completo", "Atleta"))
+    es_mujer = "Femen" in sexo or "femen" in sexo
+
+    peso_q2    = _parse_float(ult_rev.get("Peso_Revision", mot["peso"]), mot["peso"])
+    cintura_q2 = _parse_float(ult_rev.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
+    fuerza_q2  = _parse_float(ult_rev.get("Progreso_Fuerza", "5"), 5.0)
+    adherencia = str(ult_rev.get("Adherencia Real al Sistema", "100%"))
+    sobrecarga = str(ult_rev.get("Sobrecarga Progresiva", "Sí"))
+
+    dif_peso    = peso_q2 - mot["peso"]
+    dif_cintura = cintura_q2 - mot["cintura"]
+
+    # ── Color y emoción según estado ───────────────────────────────────────
+    if estado == "AVANCE":
+        ring_color  = "#50C878"
+        accent      = "#22C55E"
+        outfit_color= "#166534"
+        emoji_estado= "💪"
+        postura_offset = -5       # avatar erguido
+        barra_h     = int(fuerza_q2 * 4)
+    elif estado == "RETROCESO":
+        ring_color  = "#EF4444"
+        accent      = "#F87171"
+        outfit_color= "#7F1D1D"
+        emoji_estado= "⚠️"
+        postura_offset = 8        # avatar ligeramente encorvado
+        barra_h     = int(fuerza_q2 * 4)
+    else:
+        ring_color  = "#F59E0B"
+        accent      = "#FBBF24"
+        outfit_color= "#78350F"
+        emoji_estado= "⏳"
+        postura_offset = 0
+        barra_h     = int(fuerza_q2 * 4)
+
+    # ── Complexión dinámica Q2 ──────────────────────────────────────────────
+    imc_q2 = peso_q2 / ((mot["estatura"] / 100) ** 2) if mot["estatura"] > 0 else imc
+    if imc_q2 < 18.5:   tw, bw = 36, 7
+    elif imc_q2 < 25:   tw, bw = 44, 9
+    elif imc_q2 < 30:   tw, bw = 54, 12
+    else:                tw, bw = 62, 15
+
+    skin  = "#F5C5A3" if not es_mujer else "#F0B090"
+    hair  = "#3D2B1F" if not es_mujer else "#6B3A2A"
+    cx    = 100
+    cy_cab= 55 + postura_offset
+    cr    = 22
+    ty    = cy_cab + cr + 4
+    th    = 50
+    py    = ty + th
+    ph    = 50
+    pie_y = py + ph
+
+    # Boca: sonrisa=avance, neutral=lento, triste=retroceso
+    if estado == "AVANCE":
+        boca = f'<path d="M {cx-7} {cy_cab+7} Q {cx} {cy_cab+14} {cx+7} {cy_cab+7}" stroke="#555" stroke-width="1.5" fill="none" stroke-linecap="round"/>'
+    elif estado == "RETROCESO":
+        boca = f'<path d="M {cx-7} {cy_cab+12} Q {cx} {cy_cab+6} {cx+7} {cy_cab+12}" stroke="#555" stroke-width="1.5" fill="none" stroke-linecap="round"/>'
+    else:
+        boca = f'<line x1="{cx-6}" y1="{cy_cab+10}" x2="{cx+6}" y2="{cy_cab+10}" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>'
+
+    # Cabello
+    if es_mujer:
+        cabello = f'''
+        <ellipse cx="{cx}" cy="{cy_cab - cr + 4}" rx="{cr + 6}" ry="{cr // 2}" fill="{hair}"/>
+        <rect x="{cx-cr-4}" y="{cy_cab-cr//2}" width="10" height="{cr+16}" rx="5" fill="{hair}"/>
+        <rect x="{cx+cr-6}" y="{cy_cab-cr//2}" width="10" height="{cr+16}" rx="5" fill="{hair}"/>
+        '''
+    else:
+        cabello = f'<ellipse cx="{cx}" cy="{cy_cab - cr + 6}" rx="{cr}" ry="{cr//2+2}" fill="{hair}"/>'
+
+    # Partícula de energía animada si está en avance
+    particulas = ""
+    if estado == "AVANCE":
+        for i, (px2, py2, delay) in enumerate([(80,40,0),(120,35,0.3),(105,25,0.6),(95,30,0.9)]):
+            particulas += f'''<circle cx="{px2}" cy="{py2}" r="3" fill="{accent}" opacity="0">
+              <animate attributeName="cy" values="{py2};{py2-20};{py2}" dur="1.8s" begin="{delay}s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0;0.8;0" dur="1.8s" begin="{delay}s" repeatCount="indefinite"/>
+            </circle>'''
+
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="200" height="340" viewBox="0 0 200 340">
+  <defs>
+    <radialGradient id="bg2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#1A2B1F;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0D1F14;stop-opacity:1"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="200" height="340" fill="url(#bg2)" rx="16"/>
+
+  <!-- Partículas de energía -->
+  {particulas}
+
+  <!-- Anillo de estado -->
+  <circle cx="{cx}" cy="{cy_cab}" r="{cr + 10}" fill="none" stroke="{ring_color}" stroke-width="2.5" opacity="0.7">
+    <animate attributeName="r" values="{cr+8};{cr+15};{cr+8}" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.7;0.15;0.7" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Sombra -->
+  <ellipse cx="{cx}" cy="{pie_y+8}" rx="26" ry="7" fill="#000" opacity="0.25"/>
+
+  <!-- Cabello -->
+  {cabello}
+
+  <!-- Cabeza -->
+  <circle cx="{cx}" cy="{cy_cab}" r="{cr}" fill="{skin}"/>
+
+  <!-- Ojos -->
+  <circle cx="{cx-7}" cy="{cy_cab-3}" r="3" fill="#2C2C2C"/>
+  <circle cx="{cx+7}" cy="{cy_cab-3}" r="3" fill="#2C2C2C"/>
+  <circle cx="{cx-6}" cy="{cy_cab-4}" r="1" fill="#fff"/>
+  <circle cx="{cx+8}" cy="{cy_cab-4}" r="1" fill="#fff"/>
+
+  <!-- Boca expresiva -->
+  {boca}
+
+  <!-- Torso -->
+  <rect x="{cx-tw//2}" y="{ty}" width="{tw}" height="{th}" rx="6" fill="{outfit_color}"/>
+
+  <!-- Brazos -->
+  <rect x="{cx-tw//2-bw-2}" y="{ty+4}" width="{bw}" height="{th-10}" rx="5" fill="{skin}"/>
+  <rect x="{cx+tw//2+2}" y="{ty+4}" width="{bw}" height="{th-10}" rx="5" fill="{skin}"/>
+
+  <!-- Piernas -->
+  <rect x="{cx-tw//4}" y="{py}" width="{tw//4-2}" height="{ph}" rx="6" fill="#2C2C2C"/>
+  <rect x="{cx+2}" y="{py}" width="{tw//4-2}" height="{ph}" rx="6" fill="#2C2C2C"/>
+
+  <!-- Pies -->
+  <ellipse cx="{cx-tw//8}" cy="{pie_y+5}" rx="10" ry="5" fill="#1A1A2E"/>
+  <ellipse cx="{cx+tw//8+2}" cy="{pie_y+5}" rx="10" ry="5" fill="#1A1A2E"/>
+
+  <!-- Emoji de estado -->
+  <text x="{cx+32}" y="{cy_cab-14}" font-size="16" text-anchor="middle">{emoji_estado}</text>
+
+  <!-- Barra de fuerza -->
+  <rect x="155" y="{pie_y - 60}" width="10" height="60" rx="4" fill="#1A3D24"/>
+  <rect x="155" y="{pie_y - barra_h}" width="10" height="{barra_h}" rx="4" fill="{accent}">
+    <animate attributeName="height" values="0;{barra_h}" dur="1.2s" fill="freeze"/>
+    <animate attributeName="y" values="{pie_y}" to="{pie_y - barra_h}" dur="1.2s" fill="freeze"/>
+  </rect>
+  <text x="160" y="{pie_y - 64}" font-size="7" fill="{accent}" text-anchor="middle">FZA</text>
+
+  <!-- Delta peso -->
+  <text x="{cx}" y="295" font-size="10" fill="{ring_color}" text-anchor="middle" font-weight="bold" font-family="monospace">
+    PESO {dif_peso:+.1f}kg · CIN {dif_cintura:+.1f}cm
+  </text>
+
+  <!-- Nombre -->
+  <text x="{cx}" y="315" font-size="9" fill="{accent}" text-anchor="middle" font-family="monospace" letter-spacing="1">{nombre[:12].upper()}</text>
+</svg>'''
+    return svg
+
+
+def render_avatar_svg(svg_str: str, height: int = 280):
+    """Renderiza SVG inline en Streamlit."""
+    import base64
+    b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
+    st.markdown(
+        f'<div style="display:flex;justify-content:center;margin:10px 0;">'
+        f'<img src="data:image/svg+xml;base64,{b64}" height="{height}" style="filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
 # =============================================================================
 # 7. PDF GENERATOR
@@ -739,27 +1080,84 @@ def mostrar_dashboard_q1(norm: dict, mot: dict, id_al: str):
     nombre = norm.get("Nombre completo","Atleta")
     render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
 
-    # Avatar + estado general
+    # ── Avatar inteligente Q1 + perfil ────────────────────────────────────────
     ca, cb = st.columns([1, 3])
     with ca:
-        st.markdown("<div class='avatar-container'><div class='avatar-ring'>", unsafe_allow_html=True)
-        st.image(obtener_avatar_url("AVANCE", nombre), width=120)
-        st.markdown("</div></div>", unsafe_allow_html=True)
-    with cb:
+        svg_q1 = construir_avatar_q1(norm, mot)
+        render_avatar_svg(svg_q1, height=260)
+
+        # Leyenda de indicadores del avatar
+        lesion = norm.get("Lesión actual","Ninguna")
+        imc    = mot.get("imc", 22)
+        if imc < 18.5:   complexion_lbl = "🔹 Complexión: Delgado"
+        elif imc < 25:   complexion_lbl = "🟢 Complexión: Normal"
+        elif imc < 30:   complexion_lbl = "🟡 Complexión: Sobrepeso"
+        else:            complexion_lbl = "🔴 Complexión: Obesidad"
         st.markdown(f"""
-        <div style="padding:16px 0;">
+        <div style='font-size:10px;color:#7D9A84;text-align:center;line-height:1.8;margin-top:4px;'>
+          {'👩' if 'Femen' in norm.get('Sexo','') else '👨'} {norm.get('Sexo','')}<br>
+          {complexion_lbl}<br>
+          {'🚨 Lesión: ' + lesion if lesion != 'Ninguna' else '✅ Sin lesiones activas'}<br>
+          📏 {mot['estatura']} cm
+        </div>
+        """, unsafe_allow_html=True)
+
+    with cb:
+        # Análisis de zonas de enfoque basado en datos reales
+        objetivo  = norm.get("Objetivo principal","")
+        estres    = _parse_float(norm.get("Estres_Ext","5"), 5.0)
+        recup     = norm.get("Recuperacion_Base","Normal")
+        biofeed   = norm.get("Biofeedback_Dig","Sin molestias")
+        nivel     = norm.get("Tiempo entrenando","")
+        postura   = norm.get("Mala postura","No")
+
+        zonas = []
+        if "Perder" in objetivo or "grasa" in objetivo:
+            zonas.append(("🔥","Quema de grasa","Déficit calórico activo · Cardio HIIT recomendado"))
+        if "Ganar" in objetivo or "muscular" in objetivo:
+            zonas.append(("💪","Hipertrofia muscular","Superávit calórico · Progresión de cargas clave"))
+        if "Recomposición" in objetivo:
+            zonas.append(("⚖️","Recomposición corporal","Balance calórico · Prioridad proteica alta"))
+        if lesion != "Ninguna":
+            zonas.append(("⚠️",f"Lesión: {lesion}","Protocolo adaptado · Evitar carga axial"))
+        if estres >= 7:
+            zonas.append(("🧠","Estrés elevado","Priorizar sueño · Reducir volumen de entrenamiento"))
+        if "pesadez" in biofeed.lower() or "Gases" in biofeed:
+            zonas.append(("🫀","Biofeedback digestivo","Ajuste de fuentes de carbohidratos recomendado"))
+        if "Nunca" in nivel or "Menos de 6" in nivel:
+            zonas.append(("🌱","Principiante","Inducción activa · Técnica antes que carga"))
+        if postura != "No":
+            zonas.append(("🦴",f"Corrección postural: {postura}","Ejercicios correctivos incluidos en rutina"))
+        if not zonas:
+            zonas.append(("✅","Perfil equilibrado","Continuar protocolo estándar de progresión"))
+
+        st.markdown(f"""
+        <div style="padding:12px 0 4px;">
           <div style="font-size:26px;font-weight:900;color:#0D1F14;font-family:'Space Grotesk',sans-serif;">{nombre}</div>
           <div style="font-size:12px;color:#50C878;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">
-            {mot['genero']} · {int(mot['edad'])} años · {mot['estatura']} cm
+            {mot['genero']} · {int(mot['edad'])} años · {mot['estatura']} cm · IMC {mot['imc']}
           </div>
-          <div style="margin-top:10px;">
-            <span class="badge-avance">✅ EXPEDIENTE ACTIVO</span>
-          </div>
-          <div style="font-size:13px;color:#6B7280;margin-top:8px;">
-            Objetivo: <strong style='color:#166534;'>{norm.get('Objetivo principal','--')}</strong>
+          <div style="margin-top:8px;"><span class="badge-avance">✅ EXPEDIENTE ACTIVO</span></div>
+          <div style="font-size:13px;color:#6B7280;margin-top:6px;">
+            Objetivo: <strong style='color:#166534;'>{objetivo}</strong>
           </div>
         </div>
         """, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top:12px;'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:8px;'>ÁREAS DE ENFOQUE DETECTADAS</div>", unsafe_allow_html=True)
+        for icono, titulo_zona, desc_zona in zonas:
+            st.markdown(f"""
+            <div style='display:flex;align-items:flex-start;gap:10px;padding:8px 12px;
+                        background:#F0FDF4;border-left:3px solid #50C878;border-radius:0 8px 8px 0;
+                        margin-bottom:6px;'>
+              <span style='font-size:18px;'>{icono}</span>
+              <div>
+                <div style='font-size:12px;font-weight:700;color:#166534;'>{titulo_zona}</div>
+                <div style='font-size:11px;color:#6B7280;margin-top:2px;'>{desc_zona}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Métricas biométricas
     st.markdown("<div class='sec-head'>MÉTRICAS BIOMÉTRICAS BASE</div>", unsafe_allow_html=True)
@@ -905,26 +1303,94 @@ def mostrar_dashboard_q2(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: st
 
     render_hero("AUDITORÍA COMPARATIVA — Q1 vs Q2", "MI AVANCE MM247", id_al)
 
-    # Estado general con avatar
+    # ── Avatar inteligente Q2 + análisis dinámico ─────────────────────────────
     ca, cb = st.columns([1, 3])
     with ca:
-        st.image(obtener_avatar_url(estado, nombre), width=130)
+        svg_q2 = construir_avatar_q2(norm, mot, dict(ult), estado)
+        render_avatar_svg(svg_q2, height=280)
+
+        # Leyenda dinámica Q2
+        dif_p_prev = round(peso_act - mot["peso"], 1)
+        dif_c_prev = round(cintura_act - mot["cintura"], 1)
+        color_p = "#22C55E" if dif_p_prev <= 0 else "#EF4444"
+        color_c = "#22C55E" if dif_c_prev <= 0 else "#EF4444"
+        ring_color_leg = {"AVANCE":"#22C55E","RETROCESO":"#EF4444"}.get(estado,"#F59E0B")
+        st.markdown(f"""
+        <div style='font-size:10px;text-align:center;line-height:2;margin-top:4px;'>
+          <span style='color:{ring_color_leg};font-weight:700;'>{estado}</span><br>
+          <span style='color:{color_p};'>Peso {dif_p_prev:+.1f} kg</span><br>
+          <span style='color:{color_c};'>Cintura {dif_c_prev:+.1f} cm</span><br>
+          <span style='color:#7D9A84;'>Fuerza: {ult.get("Progreso_Fuerza","5")}/10</span>
+        </div>
+        """, unsafe_allow_html=True)
+
     with cb:
         badge_map = {
             "AVANCE":    "<span class='badge-avance'>🚀 EN AVANCE</span>",
             "RETROCESO": "<span class='badge-retroceso'>⚠️ RETROCESO DETECTADO</span>",
             "LENTO":     "<span class='badge-lento'>⏳ PROGRESO LENTO</span>",
         }
+
+        # Análisis dinámico basado en datos Q2
+        adherencia  = str(ult.get("Adherencia Real al Sistema",""))
+        sobrecarga  = str(ult.get("Sobrecarga Progresiva",""))
+        tolerancia  = str(ult.get("Tolerancia Metabólica",""))
+        fuerza_q2v  = _parse_float(ult.get("Progreso_Fuerza","5"), 5.0)
+        energia_q2  = _parse_float(ult.get("Energia","5"), 5.0)
+        sueno_q2    = _parse_float(ult.get("Calidad_Sueno","5"), 5.0)
+
+        analisis = []
+        if "100%" in adherencia or "80-90%" in adherencia:
+            analisis.append(("✅","Adherencia alta","El cliente sigue el protocolo correctamente. Mantener estructura."))
+        elif "50%" in adherencia:
+            analisis.append(("⚠️","Adherencia media","Revisar obstáculos prácticos. Simplificar plan nutricional."))
+        else:
+            analisis.append(("🚨","Adherencia crítica","Protocolo abandonado parcialmente. Reencuadre motivacional urgente."))
+
+        if "Sí, subí" in sobrecarga:
+            analisis.append(("💪","Sobrecarga progresiva ✓","Adaptación neuromuscular confirmada. Autorizado aumentar +5%."))
+        elif "mantuve" in sobrecarga:
+            analisis.append(("⏸️","Sin progresión de cargas","Estancamiento potencial. Revisar periodización."))
+        else:
+            analisis.append(("📉","Pérdida de fuerza","Posible sobreentrenamiento o déficit calórico excesivo."))
+
+        if "pesadez" in tolerancia.lower() or "Inflamación" in tolerancia:
+            analisis.append(("🫀","Intolerancia digestiva","Rotar carbohidratos. Evitar gluten y lácteos 2 semanas."))
+        else:
+            analisis.append(("✅","Tolerancia metabólica OK","Sin ajustes digestivos requeridos."))
+
+        if energia_q2 <= 4:
+            analisis.append(("⚡","Energía baja","Revisar calidad de sueño y distribución calórica pre-entreno."))
+        if sueno_q2 <= 4:
+            analisis.append(("😴","Sueño deficiente","Factor limitante clave. Higiene de sueño como prioridad."))
+        if fuerza_q2v >= 8 and estado == "AVANCE":
+            analisis.append(("🏆","Alto rendimiento","Perfil de alto desempeño. Candidato para protocolo avanzado."))
+
         st.markdown(f"""
-        <div style="padding:16px 0;">
+        <div style="padding:12px 0 4px;">
           <div style="font-size:26px;font-weight:900;color:#0D1F14;">{nombre}</div>
-          <div style="margin:8px 0;">{badge_map.get(estado, badge_map['AVANCE'])}</div>
-          <div style="font-size:13px;color:#6B7280;">
-            Adherencia: <strong>{ult.get('Adherencia Real al Sistema','--')}</strong> ·
-            Sobrecarga: <strong>{ult.get('Sobrecarga Progresiva','--')}</strong>
+          <div style="margin:8px 0;">{badge_map.get(estado, badge_map['LENTO'])}</div>
+          <div style="font-size:12px;color:#6B7280;">
+            Adherencia: <strong>{adherencia}</strong> · Sobrecarga: <strong>{sobrecarga}</strong>
           </div>
         </div>
         """, unsafe_allow_html=True)
+
+        st.markdown("<div style='margin-top:10px;'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:8px;'>ANÁLISIS CLÍNICO DINÁMICO</div>", unsafe_allow_html=True)
+        for icono, titulo_an, desc_an in analisis:
+            color_borde = "#22C55E" if icono in ("✅","💪","🏆") else ("#EF4444" if icono in ("🚨","📉") else "#F59E0B")
+            st.markdown(f"""
+            <div style='display:flex;align-items:flex-start;gap:10px;padding:7px 12px;
+                        background:#fff;border-left:3px solid {color_borde};border-radius:0 8px 8px 0;
+                        margin-bottom:5px;box-shadow:0 1px 4px rgba(0,0,0,.04);'>
+              <span style='font-size:16px;'>{icono}</span>
+              <div>
+                <div style='font-size:12px;font-weight:700;color:#0D1F14;'>{titulo_an}</div>
+                <div style='font-size:11px;color:#6B7280;margin-top:1px;'>{desc_an}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Deltas biométricos
     st.markdown("<div class='sec-head'>CRUCE BIOMÉTRICO — DELTAS Q1 → Q2</div>", unsafe_allow_html=True)
@@ -1401,22 +1867,30 @@ def mostrar_dashboard_admin(df_existente: pd.DataFrame):
             if not r_df.empty:
                 estado_actual = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
 
-            # Avatar
+            # Avatar inteligente en admin
             ca2, cb2 = st.columns([1, 3])
             with ca2:
-                st.image(obtener_avatar_url(estado_actual if not r_df.empty else "AVANCE", d_norm.get("Nombre completo","Atleta")), width=110)
+                if not r_df.empty:
+                    svg_admin = construir_avatar_q2(d_norm, m_calc, dict(r_df.iloc[-1]), estado_actual)
+                else:
+                    svg_admin = construir_avatar_q1(d_norm, m_calc)
+                render_avatar_svg(svg_admin, height=220)
             with cb2:
                 badge_map = {
                     "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
                     "RETROCESO":     "<span class='badge-retroceso'>⚠️ RETROCESO</span>",
                     "SIN AUDITORÍA": "<span class='badge-lento'>📋 SIN Q2 AÚN</span>",
                 }
+                sexo_icon = "👩" if "Femen" in m_calc.get("genero","") else "👨"
                 st.markdown(f"""
                 <div style="padding:8px 0;">
                   <div style="font-size:20px;font-weight:900;color:#0D1F14;">{d_norm.get('Nombre completo','')}</div>
                   <div style="margin:6px 0;">{badge_map.get(estado_actual, badge_map['SIN AUDITORÍA'])}</div>
                   <div style="font-size:12px;color:#6B7280;">
-                    {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg
+                    {sexo_icon} {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg · {m_calc['estatura']} cm
+                  </div>
+                  <div style="font-size:11px;color:#7D9A84;margin-top:4px;">
+                    IMC: {m_calc['imc']} · {m_calc['origen']}
                   </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1486,14 +1960,10 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
-
-    # ── Info del sistema ────────────────────────────────────────────────────
-    total_reg = len(df_existente[df_existente["Tipo_Registro"] == "INICIAL"]) if not df_existente.empty else 0
-    st.markdown(f"""
-    <div style='background:#0D1F14;border:1px solid #50C87830;border-radius:8px;padding:12px;margin-top:8px;'>
+    st.markdown("""
+    <div style='background:#0D1F14;border:1px solid #50C87830;border-radius:8px;padding:10px 12px;margin-top:8px;'>
       <div style='font-size:9px;letter-spacing:2px;color:#50C87870;text-transform:uppercase;'>Sistema</div>
-      <div style='font-size:14px;font-weight:700;color:#50C878;margin-top:4px;'>{total_reg} atletas registrados</div>
-      <div style='font-size:10px;color:#4B7A5A;margin-top:2px;'>v6.0 · IDs Secuenciales</div>
+      <div style='font-size:10px;color:#4B7A5A;margin-top:4px;'>v7.0 · Mind Muscle Ecosystem</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1513,3 +1983,4 @@ else:
 
     elif vista == "avance":
         mostrar_formulario_q2(df_existente)
+
