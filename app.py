@@ -2325,3 +2325,4 @@ else:
 
     elif vista == "avance":
         mostrar_formulario_q2(df_existente)
+
