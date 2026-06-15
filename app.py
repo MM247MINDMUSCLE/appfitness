@@ -524,592 +524,187 @@ def generar_plan_accion(norm: dict, ult_rev: pd.Series, estado: str) -> list:
     return plan
 
 # =============================================================================
-# 6. AVATAR
+# 6. MOTOR DE AVATAR — DICEBEAR CARTOON FITNESS (ALTA CALIDAD)
 # =============================================================================
-# 6. MOTOR DE AVATAR INTELIGENTE
-# =============================================================================
-def obtener_avatar_url(estatus: str, nombre: str = "Atleta") -> str:
-    """Avatar básico de fallback."""
-    nom = str(nombre).replace(" ", "+")
-    bg = {"AVANCE": "50C878", "RETROCESO": "EF4444"}.get(estatus, "F59E0B")
-    return f"https://ui-avatars.com/api/?name={nom}&background={bg}&color=fff&size=256&font-size=0.4&bold=true&rounded=true"
+
+def _avatar_params(norm: dict, mot: dict) -> dict:
+    """
+    Calcula todos los parámetros visuales del avatar basándose en los datos
+    reales del cliente: género, complexión, tono de piel, cabello, ropa.
+    """
+    sexo     = str(norm.get("Sexo", "Masculino"))
+    imc      = mot.get("imc", 22.0)
+    objetivo = str(norm.get("Objetivo principal", ""))
+    nombre   = str(norm.get("Nombre completo", "Atleta"))
+    es_mujer = "Femen" in sexo or "femen" in sexo
+
+    # Tono de piel (0=claro, 100=oscuro) — basado en nombre/región como proxy neutro
+    skin_tone = "f5cfa0"  # neutral medio por defecto
+
+    # Color de cabello
+    hair_col = "4a2511" if not es_mujer else "6b2d0e"
+
+    # Ropa según objetivo y género
+    if "grasa" in objetivo or "Perder" in objetivo:
+        top_col  = "ff6b35" if not es_mujer else "e91e8c"
+        bot_col  = "1a1a2e" if not es_mujer else "1a1a2e"
+    elif "muscular" in objetivo or "Ganar" in objetivo:
+        top_col  = "1a3d24" if not es_mujer else "1a3d80"
+        bot_col  = "111827" if not es_mujer else "111827"
+    else:
+        top_col  = "1a3d24" if not es_mujer else "7c3d8a"
+        bot_col  = "1a1a2e" if not es_mujer else "6d28d9"
+
+    # Accesorio según nivel
+    nivel = str(norm.get("Tiempo entrenando", ""))
+    acc = "eyeglasses" if "Más de 3" in nivel else "none"
+
+    return {
+        "es_mujer": es_mujer,
+        "skin_tone": skin_tone,
+        "hair_col": hair_col,
+        "top_col": top_col,
+        "bot_col": bot_col,
+        "imc": imc,
+        "nombre": nombre,
+        "objetivo": objetivo,
+        "acc": acc,
+    }
+
+
+def construir_url_avatar(norm: dict, mot: dict, estado: str = "Q1") -> str:
+    """
+    Genera URL de avatar DiceBear estilo 'avataaars' (cartoon fitness).
+    Parámetros personalizados por datos del cliente.
+    """
+    p = _avatar_params(norm, mot)
+    es_mujer = p["es_mujer"]
+
+    # Estilo base: avataaars (alta calidad cartoon)
+    base = "https://api.dicebear.com/9.x/avataaars/svg"
+
+    # Tipo de cabello según género
+    if es_mujer:
+        hair_types = "longHairBraids,longHairCurly,longHairStraight,longHairBun"
+    else:
+        hair_types = "shortHairShortFlat,shortHairDreads01,shortHairFrizzle,shortHairTheCaesar"
+
+    # Top según género
+    if es_mujer:
+        top_type = "GraphicShirt"
+        clothing = "GraphicShirt"
+    else:
+        top_type = "ShirtVNeck"
+        clothing = "ShirtVNeck"
+
+    # Color outfit según estado Q2
+    if estado == "AVANCE":
+        cloth_color = "262E33"
+        mouth = "smile"
+    elif estado == "RETROCESO":
+        cloth_color = "929598"
+        mouth = "sad"
+    elif estado == "LENTO":
+        cloth_color = "65C9FF"
+        mouth = "default"
+    else:  # Q1
+        cloth_color = p["top_col"].lstrip("#") if not es_mujer else p["top_col"].lstrip("#")
+        mouth = "smile"
+
+    # Accesorios (gafas de sol si es avanzado)
+    accessories = "sunglasses" if "Más de 3" in str(norm.get("Tiempo entrenando","")) else "none"
+
+    # Ojos expresivos
+    eye_type = "default" if estado not in ("RETROCESO",) else "squint"
+
+    # Seed único por cliente para consistencia
+    import hashlib
+    seed = hashlib.md5(p["nombre"].encode()).hexdigest()[:8]
+
+    params = (
+        f"?seed={seed}"
+        f"&skinColor={p['skin_tone']}"
+        f"&hairColor={p['hair_col']}"
+        f"&top[]={hair_types.split(',')[0]}"
+        f"&clothesColor={cloth_color}"
+        f"&clothes[]={clothing}"
+        f"&eyes[]={eye_type}"
+        f"&mouth[]={mouth}"
+        f"&accessories[]={accessories}"
+        f"&backgroundColor=1E3A28"
+        f"&backgroundType=gradientLinear"
+        f"&radius=16"
+        f"&size=300"
+    )
+    return base + params
+
+
+def construir_url_avatar_q2(norm: dict, mot: dict, ult_rev: dict, estado: str) -> str:
+    """URL de avatar Q2 con expresión y accesorios según estado."""
+    return construir_url_avatar(norm, mot, estado)
+
+
+def render_avatar_fitness(url: str, nombre: str, estado: str = "Q1",
+                           info_extra: str = "", height: int = 260):
+    """
+    Muestra el avatar fitness con marco, badge de estado y nombre.
+    Compatible 100% con Streamlit — usa st.image con URL directa.
+    """
+    # Color del badge según estado
+    badge_colors = {
+        "AVANCE":    ("#22C55E", "#DCFCE7", "🚀 AVANCE"),
+        "RETROCESO": ("#EF4444", "#FEE2E2", "⚠️ RETROCESO"),
+        "LENTO":     ("#F59E0B", "#FEF9C3", "⏳ LENTO"),
+        "Q1":        ("#50C878", "#F0FDF4", "✅ ACTIVO"),
+    }
+    bc, bbg, blbl = badge_colors.get(estado, badge_colors["Q1"])
+
+    st.markdown(f"""
+    <div style="text-align:center;">
+      <div style="display:inline-block;border:3px solid {bc};border-radius:20px;
+                  padding:6px;background:linear-gradient(135deg,#0D1F14,#1A3D24);
+                  box-shadow:0 0 24px {bc}55;">
+        <img src="{url}" width="{height}" style="border-radius:14px;display:block;"/>
+      </div>
+      <div style="margin-top:10px;">
+        <span style="background:{bbg};color:{bc};border:1px solid {bc};
+                     padding:4px 14px;border-radius:20px;font-size:12px;
+                     font-weight:700;letter-spacing:1px;">{blbl}</span>
+      </div>
+      {f'<div style="font-size:11px;color:#7D9A84;margin-top:6px;">{info_extra}</div>' if info_extra else ""}
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def construir_avatar_q1(norm: dict, mot: dict) -> str:
-    """
-    Avatar SVG fitness profesional Q1 con anatomía, zonas musculares
-    señalizadas dinámicamente y diferenciación hombre/mujer completa.
-    """
-    sexo     = str(norm.get("Sexo", "Masculino"))
-    imc      = mot.get("imc", 22.0)
-    estatura = mot.get("estatura", 175.0)
-    objetivo = str(norm.get("Objetivo principal", ""))
-    lesion   = str(norm.get("Lesión actual", "Ninguna"))
-    nivel    = str(norm.get("Tiempo entrenando", "Menos de 6 meses"))
-    nombre   = str(norm.get("Nombre completo", "Atleta"))
-
-    es_mujer = "Femen" in sexo or "femen" in sexo
-    skin  = "#F4C49E" if not es_mujer else "#F2B08A"
-    hair  = "#3B2314" if not es_mujer else "#7B3F00"
-    acc   = "#50C878"
-    cx, W, H = 110, 220, 420
-
-    # ── Complexión según IMC ────────────────────────────────────────────────
-    if imc < 18.5:
-        sw, cw, lw = 44, 52, 16   # delgado
-        grasa_op = 0.0
-    elif imc < 25:
-        sw, cw, lw = 54, 62, 20   # normal-atlético
-        grasa_op = 0.05
-    elif imc < 30:
-        sw, cw, lw = 66, 74, 24   # sobrepeso
-        grasa_op = 0.18
-    else:
-        sw, cw, lw = 78, 86, 28   # obesidad
-        grasa_op = 0.32
-
-    # Hombros más anchos si objetivo muscular
-    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
-        sw = min(sw + 10, 88)
-
-    # Escala por estatura
-    sc = 0.90 if estatura < 162 else (1.08 if estatura > 178 else 1.0)
-
-    # Posiciones anatómicas
-    cy_h  = int(52 * sc)          # centro cabeza
-    cr    = int(24 * sc)          # radio cabeza
-    neck_y= cy_h + cr
-    sho_y = neck_y + int(10*sc)   # hombros
-    torso_y = sho_y
-    torso_h = int(72 * sc)
-    waist_y = torso_y + torso_h
-    hip_y   = waist_y + int(8*sc)
-    knee_y  = hip_y + int(60*sc)
-    foot_y  = knee_y + int(58*sc)
-
-    sw2, cw2 = sw//2, cw//2       # half-widths
-
-    # ── Zonas musculares a entrenar según objetivo ──────────────────────────
-    zonas_color = []
-    if "grasa" in objetivo or "Perder" in objetivo:
-        # Cardio → cintura y todo el cuerpo
-        zonas_color = [
-            ("abdomen",  cx-14, waist_y-18, 28, 20, "#FF6B35", "ABDOMEN"),
-            ("cardio",   cx-sw2+2, torso_y+10, sw-4, 16, "#FF6B35", "CARDIO"),
-        ]
-    elif "muscular" in objetivo or "Ganar" in objetivo:
-        zonas_color = [
-            ("pecho",    cx-sw2+4, torso_y+6,  sw-8, 22, "#3B82F6", "PECHO"),
-            ("espalda",  cx-sw2+4, torso_y+30, sw-8, 18, "#8B5CF6", "ESPALDA"),
-            ("biceps_i", cx-sw2-lw-2, torso_y+10, lw, 20, "#3B82F6", "BIC"),
-            ("biceps_d", cx+sw2+2,    torso_y+10, lw, 20, "#3B82F6", "BIC"),
-            ("cuad_i",   cx-cw2+2, hip_y+4, cw2-4, 30, "#10B981", "CUAD"),
-            ("cuad_d",   cx+2,     hip_y+4, cw2-4, 30, "#10B981", "CUAD"),
-        ]
-    else:  # recomposición
-        zonas_color = [
-            ("pecho",    cx-sw2+4, torso_y+6,  sw-8, 18, "#3B82F6", "PECHO"),
-            ("abdomen",  cx-14, waist_y-16, 28, 18, "#FF6B35", "ABS"),
-            ("gluteo",   cx-cw2+2, hip_y+2, cw-4, 18, "#EC4899", "GLUT"),
-        ]
-
-    # ── Señal de lesión ─────────────────────────────────────────────────────
-    lesion_markers = ""
-    if "Rodilla" in lesion:
-        for lx in [cx-cw2+4, cx+4]:
-            lesion_markers += f'''
-            <circle cx="{lx+lw//2}" cy="{knee_y}" r="9" fill="#EF4444" opacity="0.9">
-              <animate attributeName="r" values="7;12;7" dur="1s" repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0.9;0.4;0.9" dur="1s" repeatCount="indefinite"/>
-            </circle>
-            <text x="{lx+lw//2}" y="{knee_y+4}" font-size="8" fill="#fff" text-anchor="middle" font-weight="bold">!</text>'''
-    elif "Hombro" in lesion:
-        for lx in [cx-sw2-4, cx+sw2+4]:
-            lesion_markers += f'''
-            <circle cx="{lx}" cy="{sho_y+6}" r="9" fill="#EF4444" opacity="0.9">
-              <animate attributeName="r" values="7;12;7" dur="1s" repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0.9;0.4;0.9" dur="1s" repeatCount="indefinite"/>
-            </circle>
-            <text x="{lx}" y="{sho_y+10}" font-size="8" fill="#fff" text-anchor="middle" font-weight="bold">!</text>'''
-    elif "Espalda" in lesion:
-        lesion_markers += f'''
-        <ellipse cx="{cx}" cy="{torso_y+torso_h//2}" rx="18" ry="12" fill="#EF4444" opacity="0.7">
-          <animate attributeName="ry" values="10;16;10" dur="1.2s" repeatCount="indefinite"/>
-          <animate attributeName="opacity" values="0.7;0.3;0.7" dur="1.2s" repeatCount="indefinite"/>
-        </ellipse>
-        <text x="{cx}" y="{torso_y+torso_h//2+4}" font-size="9" fill="#fff" text-anchor="middle" font-weight="bold">ESC</text>'''
-    elif "Cervical" in lesion:
-        lesion_markers += f'''
-        <circle cx="{cx}" cy="{neck_y+5}" r="9" fill="#EF4444" opacity="0.9">
-          <animate attributeName="r" values="7;12;7" dur="1s" repeatCount="indefinite"/>
-        </circle>
-        <text x="{cx}" y="{neck_y+9}" font-size="7" fill="#fff" text-anchor="middle" font-weight="bold">CRV</text>'''
-
-    # ── Nivel badge ─────────────────────────────────────────────────────────
-    if "Más de 3" in nivel:    nivel_txt, nivel_col = "PRO", "#FFD700"
-    elif "1 a 3" in nivel:     nivel_txt, nivel_col = "INT", "#C0C0C0"
-    elif "6 meses" in nivel:   nivel_txt, nivel_col = "MED", "#CD7F32"
-    else:                       nivel_txt, nivel_col = "INI", "#50C878"
-
-    # ── Capas de grasa corporal ─────────────────────────────────────────────
-    grasa_layer = ""
-    if grasa_op > 0:
-        grasa_layer = f'''
-        <ellipse cx="{cx}" cy="{waist_y-10}" rx="{cw2+8}" ry="14" fill="#FFA07A" opacity="{grasa_op:.2f}"/>
-        <ellipse cx="{cx}" cy="{hip_y+10}" rx="{cw2+10}" ry="12" fill="#FFA07A" opacity="{grasa_op:.2f}"/>'''
-
-    # ── Cabello por género ──────────────────────────────────────────────────
-    if es_mujer:
-        cabello = f'''
-        <ellipse cx="{cx}" cy="{cy_h-cr+6}" rx="{cr+8}" ry="{cr//2+4}" fill="{hair}"/>
-        <path d="M {cx-cr-6} {cy_h-4} Q {cx-cr-14} {cy_h+cr+10} {cx-cr-4} {cy_h+cr+20}" stroke="{hair}" stroke-width="10" fill="none" stroke-linecap="round"/>
-        <path d="M {cx+cr+6} {cy_h-4} Q {cx+cr+14} {cy_h+cr+10} {cx+cr+4} {cy_h+cr+20}" stroke="{hair}" stroke-width="10" fill="none" stroke-linecap="round"/>'''
-    else:
-        cabello = f'<ellipse cx="{cx}" cy="{cy_h-cr+7}" rx="{cr+2}" ry="{cr//2+3}" fill="{hair}"/>'
-
-    # ── Cuerpo fitness con anatomía ─────────────────────────────────────────
-    if es_mujer:
-        # Figura femenina: hombros estrechos, cintura marcada, caderas
-        cuerpo = f'''
-        <!-- Cuello -->
-        <rect x="{cx-7}" y="{neck_y}" width="14" height="{int(10*sc)}" rx="4" fill="{skin}"/>
-        <!-- Hombros trapecio -->
-        <ellipse cx="{cx}" cy="{sho_y+4}" rx="{sw//2}" ry="10" fill="{skin}"/>
-        <!-- Torso superior (pecho/espalda) -->
-        <path d="M {cx-sw2} {sho_y+6} C {cx-sw2-4} {torso_y+torso_h//3} {cx-cw2-2} {waist_y-12} {cx-cw2} {waist_y}
-                 L {cx+cw2} {waist_y} C {cx+cw2+2} {waist_y-12} {cx+sw2+4} {torso_y+torso_h//3} {cx+sw2} {sho_y+6} Z"
-              fill="{skin}"/>
-        <!-- Sujetador deportivo -->
-        <path d="M {cx-sw2+4} {sho_y+8} C {cx-sw2} {sho_y+28} {cx-10} {sho_y+32} {cx} {sho_y+32}
-                 C {cx+10} {sho_y+32} {cx+sw2} {sho_y+28} {cx+sw2-4} {sho_y+8} Z"
-              fill="#7C3D8A" opacity="0.9"/>
-        <line x1="{cx-sw2+6}" y1="{sho_y+8}" x2="{cx-4}" y2="{sho_y+2}" stroke="#9D50BB" stroke-width="3" stroke-linecap="round"/>
-        <line x1="{cx+sw2-6}" y1="{sho_y+8}" x2="{cx+4}" y2="{sho_y+2}" stroke="#9D50BB" stroke-width="3" stroke-linecap="round"/>
-        <!-- Caderas -->
-        <ellipse cx="{cx}" cy="{hip_y+6}" rx="{cw2+6}" ry="10" fill="{skin}"/>
-        <!-- Leggings piernas -->
-        <path d="M {cx-cw2} {hip_y} L {cx-4} {hip_y+10} L {cx-lw//2-2} {knee_y} L {cx-lw//2-6} {foot_y}
-                 L {cx-lw//2+lw//2} {foot_y} L {cx-lw//2+lw//2+2} {knee_y} L {cx-2} {hip_y+10} Z"
-              fill="#6D28D9"/>
-        <path d="M {cx+cw2} {hip_y} L {cx+4} {hip_y+10} L {cx+lw//2+2} {knee_y} L {cx+lw//2+6} {foot_y}
-                 L {cx+lw//2-lw//2} {foot_y} L {cx+lw//2-lw//2-2} {knee_y} L {cx+2} {hip_y+10} Z"
-              fill="#6D28D9"/>
-        <!-- Línea quad -->
-        <line x1="{cx-cw2//2}" y1="{hip_y+12}" x2="{cx-cw2//2+2}" y2="{knee_y-6}" stroke="#8B5CF6" stroke-width="1.5" opacity="0.5"/>
-        <line x1="{cx+cw2//2}" y1="{hip_y+12}" x2="{cx+cw2//2-2}" y2="{knee_y-6}" stroke="#8B5CF6" stroke-width="1.5" opacity="0.5"/>
-        '''
-    else:
-        # Figura masculina: hombros anchos, torso en V, cuádriceps marcados
-        cuerpo = f'''
-        <!-- Cuello -->
-        <rect x="{cx-8}" y="{neck_y}" width="16" height="{int(10*sc)}" rx="4" fill="{skin}"/>
-        <!-- Trapecios / deltoides -->
-        <ellipse cx="{cx-sw2}" cy="{sho_y+6}" rx="14" ry="10" fill="{skin}"/>
-        <ellipse cx="{cx+sw2}" cy="{sho_y+6}" rx="14" ry="10" fill="{skin}"/>
-        <!-- Torso en V (pecho → cintura) -->
-        <path d="M {cx-sw2} {sho_y+4} L {cx-cw2} {waist_y} L {cx+cw2} {waist_y} L {cx+sw2} {sho_y+4} Z"
-              fill="{skin}"/>
-        <!-- División pectoral -->
-        <line x1="{cx}" y1="{torso_y+4}" x2="{cx}" y2="{torso_y+torso_h//3+4}" stroke="rgba(0,0,0,0.12)" stroke-width="2"/>
-        <!-- Pectorales forma -->
-        <ellipse cx="{cx-sw2//2}" cy="{torso_y+torso_h//4}" rx="{sw//4+2}" ry="{int(14*sc)}" fill="rgba(0,0,0,0.04)"/>
-        <ellipse cx="{cx+sw2//2}" cy="{torso_y+torso_h//4}" rx="{sw//4+2}" ry="{int(14*sc)}" fill="rgba(0,0,0,0.04)"/>
-        <!-- Abdomen 6-pack -->
-        <rect x="{cx-10}" y="{torso_y+torso_h//2}" width="20" height="{torso_h//3}" rx="4" fill="rgba(0,0,0,0.06)"/>
-        <line x1="{cx}" y1="{torso_y+torso_h//2}" x2="{cx}" y2="{waist_y-4}" stroke="rgba(0,0,0,0.10)" stroke-width="1.5"/>
-        <line x1="{cx-10}" y1="{torso_y+torso_h//2+10}" x2="{cx+10}" y2="{torso_y+torso_h//2+10}" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
-        <line x1="{cx-10}" y1="{torso_y+torso_h//2+20}" x2="{cx+10}" y2="{torso_y+torso_h//2+20}" stroke="rgba(0,0,0,0.08)" stroke-width="1"/>
-        <!-- Shorts deportivos -->
-        <path d="M {cx-cw2} {waist_y} L {cx-lw-2} {knee_y-16} L {cx-2} {knee_y-10} L {cx} {waist_y+10} Z" fill="#1A3D24"/>
-        <path d="M {cx+cw2} {waist_y} L {cx+lw+2} {knee_y-16} L {cx+2} {knee_y-10} L {cx} {waist_y+10} Z" fill="#1A3D24"/>
-        <!-- Cuádriceps -->
-        <path d="M {cx-lw-2} {knee_y-16} L {cx-lw-4} {knee_y} L {cx-2} {knee_y+4} L {cx-2} {knee_y-10} Z" fill="{skin}"/>
-        <path d="M {cx+lw+2} {knee_y-16} L {cx+lw+4} {knee_y} L {cx+2} {knee_y+4} L {cx+2} {knee_y-10} Z" fill="{skin}"/>
-        <!-- Línea quad sep -->
-        <line x1="{cx-lw//2-1}" y1="{knee_y-14}" x2="{cx-lw//2+1}" y2="{knee_y-2}" stroke="rgba(0,0,0,0.10)" stroke-width="1.5"/>
-        <line x1="{cx+lw//2+1}" y1="{knee_y-14}" x2="{cx+lw//2-1}" y2="{knee_y-2}" stroke="rgba(0,0,0,0.10)" stroke-width="1.5"/>
-        <!-- Gemelos / espinillas -->
-        <path d="M {cx-lw-4} {knee_y} C {cx-lw-6} {knee_y+20} {cx-lw//2-4} {foot_y-10} {cx-lw//2} {foot_y}
-                 L {cx-2} {foot_y} C {cx-2} {foot_y-10} {cx-2} {knee_y+4} {cx-2} {knee_y+4} Z" fill="{skin}"/>
-        <path d="M {cx+lw+4} {knee_y} C {cx+lw+6} {knee_y+20} {cx+lw//2+4} {foot_y-10} {cx+lw//2} {foot_y}
-                 L {cx+2} {foot_y} C {cx+2} {foot_y-10} {cx+2} {knee_y+4} {cx+2} {knee_y+4} Z" fill="{skin}"/>
-        <!-- Gemelo línea -->
-        <line x1="{cx-lw//2-2}" y1="{knee_y+8}" x2="{cx-lw//2}" y2="{knee_y+28}" stroke="rgba(0,0,0,0.09)" stroke-width="1.5"/>
-        <line x1="{cx+lw//2+2}" y1="{knee_y+8}" x2="{cx+lw//2}" y2="{knee_y+28}" stroke="rgba(0,0,0,0.09)" stroke-width="1.5"/>
-        '''
-
-    # ── Brazos fitness ───────────────────────────────────────────────────────
-    if es_mujer:
-        brazos = f'''
-        <path d="M {cx-sw2} {sho_y+4} C {cx-sw2-lw-8} {sho_y+20} {cx-sw2-lw-6} {waist_y-14} {cx-sw2-lw+4} {waist_y}"
-              stroke="{skin}" stroke-width="{lw}" fill="none" stroke-linecap="round"/>
-        <path d="M {cx+sw2} {sho_y+4} C {cx+sw2+lw+8} {sho_y+20} {cx+sw2+lw+6} {waist_y-14} {cx+sw2+lw-4} {waist_y}"
-              stroke="{skin}" stroke-width="{lw}" fill="none" stroke-linecap="round"/>'''
-    else:
-        brazos = f'''
-        <!-- Brazo izq con bícep -->
-        <path d="M {cx-sw2} {sho_y+4} C {cx-sw2-lw-10} {sho_y+18} {cx-sw2-lw-12} {waist_y-20} {cx-sw2-lw+2} {waist_y+2}"
-              stroke="{skin}" stroke-width="{lw+2}" fill="none" stroke-linecap="round"/>
-        <ellipse cx="{cx-sw2-lw-6}" cy="{torso_y+torso_h//3+8}" rx="{lw//2+3}" ry="{int(14*sc)}" fill="{skin}" opacity="0.5"/>
-        <!-- Brazo der con bícep -->
-        <path d="M {cx+sw2} {sho_y+4} C {cx+sw2+lw+10} {sho_y+18} {cx+sw2+lw+12} {waist_y-20} {cx+sw2+lw-2} {waist_y+2}"
-              stroke="{skin}" stroke-width="{lw+2}" fill="none" stroke-linecap="round"/>
-        <ellipse cx="{cx+sw2+lw+6}" cy="{torso_y+torso_h//3+8}" rx="{lw//2+3}" ry="{int(14*sc)}" fill="{skin}" opacity="0.5"/>'''
-
-    # ── Zapatillas deportivas ────────────────────────────────────────────────
-    shoe_color = "#50C878" if not es_mujer else "#9D50BB"
-    zapatillas = f'''
-    <ellipse cx="{cx-lw//2-2}" cy="{foot_y+6}" rx="{lw//2+8}" ry="7" fill="#1A1A2E"/>
-    <ellipse cx="{cx+lw//2+2}" cy="{foot_y+6}" rx="{lw//2+8}" ry="7" fill="#1A1A2E"/>
-    <ellipse cx="{cx-lw//2+2}" cy="{foot_y+4}" rx="{lw//2+4}" ry="4" fill="{shoe_color}" opacity="0.6"/>
-    <ellipse cx="{cx+lw//2-2}" cy="{foot_y+4}" rx="{lw//2+4}" ry="4" fill="{shoe_color}" opacity="0.6"/>'''
-
-    # ── Overlays de zonas musculares con animación ──────────────────────────
-    zonas_svg = ""
-    for zid, zx, zy, zw, zh, zcol, zlbl in zonas_color:
-        zonas_svg += f'''
-        <rect x="{zx}" y="{zy}" width="{zw}" height="{zh}" rx="4" fill="{zcol}" opacity="0.0">
-          <animate attributeName="opacity" values="0;0.35;0" dur="2s" begin="{hash(zid)%10*0.2:.1f}s" repeatCount="indefinite"/>
-        </rect>
-        <rect x="{zx}" y="{zy}" width="{zw}" height="{zh}" rx="4" fill="none" stroke="{zcol}" stroke-width="1.5" opacity="0.6">
-          <animate attributeName="opacity" values="0.3;0.9;0.3" dur="2s" begin="{hash(zid)%10*0.2:.1f}s" repeatCount="indefinite"/>
-        </rect>
-        <text x="{zx+zw//2}" y="{zy+zh//2+3}" font-size="7" fill="{zcol}" text-anchor="middle" font-weight="bold" font-family="monospace">{zlbl}</text>'''
-
-    # ── Leyenda lateral zonas ────────────────────────────────────────────────
-    leyenda_svg = ""
-    colores_unicos = list({z[5]: z[6] for z in zonas_color}.items())
-    for i, (col, lbl) in enumerate(colores_unicos[:3]):
-        ly = H - 70 + i*18
-        leyenda_svg += f'''
-        <rect x="8" y="{ly}" width="8" height="8" rx="2" fill="{col}"/>
-        <text x="20" y="{ly+7}" font-size="8" fill="{col}" font-family="monospace">{lbl}</text>'''
-
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <defs>
-    <radialGradient id="bg1q" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#1E3A28"/>
-      <stop offset="100%" stop-color="#0A1A0F"/>
-    </radialGradient>
-    <filter id="softshadow">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.3"/>
-    </filter>
-  </defs>
-
-  <!-- Fondo -->
-  <rect width="{W}" height="{H}" fill="url(#bg1q)" rx="18"/>
-
-  <!-- Grid decorativo de fondo -->
-  <g opacity="0.04" stroke="{acc}" stroke-width="0.5">
-    {"".join(f'<line x1="{x}" y1="0" x2="{x}" y2="{H}"/>' for x in range(0,W,20))}
-    {"".join(f'<line x1="0" y1="{y}" x2="{W}" y2="{y}"/>' for y in range(0,H,20))}
-  </g>
-
-  <!-- Anillo pulsante cabeza -->
-  <circle cx="{cx}" cy="{cy_h}" r="{cr+14}" fill="none" stroke="{acc}" stroke-width="1.5" opacity="0.3">
-    <animate attributeName="r" values="{cr+10};{cr+20};{cr+10}" dur="2.5s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values="0.3;0.05;0.3" dur="2.5s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- Sombra pies -->
-  <ellipse cx="{cx}" cy="{foot_y+14}" rx="36" ry="9" fill="#000" opacity="0.3" filter="url(#softshadow)"/>
-
-  <!-- Cabello -->
-  {cabello}
-
-  <!-- Cara -->
-  <circle cx="{cx}" cy="{cy_h}" r="{cr}" fill="{skin}"/>
-  <!-- Ojos -->
-  <ellipse cx="{cx-8}" cy="{cy_h-4}" rx="4" ry="4.5" fill="#2C1810"/>
-  <ellipse cx="{cx+8}" cy="{cy_h-4}" rx="4" ry="4.5" fill="#2C1810"/>
-  <circle cx="{cx-7}" cy="{cy_h-5}" r="1.5" fill="#fff"/>
-  <circle cx="{cx+9}" cy="{cy_h-5}" r="1.5" fill="#fff"/>
-  <!-- Cejas -->
-  <path d="M {cx-12} {cy_h-11} Q {cx-8} {cy_h-14} {cx-4} {cy_h-11}" stroke="#3B2314" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="M {cx+12} {cy_h-11} Q {cx+8} {cy_h-14} {cx+4} {cy_h-11}" stroke="#3B2314" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <!-- Nariz -->
-  <path d="M {cx-3} {cy_h+2} Q {cx} {cy_h+8} {cx+3} {cy_h+2}" stroke="{skin}" stroke-width="2" fill="none" opacity="0.6"/>
-  <!-- Sonrisa -->
-  <path d="M {cx-7} {cy_h+9} Q {cx} {cy_h+15} {cx+7} {cy_h+9}" stroke="#8B4513" stroke-width="2" fill="none" stroke-linecap="round"/>
-
-  <!-- Cuerpo -->
-  {cuerpo}
-
-  <!-- Grasa corporal overlay -->
-  {grasa_layer}
-
-  <!-- Brazos -->
-  {brazos}
-
-  <!-- Zapatillas -->
-  {zapatillas}
-
-  <!-- Zonas musculares señalizadas -->
-  {zonas_svg}
-
-  <!-- Indicadores de lesión -->
-  {lesion_markers}
-
-  <!-- Badge nivel superior derecha -->
-  <rect x="{W-42}" y="10" width="34" height="18" rx="9" fill="{nivel_col}" opacity="0.9"/>
-  <text x="{W-25}" y="23" font-size="9" fill="#000" text-anchor="middle" font-weight="bold" font-family="monospace">{nivel_txt}</text>
-
-  <!-- Leyenda zonas -->
-  {leyenda_svg}
-
-  <!-- Nombre abajo -->
-  <text x="{cx}" y="{H-8}" font-size="10" fill="{acc}" text-anchor="middle" font-family="monospace" letter-spacing="2">{nombre[:14].upper()}</text>
-</svg>'''
-    return svg
+    """Devuelve URL del avatar Q1."""
+    return construir_url_avatar(norm, mot, "Q1")
 
 
 def construir_avatar_q2(norm: dict, mot: dict, ult_rev: dict, estado: str) -> str:
-    """
-    Avatar fitness Q2 que refleja avance/retroceso con anatomía dinámica,
-    zonas musculares, expresión facial y partículas de energía.
-    """
-    sexo     = str(norm.get("Sexo", "Masculino"))
-    imc      = mot.get("imc", 22.0)
-    nombre   = str(norm.get("Nombre completo", "Atleta"))
-    objetivo = str(norm.get("Objetivo principal", ""))
-    es_mujer = "Femen" in sexo or "femen" in sexo
-
-    peso_q2    = _parse_float(ult_rev.get("Peso_Revision", mot["peso"]), mot["peso"])
-    cintura_q2 = _parse_float(ult_rev.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
-    fuerza_q2  = _parse_float(ult_rev.get("Progreso_Fuerza", "5"), 5.0)
-    energia_q2 = _parse_float(ult_rev.get("Energia", "5"), 5.0)
-
-    dif_peso    = peso_q2 - mot["peso"]
-    dif_cintura = cintura_q2 - mot["cintura"]
-
-    skin  = "#F4C49E" if not es_mujer else "#F2B08A"
-    hair  = "#3B2314" if not es_mujer else "#7B3F00"
-    cx, W, H = 110, 220, 440
-
-    # ── Paleta y postura según estado ──────────────────────────────────────
-    if estado == "AVANCE":
-        ring_col = "#22C55E"; acc = "#4ADE80"; outfit = "#166534"
-        postura  = -6        # erguido
-        boca_svg = f'<path d="M {{cx-9}} {{cy_h+10}} Q {{cx}} {{cy_h+17}} {{cx+9}} {{cy_h+10}}" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    elif estado == "RETROCESO":
-        ring_col = "#EF4444"; acc = "#F87171"; outfit = "#7F1D1D"
-        postura  = 10        # ligeramente encorvado
-        boca_svg = f'<path d="M {{cx-9}} {{cy_h+14}} Q {{cx}} {{cy_h+8}} {{cx+9}} {{cy_h+14}}" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    else:
-        ring_col = "#F59E0B"; acc = "#FCD34D"; outfit = "#78350F"
-        postura  = 2
-        boca_svg = f'<line x1="{{cx-8}}" y1="{{cy_h+12}}" x2="{{cx+8}}" y2="{{cy_h+12}}" stroke="#666" stroke-width="2" stroke-linecap="round"/>'
-
-    # IMC Q2 actualizado
-    imc_q2 = peso_q2 / ((mot["estatura"]/100)**2) if mot["estatura"] > 0 else imc
-    sc = 0.90 if mot["estatura"] < 162 else (1.08 if mot["estatura"] > 178 else 1.0)
-
-    if imc_q2 < 18.5:   sw, cw, lw = 44, 52, 16
-    elif imc_q2 < 25:   sw, cw, lw = 54, 62, 20
-    elif imc_q2 < 30:   sw, cw, lw = 66, 74, 24
-    else:                sw, cw, lw = 78, 86, 28
-
-    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
-        sw = min(sw+10, 88)
-
-    cy_h  = int(54*sc) + postura
-    cr    = int(24*sc)
-    neck_y= cy_h + cr
-    sho_y = neck_y + int(10*sc)
-    torso_y = sho_y
-    torso_h = int(72*sc)
-    waist_y = torso_y + torso_h
-    hip_y   = waist_y + int(8*sc)
-    knee_y  = hip_y + int(60*sc)
-    foot_y  = knee_y + int(58*sc)
-    sw2, cw2 = sw//2, cw//2
-
-    # Boca con posiciones reales
-    if estado == "AVANCE":
-        boca = f'<path d="M {cx-9} {cy_h+10} Q {cx} {cy_h+17} {cx+9} {cy_h+10}" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    elif estado == "RETROCESO":
-        boca = f'<path d="M {cx-9} {cy_h+14} Q {cx} {cy_h+8} {cx+9} {cy_h+14}" stroke="#666" stroke-width="2" fill="none" stroke-linecap="round"/>'
-    else:
-        boca = f'<line x1="{cx-8}" y1="{cy_h+12}" x2="{cx+8}" y2="{cy_h+12}" stroke="#666" stroke-width="2" stroke-linecap="round"/>'
-
-    # Cabello
-    if es_mujer:
-        cabello = f'''
-        <ellipse cx="{cx}" cy="{cy_h-cr+6}" rx="{cr+8}" ry="{cr//2+4}" fill="{hair}"/>
-        <path d="M {cx-cr-6} {cy_h-4} Q {cx-cr-14} {cy_h+cr+10} {cx-cr-4} {cy_h+cr+20}" stroke="{hair}" stroke-width="10" fill="none" stroke-linecap="round"/>
-        <path d="M {cx+cr+6} {cy_h-4} Q {cx+cr+14} {cy_h+cr+10} {cx+cr+4} {cy_h+cr+20}" stroke="{hair}" stroke-width="10" fill="none" stroke-linecap="round"/>'''
-    else:
-        cabello = f'<ellipse cx="{cx}" cy="{cy_h-cr+7}" rx="{cr+2}" ry="{cr//2+3}" fill="{hair}"/>'
-
-    # Cuerpo fitness Q2 (mismo que Q1 pero con outfit de estado)
-    if es_mujer:
-        cuerpo = f'''
-        <rect x="{cx-7}" y="{neck_y}" width="14" height="{int(10*sc)}" rx="4" fill="{skin}"/>
-        <ellipse cx="{cx}" cy="{sho_y+4}" rx="{sw2}" ry="10" fill="{skin}"/>
-        <path d="M {cx-sw2} {sho_y+6} C {cx-sw2-4} {torso_y+torso_h//3} {cx-cw2-2} {waist_y-12} {cx-cw2} {waist_y}
-                 L {cx+cw2} {waist_y} C {cx+cw2+2} {waist_y-12} {cx+sw2+4} {torso_y+torso_h//3} {cx+sw2} {sho_y+6} Z" fill="{skin}"/>
-        <path d="M {cx-sw2+4} {sho_y+8} C {cx-sw2} {sho_y+28} {cx-10} {sho_y+32} {cx} {sho_y+32}
-                 C {cx+10} {sho_y+32} {cx+sw2} {sho_y+28} {cx+sw2-4} {sho_y+8} Z" fill="{outfit}" opacity="0.9"/>
-        <ellipse cx="{cx}" cy="{hip_y+6}" rx="{cw2+6}" ry="10" fill="{skin}"/>
-        <path d="M {cx-cw2} {hip_y} L {cx-4} {hip_y+10} L {cx-lw//2-2} {knee_y} L {cx-lw//2-6} {foot_y}
-                 L {cx-lw//2+lw//2} {foot_y} L {cx-lw//2+lw//2+2} {knee_y} L {cx-2} {hip_y+10} Z" fill="{outfit}"/>
-        <path d="M {cx+cw2} {hip_y} L {cx+4} {hip_y+10} L {cx+lw//2+2} {knee_y} L {cx+lw//2+6} {foot_y}
-                 L {cx+lw//2-lw//2} {foot_y} L {cx+lw//2-lw//2-2} {knee_y} L {cx+2} {hip_y+10} Z" fill="{outfit}"/>
-        <path d="M {cx-sw2} {sho_y+4} C {cx-sw2-lw-8} {sho_y+20} {cx-sw2-lw-6} {waist_y-14} {cx-sw2-lw+4} {waist_y}"
-              stroke="{skin}" stroke-width="{lw}" fill="none" stroke-linecap="round"/>
-        <path d="M {cx+sw2} {sho_y+4} C {cx+sw2+lw+8} {sho_y+20} {cx+sw2+lw+6} {waist_y-14} {cx+sw2+lw-4} {waist_y}"
-              stroke="{skin}" stroke-width="{lw}" fill="none" stroke-linecap="round"/>'''
-    else:
-        cuerpo = f'''
-        <rect x="{cx-8}" y="{neck_y}" width="16" height="{int(10*sc)}" rx="4" fill="{skin}"/>
-        <ellipse cx="{cx-sw2}" cy="{sho_y+6}" rx="14" ry="10" fill="{skin}"/>
-        <ellipse cx="{cx+sw2}" cy="{sho_y+6}" rx="14" ry="10" fill="{skin}"/>
-        <path d="M {cx-sw2} {sho_y+4} L {cx-cw2} {waist_y} L {cx+cw2} {waist_y} L {cx+sw2} {sho_y+4} Z" fill="{skin}"/>
-        <path d="M {cx-sw2+2} {sho_y+6} L {cx-cw2+2} {waist_y-2} L {cx+cw2-2} {waist_y-2} L {cx+sw2-2} {sho_y+6} Z" fill="{outfit}" opacity="0.85"/>
-        <line x1="{cx}" y1="{torso_y+4}" x2="{cx}" y2="{torso_y+torso_h//3+4}" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
-        <path d="M {cx-cw2} {waist_y} L {cx-lw-2} {knee_y-16} L {cx-2} {knee_y-10} L {cx} {waist_y+10} Z" fill="#111827"/>
-        <path d="M {cx+cw2} {waist_y} L {cx+lw+2} {knee_y-16} L {cx+2} {knee_y-10} L {cx} {waist_y+10} Z" fill="#111827"/>
-        <path d="M {cx-lw-2} {knee_y-16} L {cx-lw-4} {knee_y} L {cx-2} {knee_y+4} L {cx-2} {knee_y-10} Z" fill="{skin}"/>
-        <path d="M {cx+lw+2} {knee_y-16} L {cx+lw+4} {knee_y} L {cx+2} {knee_y+4} L {cx+2} {knee_y-10} Z" fill="{skin}"/>
-        <path d="M {cx-lw-4} {knee_y} C {cx-lw-6} {knee_y+20} {cx-lw//2-4} {foot_y-10} {cx-lw//2} {foot_y}
-                 L {cx-2} {foot_y} C {cx-2} {foot_y-10} {cx-2} {knee_y+4} {cx-2} {knee_y+4} Z" fill="{skin}"/>
-        <path d="M {cx+lw+4} {knee_y} C {cx+lw+6} {knee_y+20} {cx+lw//2+4} {foot_y-10} {cx+lw//2} {foot_y}
-                 L {cx+2} {foot_y} C {cx+2} {foot_y-10} {cx+2} {knee_y+4} {cx+2} {knee_y+4} Z" fill="{skin}"/>
-        <path d="M {cx-sw2} {sho_y+4} C {cx-sw2-lw-10} {sho_y+18} {cx-sw2-lw-12} {waist_y-20} {cx-sw2-lw+2} {waist_y+2}"
-              stroke="{skin}" stroke-width="{lw+2}" fill="none" stroke-linecap="round"/>
-        <path d="M {cx+sw2} {sho_y+4} C {cx+sw2+lw+10} {sho_y+18} {cx+sw2+lw+12} {waist_y-20} {cx+sw2+lw-2} {waist_y+2}"
-              stroke="{skin}" stroke-width="{lw+2}" fill="none" stroke-linecap="round"/>'''
-
-    # Zapatillas
-    shoe_color = acc
-    zapatillas = f'''
-    <ellipse cx="{cx-lw//2-2}" cy="{foot_y+6}" rx="{lw//2+8}" ry="7" fill="#1A1A2E"/>
-    <ellipse cx="{cx+lw//2+2}" cy="{foot_y+6}" rx="{lw//2+8}" ry="7" fill="#1A1A2E"/>
-    <ellipse cx="{cx-lw//2+2}" cy="{foot_y+4}" rx="{lw//2+4}" ry="4" fill="{shoe_color}" opacity="0.6"/>
-    <ellipse cx="{cx+lw//2-2}" cy="{foot_y+4}" rx="{lw//2+4}" ry="4" fill="{shoe_color}" opacity="0.6"/>'''
-
-    # Partículas de energía (avance) o niebla (retroceso)
-    particulas = ""
-    if estado == "AVANCE":
-        pts = [(cx-20,sho_y-10,0.0),(cx+20,sho_y-15,0.4),(cx,sho_y-20,0.8),(cx-10,torso_y,1.2),(cx+15,torso_y-5,0.6)]
-        for px,py,dl in pts:
-            particulas += f'''<circle cx="{px}" cy="{py}" r="4" fill="{acc}" opacity="0">
-              <animate attributeName="cy" values="{py};{py-30};{py}" dur="2s" begin="{dl}s" repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0;0.85;0" dur="2s" begin="{dl}s" repeatCount="indefinite"/>
-              <animate attributeName="r" values="3;6;3" dur="2s" begin="{dl}s" repeatCount="indefinite"/>
-            </circle>'''
-    elif estado == "RETROCESO":
-        for i in range(3):
-            particulas += f'''<circle cx="{cx-20+i*20}" cy="{torso_y+20}" r="12" fill="#EF4444" opacity="0">
-              <animate attributeName="opacity" values="0;0.08;0" dur="3s" begin="{i*0.8}s" repeatCount="indefinite"/>
-              <animate attributeName="r" values="10;20;10" dur="3s" begin="{i*0.8}s" repeatCount="indefinite"/>
-            </circle>'''
-
-    # Barra de fuerza lateral
-    barra_max = 80
-    barra_h = int((fuerza_q2 / 10) * barra_max)
-    barra_x = W - 28
-
-    # Barra de energía lateral izquierda
-    energia_h = int((energia_q2 / 10) * barra_max)
-
-    # Delta peso visual sobre figura
-    color_delta = "#22C55E" if dif_peso <= 0 else "#EF4444"
-    icono_delta = "▼" if dif_peso < 0 else ("▲" if dif_peso > 0 else "━")
-
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">
-  <defs>
-    <radialGradient id="bg2q" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#1C2E20"/>
-      <stop offset="100%" stop-color="#080F0A"/>
-    </radialGradient>
-  </defs>
-
-  <rect width="{W}" height="{H}" fill="url(#bg2q)" rx="18"/>
-
-  <!-- Grid -->
-  <g opacity="0.03" stroke="{acc}" stroke-width="0.5">
-    {"".join(f'<line x1="{x}" y1="0" x2="{x}" y2="{H}"/>' for x in range(0,W,20))}
-    {"".join(f'<line x1="0" y1="{y}" x2="{W}" y2="{y}"/>' for y in range(0,H,20))}
-  </g>
-
-  <!-- Anillo de estado -->
-  <circle cx="{cx}" cy="{cy_h}" r="{cr+14}" fill="none" stroke="{ring_col}" stroke-width="2" opacity="0.4">
-    <animate attributeName="r" values="{cr+10};{cr+22};{cr+10}" dur="1.8s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values="0.4;0.05;0.4" dur="1.8s" repeatCount="indefinite"/>
-  </circle>
-
-  <!-- Partículas -->
-  {particulas}
-
-  <!-- Sombra -->
-  <ellipse cx="{cx}" cy="{foot_y+14}" rx="36" ry="9" fill="#000" opacity="0.35"/>
-
-  <!-- Cabello -->
-  {cabello}
-
-  <!-- Cara -->
-  <circle cx="{cx}" cy="{cy_h}" r="{cr}" fill="{skin}"/>
-  <ellipse cx="{cx-8}" cy="{cy_h-4}" rx="4" ry="4.5" fill="#2C1810"/>
-  <ellipse cx="{cx+8}" cy="{cy_h-4}" rx="4" ry="4.5" fill="#2C1810"/>
-  <circle cx="{cx-7}" cy="{cy_h-5}" r="1.5" fill="#fff"/>
-  <circle cx="{cx+9}" cy="{cy_h-5}" r="1.5" fill="#fff"/>
-  <path d="{f'M {cx-12} {cy_h-11} Q {cx-8} {cy_h-14} {cx-4} {cy_h-11}'}" stroke="#3B2314" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <path d="{f'M {cx+12} {cy_h-11} Q {cx+8} {cy_h-14} {cx+4} {cy_h-11}'}" stroke="#3B2314" stroke-width="2" fill="none" stroke-linecap="round"/>
-  {boca}
-
-  <!-- Cuerpo -->
-  {cuerpo}
-
-  <!-- Zapatillas -->
-  {zapatillas}
-
-  <!-- Barra FUERZA derecha -->
-  <rect x="{barra_x}" y="{cy_h}" width="10" height="{barra_max}" rx="5" fill="#1A3D24"/>
-  <rect x="{barra_x}" y="{cy_h + barra_max - barra_h}" width="10" height="{barra_h}" rx="5" fill="{acc}">
-    <animate attributeName="height" from="0" to="{barra_h}" dur="1.2s" fill="freeze"/>
-    <animate attributeName="y" from="{cy_h+barra_max}" to="{cy_h+barra_max-barra_h}" dur="1.2s" fill="freeze"/>
-  </rect>
-  <text x="{barra_x+5}" y="{cy_h-5}" font-size="7" fill="{acc}" text-anchor="middle" font-family="monospace">FZA</text>
-  <text x="{barra_x+5}" y="{cy_h+barra_max+12}" font-size="8" fill="{acc}" text-anchor="middle" font-weight="bold">{int(fuerza_q2)}</text>
-
-  <!-- Barra ENERGÍA izquierda -->
-  <rect x="8" y="{cy_h}" width="10" height="{barra_max}" rx="5" fill="#1A3D24"/>
-  <rect x="8" y="{cy_h + barra_max - energia_h}" width="10" height="{energia_h}" rx="5" fill="#FBBF24">
-    <animate attributeName="height" from="0" to="{energia_h}" dur="1.4s" fill="freeze"/>
-    <animate attributeName="y" from="{cy_h+barra_max}" to="{cy_h+barra_max-energia_h}" dur="1.4s" fill="freeze"/>
-  </rect>
-  <text x="13" y="{cy_h-5}" font-size="7" fill="#FBBF24" text-anchor="middle" font-family="monospace">ENE</text>
-  <text x="13" y="{cy_h+barra_max+12}" font-size="8" fill="#FBBF24" text-anchor="middle" font-weight="bold">{int(energia_q2)}</text>
-
-  <!-- Badge estado -->
-  <rect x="{cx-30}" y="10" width="60" height="20" rx="10" fill="{ring_col}" opacity="0.9"/>
-  <text x="{cx}" y="24" font-size="10" fill="#fff" text-anchor="middle" font-weight="bold" font-family="monospace">{estado}</text>
-
-  <!-- Delta peso cintura -->
-  <text x="{cx}" y="{H-40}" font-size="11" fill="{color_delta}" text-anchor="middle" font-weight="bold" font-family="monospace">
-    {icono_delta} PESO {dif_peso:+.1f}kg
-  </text>
-  <text x="{cx}" y="{H-24}" font-size="10" fill="{('#22C55E' if dif_cintura<=0 else '#EF4444')}" text-anchor="middle" font-family="monospace">
-    CIN {dif_cintura:+.1f}cm
-  </text>
-
-  <!-- Nombre -->
-  <text x="{cx}" y="{H-8}" font-size="9" fill="{acc}" text-anchor="middle" font-family="monospace" letter-spacing="2">{nombre[:14].upper()}</text>
-</svg>'''
-    return svg
+    """Devuelve URL del avatar Q2."""
+    return construir_url_avatar(norm, mot, estado.upper())
 
 
 def render_avatar_svg(svg_str: str, height: int = 280):
-    """Renderiza SVG inline en Streamlit."""
-    import base64
-    b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
-    st.markdown(
-        f'<div style="display:flex;justify-content:center;margin:10px 0;">'
-        f'<img src="data:image/svg+xml;base64,{b64}" height="{height}" style="filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/>'
-        f'</div>',
-        unsafe_allow_html=True
-    )
+    """Compatibilidad: si recibe URL (str que empieza con http) usa st.image."""
+    if str(svg_str).startswith("http"):
+        st.markdown(
+            f'<div style="display:flex;justify-content:center;">'
+            f'<img src="{svg_str}" height="{height}" style="border-radius:16px;'
+            f'filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/></div>',
+            unsafe_allow_html=True
+        )
+    else:
+        import base64
+        b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
+        st.markdown(
+            f'<div style="display:flex;justify-content:center;">'
+            f'<img src="data:image/svg+xml;base64,{b64}" height="{height}" '
+            f'style="filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/></div>',
+            unsafe_allow_html=True
+        )
+
 
 # =============================================================================
 # 7. PDF GENERATOR
@@ -1319,27 +914,24 @@ def mostrar_dashboard_q1(norm: dict, mot: dict, id_al: str):
     nombre = norm.get("Nombre completo","Atleta")
     render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
 
-    # ── Avatar inteligente Q1 + perfil ────────────────────────────────────────
+    # ── Avatar DiceBear Q1 + perfil ────────────────────────────────────────────
     ca, cb = st.columns([1, 3])
     with ca:
-        svg_q1 = construir_avatar_q1(norm, mot)
-        render_avatar_svg(svg_q1, height=260)
-
-        # Leyenda de indicadores del avatar
         lesion = norm.get("Lesión actual","Ninguna")
         imc    = mot.get("imc", 22)
-        if imc < 18.5:   complexion_lbl = "🔹 Complexión: Delgado"
-        elif imc < 25:   complexion_lbl = "🟢 Complexión: Normal"
-        elif imc < 30:   complexion_lbl = "🟡 Complexión: Sobrepeso"
-        else:            complexion_lbl = "🔴 Complexión: Obesidad"
-        st.markdown(f"""
-        <div style='font-size:10px;color:#7D9A84;text-align:center;line-height:1.8;margin-top:4px;'>
-          {'👩' if 'Femen' in norm.get('Sexo','') else '👨'} {norm.get('Sexo','')}<br>
-          {complexion_lbl}<br>
-          {'🚨 Lesión: ' + lesion if lesion != 'Ninguna' else '✅ Sin lesiones activas'}<br>
-          📏 {mot['estatura']} cm
-        </div>
-        """, unsafe_allow_html=True)
+        if imc < 18.5:   complexion_lbl = "🔹 Delgado/a"
+        elif imc < 25:   complexion_lbl = "🟢 Normal"
+        elif imc < 30:   complexion_lbl = "🟡 Sobrepeso"
+        else:            complexion_lbl = "🔴 Obesidad"
+
+        avatar_url = construir_avatar_q1(norm, mot)
+        render_avatar_fitness(
+            url        = avatar_url,
+            nombre     = nombre,
+            estado     = "Q1",
+            info_extra = f"{'👩' if 'Femen' in norm.get('Sexo','') else '👨'} {complexion_lbl} · {mot['estatura']}cm · {'🚨 '+lesion if lesion!='Ninguna' else '✅ Sin lesiones'}",
+            height     = 260,
+        )
 
     with cb:
         # Análisis de zonas de enfoque basado en datos reales
@@ -1505,41 +1097,31 @@ def mostrar_dashboard_q1(norm: dict, mot: dict, id_al: str):
 
     # Fotografías Q1
     st.markdown("<div class='sec-head'>EVIDENCIA VISUAL (FOTOGRAFÍAS Q1)</div>", unsafe_allow_html=True)
+    import base64 as _b64show
     pf1, pf2, pf3 = st.columns(3)
 
-    def mostrar_foto(col, b64_key, label, norm_data=None):
-        import base64 as b64lib
-        # Intentar desde session_state primero
-        b64_data = st.session_state.db.get(b64_key, "") if hasattr(st, 'session_state') else ""
-        # Si no hay en session, intentar desde norm (base de datos)
-        if not b64_data and norm_data:
-            b64_data = str(norm_data.get(b64_key, ""))
-
-        if b64_data and len(b64_data) > 100:
+    def _mostrar_foto_dash(col, key_b64, lbl):
+        data = st.session_state.db.get(key_b64, "")
+        if data and len(data) > 100:
             try:
-                img_bytes = b64lib.b64decode(b64_data)
-                col.image(img_bytes, caption=f"📸 {label}", use_container_width=True)
+                col.image(_b64show.b64decode(data), caption=f"📸 {lbl}", use_container_width=True)
+                return
             except Exception:
-                _foto_placeholder(col, label)
-        else:
-            _foto_placeholder(col, label)
-
-    def _foto_placeholder(col, label):
+                pass
         col.markdown(f"""
         <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
                     border:2px dashed #50C87840;border-radius:12px;
-                    aspect-ratio:2/3;display:flex;flex-direction:column;
-                    align-items:center;justify-content:center;padding:20px;
-                    min-height:180px;">
+                    min-height:180px;display:flex;flex-direction:column;
+                    align-items:center;justify-content:center;padding:20px;">
           <div style="font-size:32px;margin-bottom:8px;">📷</div>
           <div style="font-size:10px;color:#50C87880;letter-spacing:1px;
-                      text-transform:uppercase;text-align:center;">{label}<br>Sin foto</div>
-        </div>
-        """, unsafe_allow_html=True)
+                      text-transform:uppercase;text-align:center;">{lbl}<br>Sin foto</div>
+        </div>""", unsafe_allow_html=True)
 
-    mostrar_foto(pf1, "foto_frente_b64",  "Frente",  norm)
-    mostrar_foto(pf2, "foto_perfil_b64",  "Perfil",  norm)
-    mostrar_foto(pf3, "foto_espalda_b64", "Espalda", norm)
+    _mostrar_foto_dash(pf1, "foto_frente_b64",  "Frente Q1")
+    _mostrar_foto_dash(pf2, "foto_perfil_b64",  "Perfil Q1")
+    _mostrar_foto_dash(pf3, "foto_espalda_b64", "Espalda Q1")
+
 
     # Alertas clínicas
     st.markdown("<div class='sec-head'>ALERTAS BIOMECÁNICAS</div>", unsafe_allow_html=True)
@@ -1575,23 +1157,22 @@ def mostrar_dashboard_q2(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: st
     # ── Avatar inteligente Q2 + análisis dinámico ─────────────────────────────
     ca, cb = st.columns([1, 3])
     with ca:
-        svg_q2 = construir_avatar_q2(norm, mot, dict(ult), estado)
-        render_avatar_svg(svg_q2, height=280)
-
-        # Leyenda dinámica Q2
         dif_p_prev = round(peso_act - mot["peso"], 1)
         dif_c_prev = round(cintura_act - mot["cintura"], 1)
-        color_p = "#22C55E" if dif_p_prev <= 0 else "#EF4444"
-        color_c = "#22C55E" if dif_c_prev <= 0 else "#EF4444"
-        ring_color_leg = {"AVANCE":"#22C55E","RETROCESO":"#EF4444"}.get(estado,"#F59E0B")
-        st.markdown(f"""
-        <div style='font-size:10px;text-align:center;line-height:2;margin-top:4px;'>
-          <span style='color:{ring_color_leg};font-weight:700;'>{estado}</span><br>
-          <span style='color:{color_p};'>Peso {dif_p_prev:+.1f} kg</span><br>
-          <span style='color:{color_c};'>Cintura {dif_c_prev:+.1f} cm</span><br>
-          <span style='color:#7D9A84;'>Fuerza: {ult.get("Progreso_Fuerza","5")}/10</span>
-        </div>
-        """, unsafe_allow_html=True)
+        col_p = "#22C55E" if dif_p_prev <= 0 else "#EF4444"
+        col_c = "#22C55E" if dif_c_prev <= 0 else "#EF4444"
+
+        avatar_url_q2 = construir_avatar_q2(norm, mot, dict(ult), estado)
+        render_avatar_fitness(
+            url        = avatar_url_q2,
+            nombre     = nombre,
+            estado     = estado,
+            info_extra = (
+                f"<span style='color:{col_p};font-weight:700;'>Peso {dif_p_prev:+.1f}kg</span> · "
+                f"<span style='color:{col_c};font-weight:700;'>Cin {dif_c_prev:+.1f}cm</span>"
+            ),
+            height     = 280,
+        )
 
     with cb:
         badge_map = {
@@ -1887,33 +1468,65 @@ def mostrar_formulario_q1(df_existente: pd.DataFrame):
 
     # ── PASO 2: Fotografías Q1 ────────────────────────────────────────────────
     elif st.session_state.step == 2:
-        import base64
+        import base64 as _b64
+
         st.markdown("<div class='sec-head'>EVIDENCIA VISUAL — FOTOGRAFÍAS Q1</div>", unsafe_allow_html=True)
-        st.info("📸 Sube tus fotos iniciales. Se cruzarán con tus resultados en Mi Avance MM247.")
+        st.info("📸 Sube tus fotos y haz clic en **Guardar fotos** antes de continuar.")
 
-        # Los file_uploader FUERA del form para poder leerlos antes del submit
         f1, f2, f3 = st.columns(3)
-        f_frente  = f1.file_uploader("📷 Frente (Obligatorio)", type=["jpg","jpeg","png"], key="up_frente_q1")
-        f_perfil  = f2.file_uploader("📷 Perfil (Obligatorio)",  type=["jpg","jpeg","png"], key="up_perfil_q1")
-        f_espalda = f3.file_uploader("📷 Espalda (Obligatorio)", type=["jpg","jpeg","png"], key="up_espalda_q1")
+        up_fr = f1.file_uploader("📷 Frente",  type=["jpg","jpeg","png"], key="up_frente_q1")
+        up_pf = f2.file_uploader("📷 Perfil",  type=["jpg","jpeg","png"], key="up_perfil_q1")
+        up_es = f3.file_uploader("📷 Espalda", type=["jpg","jpeg","png"], key="up_espalda_q1")
 
-        # Preview en tiempo real
-        if f_frente:  f1.image(f_frente,  caption="✅ Frente cargada",  use_container_width=True)
-        if f_perfil:  f2.image(f_perfil,  caption="✅ Perfil cargado",  use_container_width=True)
-        if f_espalda: f3.image(f_espalda, caption="✅ Espalda cargada", use_container_width=True)
+        # Botón explícito de guardado — lee los archivos AHORA antes de cualquier rerun
+        if st.button("💾 GUARDAR FOTOS", key="btn_save_fotos", use_container_width=True):
+            if up_fr:
+                up_fr.seek(0)
+                st.session_state.db["foto_frente_b64"]  = _b64.b64encode(up_fr.read()).decode()
+            if up_pf:
+                up_pf.seek(0)
+                st.session_state.db["foto_perfil_b64"]  = _b64.b64encode(up_pf.read()).decode()
+            if up_es:
+                up_es.seek(0)
+                st.session_state.db["foto_espalda_b64"] = _b64.b64encode(up_es.read()).decode()
+            st.rerun()
+
+        # Preview desde session_state — siempre persiste
+        n_fotos = 0
+        fp1, fp2, fp3 = st.columns(3)
+        for col, key_b64, lbl in [
+            (fp1,"foto_frente_b64","Frente"),
+            (fp2,"foto_perfil_b64","Perfil"),
+            (fp3,"foto_espalda_b64","Espalda"),
+        ]:
+            data = st.session_state.db.get(key_b64, "")
+            if data and len(data) > 100:
+                n_fotos += 1
+                try:
+                    col.image(_b64.b64decode(data), caption=f"✅ {lbl}", use_container_width=True)
+                except Exception:
+                    col.warning(f"Error mostrando {lbl}")
+            else:
+                col.markdown(f"""
+                <div style="background:#0D1F14;border:2px dashed #50C87840;border-radius:10px;
+                            min-height:140px;display:flex;align-items:center;justify-content:center;
+                            flex-direction:column;gap:8px;">
+                  <div style="font-size:28px;">📷</div>
+                  <div style="font-size:9px;color:#50C87860;letter-spacing:1px;">{lbl.upper()}<br>SIN FOTO</div>
+                </div>""", unsafe_allow_html=True)
+
+        if n_fotos == 3:
+            st.success("✅ Las 3 fotos guardadas correctamente.")
+        elif n_fotos > 0:
+            st.info(f"📷 {n_fotos}/3 fotos guardadas. Sube las restantes y haz clic en Guardar.")
+        else:
+            st.warning("📷 Sube tus fotos y presiona GUARDAR FOTOS.")
 
         b1, b2 = st.columns(2)
-        if b1.button("⬅️ Atrás", key="back_p2"): guardar_y_navegar({}, 1)
+        if b1.button("⬅️ Atrás", key="back_p2"):
+            guardar_y_navegar({}, 1)
         if b2.button("Siguiente ➡️", key="next_p2"):
-            # Convertir a base64 y guardar en session_state
-            def to_b64(f):
-                if f is None: return ""
-                return base64.b64encode(f.read()).decode("utf-8")
-
-            st.session_state.db["foto_frente_b64"]  = to_b64(f_frente)
-            st.session_state.db["foto_perfil_b64"]  = to_b64(f_perfil)
-            st.session_state.db["foto_espalda_b64"] = to_b64(f_espalda)
-            st.session_state.db["fotos_q1"] = "Cargadas" if (f_frente and f_perfil and f_espalda) else "Pendientes"
+            st.session_state.db["fotos_q1"] = "Cargadas" if n_fotos == 3 else "Pendientes"
             guardar_y_navegar({}, 3)
 
     # ── PASO 3: Antecedentes ──────────────────────────────────────────────────
@@ -2061,18 +1674,61 @@ def mostrar_formulario_q2(df_existente: pd.DataFrame):
     </div>
     """, unsafe_allow_html=True)
 
-    with st.form("f_auditoria", clear_on_submit=False):
-        id_ing = st.text_input("🔑 ID de Atleta (Ej: 247001):", placeholder="Ingresa tu ID MM247").strip().upper()
+    import base64 as _b64q2
 
-        st.markdown("<div class='sec-head'>EVIDENCIA VISUAL — FOTOGRAFÍAS Q2</div>", unsafe_allow_html=True)
-        st.info("📸 Sube tus fotos actuales para el cruce comparativo Q1 vs Q2.")
-        fq1, fq2, fq3 = st.columns(3)
-        f2_frente  = fq1.file_uploader("📷 Frente Actual",  type=["png","jpg","jpeg"], key="up_frente_q2")
-        f2_perfil  = fq2.file_uploader("📷 Perfil Actual",  type=["png","jpg","jpeg"], key="up_perfil_q2")
-        f2_espalda = fq3.file_uploader("📷 Espalda Actual", type=["png","jpg","jpeg"], key="up_espalda_q2")
-        if f2_frente:  fq1.image(f2_frente,  caption="✅ Frente Q2",  use_container_width=True)
-        if f2_perfil:  fq2.image(f2_perfil,  caption="✅ Perfil Q2",  use_container_width=True)
-        if f2_espalda: fq3.image(f2_espalda, caption="✅ Espalda Q2", use_container_width=True)
+    id_ing = st.text_input("🔑 ID de Atleta (Ej: 247001):", placeholder="Ingresa tu ID MM247",
+                            key="q2_id_input").strip().upper()
+
+    st.markdown("<div class='sec-head'>EVIDENCIA VISUAL — FOTOGRAFÍAS Q2</div>", unsafe_allow_html=True)
+    st.info("📸 Sube tus 3 fotos y presiona **GUARDAR FOTOS Q2** antes de auditar.")
+
+    fq1, fq2, fq3 = st.columns(3)
+    up_fr2 = fq1.file_uploader("📷 Frente Actual",  type=["png","jpg","jpeg"], key="up_frente_q2")
+    up_pf2 = fq2.file_uploader("📷 Perfil Actual",  type=["png","jpg","jpeg"], key="up_perfil_q2")
+    up_es2 = fq3.file_uploader("📷 Espalda Actual", type=["png","jpg","jpeg"], key="up_espalda_q2")
+
+    if st.button("💾 GUARDAR FOTOS Q2", key="btn_save_fotos_q2", use_container_width=True):
+        if up_fr2:
+            up_fr2.seek(0)
+            st.session_state["foto_frente_q2_b64"]  = _b64q2.b64encode(up_fr2.read()).decode()
+        if up_pf2:
+            up_pf2.seek(0)
+            st.session_state["foto_perfil_q2_b64"]  = _b64q2.b64encode(up_pf2.read()).decode()
+        if up_es2:
+            up_es2.seek(0)
+            st.session_state["foto_espalda_q2_b64"] = _b64q2.b64encode(up_es2.read()).decode()
+        st.rerun()
+
+    # Preview desde session_state
+    pv1, pv2, pv3 = st.columns(3)
+    n_fotos_q2 = 0
+    for col, skey, lbl in [
+        (pv1,"foto_frente_q2_b64","Frente Q2"),
+        (pv2,"foto_perfil_q2_b64","Perfil Q2"),
+        (pv3,"foto_espalda_q2_b64","Espalda Q2"),
+    ]:
+        data = st.session_state.get(skey, "")
+        if data and len(data) > 100:
+            n_fotos_q2 += 1
+            try:
+                col.image(_b64q2.b64decode(data), caption=f"✅ {lbl}", use_container_width=True)
+            except Exception:
+                pass
+        else:
+            col.markdown(f"""
+            <div style="background:#0D1F14;border:2px dashed #50C87840;border-radius:10px;
+                        min-height:120px;display:flex;align-items:center;justify-content:center;
+                        flex-direction:column;gap:6px;">
+              <div style="font-size:24px;">📷</div>
+              <div style="font-size:9px;color:#50C87860;text-align:center;">{lbl}<br>SIN FOTO</div>
+            </div>""", unsafe_allow_html=True)
+
+    if n_fotos_q2 == 3:
+        st.success("✅ Las 3 fotos Q2 guardadas.")
+    elif n_fotos_q2 > 0:
+        st.info(f"📷 {n_fotos_q2}/3 fotos guardadas.")
+
+    with st.form("f_auditoria", clear_on_submit=False):
 
         st.markdown("<div class='sec-head'>MÉTRICAS ACTUALES</div>", unsafe_allow_html=True)
         m1, m2 = st.columns(2)
@@ -2081,6 +1737,7 @@ def mostrar_formulario_q2(df_existente: pd.DataFrame):
 
         st.markdown("<div class='sec-head'>ADHERENCIA Y DESEMPEÑO</div>", unsafe_allow_html=True)
         adherencia = st.selectbox("Adherencia real al sistema:", ["100% Perfecto","80-90% Con fallos mínimos","Cerca del 50%","Menos del 50% / Abandoné"])
+
         sobrecarga = st.selectbox("Sobrecarga progresiva:", ["Sí, subí peso/reps","Me mantuve igual","No, perdí fuerza"])
         tolerancia = st.selectbox("Tolerancia metabólica:", ["Digestión rápida y normal","Ligera pesadez","Mucha pesadez / Inflamación constante"])
 
@@ -2209,14 +1866,15 @@ def mostrar_dashboard_admin(df_existente: pd.DataFrame):
             if not r_df.empty:
                 estado_actual = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
 
-            # Avatar inteligente en admin
+            # Avatar DiceBear en admin
             ca2, cb2 = st.columns([1, 3])
             with ca2:
+                est_render = estado_actual if not r_df.empty else "Q1"
                 if not r_df.empty:
-                    svg_admin = construir_avatar_q2(d_norm, m_calc, dict(r_df.iloc[-1]), estado_actual)
+                    url_admin = construir_avatar_q2(d_norm, m_calc, dict(r_df.iloc[-1]), est_render)
                 else:
-                    svg_admin = construir_avatar_q1(d_norm, m_calc)
-                render_avatar_svg(svg_admin, height=220)
+                    url_admin = construir_avatar_q1(d_norm, m_calc)
+                render_avatar_fitness(url_admin, d_norm.get("Nombre completo",""), est_render, height=220)
             with cb2:
                 badge_map = {
                     "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
@@ -2325,4 +1983,3 @@ else:
 
     elif vista == "avance":
         mostrar_formulario_q2(df_existente)
-
