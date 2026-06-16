@@ -1,393 +1,266 @@
 # -*- coding: utf-8 -*-
 """
-================================================================================
-          SISTEMA DIGITAL CORE MM247 — MIND MUSCLE ECOSYSTEM
-   EVALUACIÓN METABÓLICA, CONTROL BIOMECÁNICO Y AUDITORÍA CLÍNICA
-   VERSIÓN 6.0 — IDs SECUENCIALES, SIDEBAR NAVIGATION, DUAL DASHBOARD
-================================================================================
+MM247 — MIND MUSCLE ECOSYSTEM v8.0
+Correcciones definitivas:
+- Dashboard solo para admin
+- Avatar con Pillow (sin internet)
+- Fotos persistidas en disco /tmp
+- Porciones exactas en nutrición
+- PDF con fotos y avatar
 """
-
 import streamlit as st
 import pandas as pd
-from fpdf import FPDF
-import datetime
-import requests
-import tempfile
-import os
+import datetime, requests, uuid, os, base64, io, hashlib, math
+from PIL import Image, ImageDraw, ImageFont
+
+# ReportLab para PDF
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors as rl_colors
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
 
 # =============================================================================
-# 0. CONFIGURACIÓN CENTRAL
+# CONFIG
 # =============================================================================
 CONFIG = {
-    "page_title": "MM247",
-    "page_icon": "🟩",
     "webhook_url": "https://script.google.com/macros/s/AKfycbx5vDCKmqpe-vsZ2fan0ZQoesLjajIHHHXHOZLtG7-w6-ts3uUl1WkZVHnPnn0F3Cbn/exec",
-    "sheet_url": "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
-    "admin_password": "MM247_Admin",
-    "total_misiones_q1": 6,
-    "factores_actividad": {
-        "Sedentario":            1.20,
-        "Poco activo":           1.375,
-        "Moderadamente activo":  1.55,
-        "Muy activo":            1.725,
+    "sheet_url":   "https://docs.google.com/spreadsheets/d/1Ix0lUfd1Qs4Jb9L3--oU7JvtKysAzYOZ-BbAv2QhwIo/gviz/tq?tqx=out:csv&sheet=Respuestas",
+    "admin_pass":  "MM247_Admin",
+    "foto_dir":    "/tmp/mm247_fotos",
+    "factores": {
+        "Sedentario": 1.20, "Poco activo": 1.375,
+        "Moderadamente activo": 1.55, "Muy activo": 1.725,
     },
     "rutinas": {
         "Inducción (1 Mes)": {
             "sin_lesion": [
-                ("Sentadilla Goblet (Prevención y Fortalecimiento)", "3", "12-15", "60s"),
-                ("Flexiones Asistidas o Regulares", "3", "8-12", "60s"),
-                ("Remo con Mancuernas Soporte", "3", "10-12", "60s"),
-                ("Puente de Glúteo", "3", "15-20", "45s"),
-                ("Plancha Abdominal Estática", "3", "30-45s", "45s"),
+                ("Sentadilla Goblet","3","12-15","60s"),
+                ("Flexiones Asistidas","3","8-12","60s"),
+                ("Remo con Mancuernas","3","10-12","60s"),
+                ("Puente de Glúteo","3","15-20","45s"),
+                ("Plancha Abdominal","3","30-45s","45s"),
             ],
             "con_lesion": [
-                ("Prensa de Piernas (Carga Ligera)", "3", "15-20", "60s"),
-                ("Press de Pecho en Máquina", "3", "12-15", "60s"),
-                ("Jalón al Pecho Agarre Neutro", "3", "12-15", "60s"),
-                ("Extensión de Cuádriceps Lenta", "3", "15-20", "45s"),
-                ("Crunch Abdominal Suelo", "3", "15-20", "45s"),
+                ("Prensa de Piernas","3","15-20","60s"),
+                ("Press Pecho Máquina","3","12-15","60s"),
+                ("Jalón Agarre Neutro","3","12-15","60s"),
+                ("Extensión Cuádriceps","3","15-20","45s"),
+                ("Crunch Suelo","3","15-20","45s"),
             ]
         },
         "Empuje": {
             "sin_lesion": [
-                ("Press Banca con Barra", "4", "6-8", "90s"),
-                ("Press Inclinado con Mancuernas", "3", "10-12", "60s"),
-                ("Aperturas en Polea Alta", "3", "15-20", "45s"),
-                ("Press Militar con Barra", "3", "8-10", "90s"),
-                ("Elevaciones Laterales", "4", "12-15", "45s"),
+                ("Press Banca con Barra","4","6-8","90s"),
+                ("Press Inclinado Mancuernas","3","10-12","60s"),
+                ("Aperturas Polea Alta","3","15-20","45s"),
+                ("Press Militar Barra","3","8-10","90s"),
+                ("Elevaciones Laterales","4","12-15","45s"),
             ],
             "con_lesion": [
-                ("Press en Máquina (neutro)", "4", "10-12", "90s"),
-                ("Aperturas en Polea Media", "3", "12-15", "60s"),
-                ("Press Hombro en Máquina", "3", "12-15", "60s"),
-                ("Elevaciones Laterales Cable", "4", "15-20", "45s"),
+                ("Press Máquina Neutro","4","10-12","90s"),
+                ("Aperturas Polea Media","3","12-15","60s"),
+                ("Press Hombro Máquina","3","12-15","60s"),
+                ("Elevaciones Cable","4","15-20","45s"),
             ],
         },
         "Tracción": {
             "sin_lesion": [
-                ("Dominadas o Jalón al Pecho", "4", "6-10", "90s"),
-                ("Remo con Barra", "4", "8-10", "90s"),
-                ("Remo en Polea Baja", "3", "12-15", "60s"),
-                ("Curl Bíceps con Barra", "3", "10-12", "60s"),
+                ("Dominadas / Jalón","4","6-10","90s"),
+                ("Remo con Barra","4","8-10","90s"),
+                ("Remo Polea Baja","3","12-15","60s"),
+                ("Curl Bíceps Barra","3","10-12","60s"),
             ],
             "con_lesion": [
-                ("Jalón al Pecho Agarre Neutro", "4", "10-12", "90s"),
-                ("Remo en Máquina", "3", "12-15", "60s"),
-                ("Polea Alta Agarre Neutro", "3", "15-20", "45s"),
-                ("Curl Martillo Mancuernas", "3", "12-15", "60s"),
+                ("Jalón Agarre Neutro","4","10-12","90s"),
+                ("Remo en Máquina","3","12-15","60s"),
+                ("Polea Alta Neutro","3","15-20","45s"),
+                ("Curl Martillo","3","12-15","60s"),
             ],
         },
         "Pierna": {
             "sin_lesion": [
-                ("Sentadilla con Barra", "4", "6-8", "120s"),
-                ("Prensa de Pierna", "3", "10-12", "90s"),
-                ("Extensión de Cuádriceps", "3", "15-20", "60s"),
-                ("Curl Femoral", "3", "12-15", "60s"),
-                ("Pantorrillas de Pie", "4", "15-20", "45s"),
+                ("Sentadilla con Barra","4","6-8","120s"),
+                ("Prensa de Pierna","3","10-12","90s"),
+                ("Extensión Cuádriceps","3","15-20","60s"),
+                ("Curl Femoral","3","12-15","60s"),
+                ("Pantorrillas de Pie","4","15-20","45s"),
             ],
             "con_lesion": [
-                ("Prensa de Pierna Rango Parcial", "4", "12-15", "90s"),
-                ("Extensión Cuádriceps (peso bajo)", "3", "15-20", "60s"),
-                ("Hip Thrust con Barra", "4", "10-12", "90s"),
-                ("Curl Femoral Tumbado", "3", "15-20", "60s"),
+                ("Prensa Rango Parcial","4","12-15","90s"),
+                ("Extensión Cuád. Ligero","3","15-20","60s"),
+                ("Hip Thrust con Barra","4","10-12","90s"),
+                ("Curl Femoral Tumbado","3","15-20","60s"),
             ],
         },
     },
+    # Porciones en gramos por 100 kcal de cada macronutriente
+    "porciones_ref": {
+        "Pechuga de Pollo":     {"prot": 31, "carbs": 0,  "grasa": 3.6, "kcal_per_100g": 165},
+        "Bisteck":              {"prot": 26, "carbs": 0,  "grasa": 8,   "kcal_per_100g": 180},
+        "Atún":                 {"prot": 30, "carbs": 0,  "grasa": 1,   "kcal_per_100g": 132},
+        "Huevos":               {"prot": 13, "carbs": 1,  "grasa": 11,  "kcal_per_100g": 155},
+        "Salmón":               {"prot": 25, "carbs": 0,  "grasa": 13,  "kcal_per_100g": 208},
+        "Arroz":                {"prot": 2.7,"carbs": 28, "grasa": 0.3, "kcal_per_100g": 130},
+        "Avena":                {"prot": 17, "carbs": 66, "grasa": 7,   "kcal_per_100g": 389},
+        "Papa":                 {"prot": 2,  "carbs": 17, "grasa": 0.1, "kcal_per_100g": 77},
+        "Tortilla":             {"prot": 6,  "carbs": 49, "grasa": 5,   "kcal_per_100g": 218},
+        "Camote":               {"prot": 1.6,"carbs": 20, "grasa": 0.1, "kcal_per_100g": 86},
+        "Aguacate":             {"prot": 2,  "carbs": 9,  "grasa": 15,  "kcal_per_100g": 160},
+        "Almendras":            {"prot": 21, "carbs": 22, "grasa": 50,  "kcal_per_100g": 579},
+        "Crema de Cacahuete":   {"prot": 25, "carbs": 20, "grasa": 50,  "kcal_per_100g": 588},
+        "Aceite de Oliva":      {"prot": 0,  "carbs": 0,  "grasa": 100, "kcal_per_100g": 884},
+        "Brócoli":              {"prot": 2.8,"carbs": 7,  "grasa": 0.4, "kcal_per_100g": 34},
+        "Espinacas":            {"prot": 2.9,"carbs": 3.6,"grasa": 0.4, "kcal_per_100g": 23},
+        "Lechuga":              {"prot": 1.4,"carbs": 2.9,"grasa": 0.2, "kcal_per_100g": 17},
+        "Pepino":               {"prot": 0.7,"carbs": 3.6,"grasa": 0.1, "kcal_per_100g": 16},
+        "Calabacín":            {"prot": 1.2,"carbs": 3.1,"grasa": 0.3, "kcal_per_100g": 17},
+    },
 }
 
-# =============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA
-# =============================================================================
-st.set_page_config(
-    page_title=CONFIG["page_title"],
-    page_icon=CONFIG["page_icon"],
-    layout="wide"
-)
+os.makedirs(CONFIG["foto_dir"], exist_ok=True)
+
 
 # =============================================================================
-# 2. ESTILOS CSS GLOBALES
+# PAGE CONFIG & CSS
 # =============================================================================
+st.set_page_config(page_title="MM247", page_icon="🟩", layout="wide")
+
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Space+Grotesk:wght@400;600;700&display=swap');
+@keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+@keyframes pulse  { 0%{box-shadow:0 0 0 0 rgba(80,200,120,.45)} 70%{box-shadow:0 0 0 14px rgba(80,200,120,0)} 100%{box-shadow:0 0 0 0 rgba(80,200,120,0)} }
 
-/* ── ANIMACIONES ── */
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulseGreen {
-  0%   { box-shadow: 0 0 0 0 rgba(80,200,120,.45); }
-  70%  { box-shadow: 0 0 0 14px rgba(80,200,120,0); }
-  100% { box-shadow: 0 0 0 0 rgba(80,200,120,0); }
-}
-@keyframes shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
-@keyframes countUp {
-  from { opacity: 0; transform: scale(0.8); }
-  to   { opacity: 1; transform: scale(1); }
-}
-@keyframes borderPulse {
-  0%,100% { border-color: #50C878; }
-  50%      { border-color: #3CB371; }
-}
+.stApp { background:#F0F4F1; font-family:'Inter',sans-serif; color:#1A2B1F; }
 
-/* ── BASE ── */
-.stApp { background: #F0F4F1; font-family: 'Inter', sans-serif; color: #1A2B1F; }
-
-/* ── SIDEBAR ── */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #0D1F14 0%, #132B1A 100%) !important;
-  border-right: 1px solid #50C87830;
+  background:linear-gradient(180deg,#0D1F14 0%,#132B1A 100%) !important;
+  border-right:1px solid #50C87830;
 }
-[data-testid="stSidebar"] * { color: #E8F5EC !important; }
+[data-testid="stSidebar"] * { color:#E8F5EC !important; }
 [data-testid="stSidebar"] .stTextInput input {
-  background: #1A3322 !important;
-  border: 1px solid #50C87870 !important;
-  color: #E8F5EC !important;
-  border-radius: 8px;
+  background:#1A3322 !important; border:1px solid #50C87870 !important;
+  color:#E8F5EC !important; border-radius:8px;
 }
 
-/* Botones sidebar */
-.sidebar-nav-btn {
-  display: block; width: 100%; padding: 14px 18px; margin: 6px 0;
-  background: linear-gradient(135deg, #1A3D24 0%, #0F2417 100%);
-  border: 1px solid #50C87840; border-radius: 10px;
-  color: #B8F0CB !important; font-family: 'Space Grotesk', sans-serif;
-  font-weight: 600; font-size: 13px; letter-spacing: 0.5px;
-  cursor: pointer; transition: all .25s ease; text-align: left;
-  text-decoration: none;
-}
-.sidebar-nav-btn:hover {
-  background: linear-gradient(135deg, #50C878 0%, #3CB371 100%);
-  color: #fff !important; border-color: #50C878;
-  transform: translateX(4px); box-shadow: 0 4px 16px rgba(80,200,120,.35);
-}
-.sidebar-nav-btn.active {
-  background: linear-gradient(135deg, #50C878 0%, #2E8B57 100%);
-  color: #fff !important; border-color: #50C878;
-  animation: pulseGreen 2.5s infinite;
-}
-.sidebar-logo {
-  text-align: center; padding: 20px 0 10px;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 32px; font-weight: 900; letter-spacing: 4px;
-  background: linear-gradient(135deg, #50C878, #B8F0CB);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-.sidebar-tagline {
-  text-align: center; font-size: 9px; letter-spacing: 3px;
-  color: #50C87880 !important; text-transform: uppercase; margin-bottom: 20px;
-}
-.sidebar-divider {
-  border: none; border-top: 1px solid #50C87825; margin: 16px 0;
-}
-
-/* ── HERO / TÍTULO ── */
 .hero-block {
-  background: linear-gradient(135deg, #0D1F14 0%, #1A3D24 60%, #0F2417 100%);
-  border-radius: 20px; padding: 40px 50px; margin-bottom: 28px;
-  position: relative; overflow: hidden;
-  animation: fadeSlideUp .7s ease-out;
-  border: 1px solid #50C87830;
+  background:linear-gradient(135deg,#0D1F14 0%,#1A3D24 60%,#0F2417 100%);
+  border-radius:20px; padding:36px 48px; margin-bottom:24px;
+  border:1px solid #50C87830; animation:fadeUp .7s ease-out; position:relative; overflow:hidden;
 }
 .hero-block::before {
-  content: '247'; position: absolute; right: -20px; top: -20px;
-  font-size: 160px; font-weight: 900; color: #50C87808;
-  font-family: 'Space Grotesk', sans-serif; line-height: 1;
+  content:'247'; position:absolute; right:-10px; top:-20px;
+  font-size:150px; font-weight:900; color:#50C87806;
+  font-family:'Space Grotesk',sans-serif; line-height:1;
 }
-.hero-title {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 52px; font-weight: 900; color: #fff; margin: 0;
-  letter-spacing: 3px;
-}
-.hero-title span { color: #50C878; }
-.hero-sub {
-  font-size: 12px; color: #8FC99E; letter-spacing: 4px;
-  text-transform: uppercase; margin-top: 6px;
-}
+.hero-title { font-family:'Space Grotesk',sans-serif; font-size:48px; font-weight:900; color:#fff; margin:0; letter-spacing:3px; }
+.hero-title span { color:#50C878; }
+.hero-sub   { font-size:11px; color:#8FC99E; letter-spacing:4px; text-transform:uppercase; margin-top:6px; }
 
-/* ── METRIC CARDS ── */
-.metric-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin: 20px 0; }
-.metric-card {
-  background: #fff; border-radius: 14px; padding: 22px 18px;
-  border-top: 3px solid #50C878;
-  box-shadow: 0 2px 12px rgba(0,0,0,.06);
-  animation: countUp .5s ease-out both;
-  transition: transform .2s, box-shadow .2s;
-}
-.metric-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(80,200,120,.15); }
-.metric-label { font-size: 10px; font-weight: 700; color: #7D9A84; letter-spacing: 1.5px; text-transform: uppercase; }
-.metric-val   { font-size: 30px; font-weight: 900; color: #0D1F14; font-family: 'Space Grotesk', sans-serif; margin: 4px 0; }
-.metric-delta { font-size: 12px; font-weight: 600; }
-.delta-pos { color: #22C55E; }
-.delta-neg { color: #EF4444; }
-.delta-neu { color: #94A3B8; }
-
-/* ── SECTION HEADERS ── */
 .sec-head {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 13px; font-weight: 700; letter-spacing: 2.5px;
-  text-transform: uppercase; color: #50C878;
-  border-left: 3px solid #50C878; padding-left: 12px;
-  margin: 28px 0 14px;
+  font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:700;
+  letter-spacing:2.5px; text-transform:uppercase; color:#50C878;
+  border-left:3px solid #50C878; padding-left:12px; margin:28px 0 14px;
 }
-
-/* ── PANEL CARDS ── */
 .panel-card {
-  background: #fff; border-radius: 16px; padding: 28px;
-  box-shadow: 0 2px 16px rgba(0,0,0,.05);
-  border: 1px solid #E8F0EA;
-  animation: fadeSlideUp .5s ease-out;
-  margin-bottom: 20px;
+  background:#fff; border-radius:16px; padding:24px;
+  box-shadow:0 2px 16px rgba(0,0,0,.05); border:1px solid #E8F0EA;
+  animation:fadeUp .5s ease-out; margin-bottom:18px;
 }
+.metric-card {
+  background:#fff; border-radius:14px; padding:20px 16px;
+  border-top:3px solid #50C878; box-shadow:0 2px 12px rgba(0,0,0,.05);
+  transition:transform .2s; margin-bottom:14px;
+}
+.metric-card:hover { transform:translateY(-3px); }
+.metric-label { font-size:10px; font-weight:700; color:#7D9A84; letter-spacing:1.5px; text-transform:uppercase; }
+.metric-val   { font-size:28px; font-weight:900; color:#0D1F14; font-family:'Space Grotesk',sans-serif; margin:4px 0; }
+.delta-pos { color:#22C55E; font-size:12px; font-weight:700; }
+.delta-neg { color:#EF4444; font-size:12px; font-weight:700; }
 
-/* ── ID BOX ── */
 .id-box {
-  background: linear-gradient(135deg, #50C878 0%, #2E8B57 100%);
-  border-radius: 16px; padding: 30px; text-align: center;
-  animation: pulseGreen 2s infinite;
-  box-shadow: 0 8px 32px rgba(80,200,120,.4);
+  background:linear-gradient(135deg,#50C878,#2E8B57); border-radius:16px;
+  padding:28px; text-align:center; animation:pulse 2s infinite;
+  box-shadow:0 8px 32px rgba(80,200,120,.4);
 }
-.id-box-num {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 48px; font-weight: 900; color: #fff; letter-spacing: 6px;
-}
-.id-box-label { font-size: 11px; color: rgba(255,255,255,.8); letter-spacing: 3px; text-transform: uppercase; }
+.id-box-num   { font-family:'Space Grotesk',sans-serif; font-size:52px; font-weight:900; color:#fff; letter-spacing:6px; }
+.id-box-label { font-size:11px; color:rgba(255,255,255,.8); letter-spacing:3px; text-transform:uppercase; }
 
-/* ── AVATAR RING ── */
-.avatar-container {
-  display: flex; justify-content: center; margin: 10px 0;
-}
-.avatar-ring {
-  width: 120px; height: 120px; border-radius: 50%;
-  border: 4px solid #50C878;
-  animation: borderPulse 2s infinite;
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 24px rgba(80,200,120,.3);
-}
-.avatar-ring img { width: 100%; height: 100%; object-fit: cover; }
-
-/* ── STATUS BADGES ── */
-.badge-avance   { background:#DCFCE7; color:#166534; border:1px solid #86EFAC; padding:6px 16px; border-radius:20px; font-weight:700; font-size:12px; display:inline-block; }
-.badge-retroceso{ background:#FEE2E2; color:#991B1B; border:1px solid #FCA5A5; padding:6px 16px; border-radius:20px; font-weight:700; font-size:12px; display:inline-block; }
-.badge-lento    { background:#FEF9C3; color:#854D0E; border:1px solid #FDE047; padding:6px 16px; border-radius:20px; font-weight:700; font-size:12px; display:inline-block; }
-
-/* ── PLAN DE ACCION ── */
-.accion-item {
-  background: linear-gradient(135deg, #F0FDF4, #ECFDF5);
-  border-left: 4px solid #22C55E;
-  border-radius: 0 10px 10px 0;
-  padding: 14px 18px; margin: 8px 0;
-  font-size: 13px; color: #166534;
-  animation: fadeSlideUp .4s ease-out;
-}
-.accion-item.warning {
-  background: linear-gradient(135deg, #FFFBEB, #FEF3C7);
-  border-left-color: #F59E0B; color: #78350F;
-}
-.accion-item.alert {
-  background: linear-gradient(135deg, #FFF1F2, #FFE4E6);
-  border-left-color: #EF4444; color: #7F1D1D;
+.confirm-box {
+  background:linear-gradient(135deg,#F0FDF4,#ECFDF5); border:2px solid #86EFAC;
+  border-radius:16px; padding:32px; text-align:center;
 }
 
-/* ── PROGRESS STEPS ── */
-.step-bar {
-  display: flex; justify-content: space-between;
-  padding: 0; list-style: none; margin: 0 0 24px;
-}
-.step-dot {
-  width: 32px; height: 32px; border-radius: 50%;
-  background: #E5E7EB; display: flex; align-items: center;
-  justify-content: center; font-size: 12px; font-weight: 700; color: #9CA3AF;
-  border: 2px solid #E5E7EB; transition: all .3s;
-}
-.step-dot.done  { background: #50C878; color: #fff; border-color: #50C878; }
-.step-dot.active{ background: #fff; color: #50C878; border-color: #50C878; box-shadow: 0 0 0 4px rgba(80,200,120,.2); }
+.badge-avance    { background:#DCFCE7;color:#166534;border:1px solid #86EFAC;padding:5px 14px;border-radius:20px;font-weight:700;font-size:12px;display:inline-block; }
+.badge-retroceso { background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5;padding:5px 14px;border-radius:20px;font-weight:700;font-size:12px;display:inline-block; }
+.badge-lento     { background:#FEF9C3;color:#854D0E;border:1px solid #FDE047;padding:5px 14px;border-radius:20px;font-weight:700;font-size:12px;display:inline-block; }
 
-/* ── RUTINA TABLE ── */
+.accion-ok   { background:#F0FDF4;border-left:4px solid #22C55E;border-radius:0 8px 8px 0;padding:12px 16px;margin:6px 0;font-size:13px;color:#166534; }
+.accion-warn { background:#FFFBEB;border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;padding:12px 16px;margin:6px 0;font-size:13px;color:#78350F; }
+.accion-alert{ background:#FFF1F2;border-left:4px solid #EF4444;border-radius:0 8px 8px 0;padding:12px 16px;margin:6px 0;font-size:13px;color:#7F1D1D; }
+
+.macro-pill {
+  display:inline-flex;flex-direction:column;align-items:center;
+  background:#F0FDF4;border:1.5px solid #86EFAC;border-radius:12px;
+  padding:14px 18px;min-width:88px;
+}
+.macro-pill-val { font-size:22px;font-weight:900;color:#166534;font-family:'Space Grotesk',sans-serif; }
+.macro-pill-lbl { font-size:10px;color:#4ADE80;letter-spacing:1px;text-transform:uppercase;font-weight:700; }
+
+div[data-testid="stForm"] {
+  background:#fff !important;border-radius:16px !important;
+  border:1px solid #E8F0EA !important;padding:24px !important;
+  box-shadow:0 2px 16px rgba(0,0,0,.04) !important;
+}
+label[data-testid="stWidgetLabel"] p { color:#1A2B1F !important; font-weight:600 !important; }
+
+div.stButton > button, div[data-testid="stForm"] button {
+  background:linear-gradient(90deg,#50C878,#2E8B57) !important;
+  color:#fff !important;border:none !important;border-radius:10px !important;
+  font-weight:700 !important;height:48px;width:100%;
+  font-family:'Space Grotesk',sans-serif !important;
+  letter-spacing:1px;text-transform:uppercase;transition:all .25s;
+}
+div.stButton > button:hover { transform:translateY(-2px) !important; filter:brightness(1.08) !important; }
+
 .rutina-header {
-  background: linear-gradient(90deg, #0D1F14, #1A3D24);
-  color: #50C878; font-weight: 700; font-size: 11px;
-  letter-spacing: 1.5px; text-transform: uppercase;
-  padding: 10px 14px; border-radius: 8px 8px 0 0;
+  background:linear-gradient(90deg,#0D1F14,#1A3D24); color:#50C878;
+  font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  padding:10px 14px;border-radius:8px 8px 0 0;
 }
 .rutina-row {
-  display: grid; grid-template-columns: 3fr 1fr 1fr 1fr;
-  padding: 10px 14px; border-bottom: 1px solid #F0F4F1;
-  font-size: 13px; transition: background .2s;
+  display:grid;grid-template-columns:3fr 1fr 1fr 1fr;
+  padding:9px 14px;border-bottom:1px solid #F0F4F1;
+  font-size:13px;transition:background .2s;
 }
-.rutina-row:hover { background: #F0FDF4; }
+.rutina-row:hover { background:#F0FDF4; }
 
-/* ── CHART CONTAINERS ── */
-.chart-wrap {
-  background: #fff; border-radius: 14px; padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,.05);
-  border: 1px solid #E8F0EA; margin-bottom: 16px;
-}
+.chart-wrap { background:#fff;border-radius:14px;padding:22px;box-shadow:0 2px 12px rgba(0,0,0,.05);border:1px solid #E8F0EA;margin-bottom:14px; }
 
-/* ── FORMS ── */
-div[data-testid="stForm"] {
-  background: #fff !important; border-radius: 16px !important;
-  border: 1px solid #E8F0EA !important; padding: 28px !important;
-  box-shadow: 0 2px 16px rgba(0,0,0,.04) !important;
-}
-label[data-testid="stWidgetLabel"] p { color: #1A2B1F !important; font-weight: 600 !important; }
-
-/* ── BUTTONS ── */
-div.stButton > button, div[data-testid="stForm"] button {
-  background: linear-gradient(90deg, #50C878, #2E8B57) !important;
-  color: #fff !important; border: none !important; border-radius: 10px !important;
-  font-weight: 700 !important; height: 48px; width: 100%;
-  font-family: 'Space Grotesk', sans-serif !important;
-  letter-spacing: 1px; text-transform: uppercase; transition: all .25s;
-}
-div.stButton > button:hover, div[data-testid="stForm"] button:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 8px 20px rgba(80,200,120,.4) !important;
-  filter: brightness(1.08) !important;
-}
-
-/* ── PHOTO FRAMES ── */
-.photo-frame {
-  border: 2px solid #50C87840; border-radius: 12px; overflow: hidden;
-  aspect-ratio: 2/3; background: #0D1F14;
-  display: flex; align-items: center; justify-content: center;
-  color: #50C87860; font-size: 12px; letter-spacing: 1px;
-  text-transform: uppercase; font-weight: 600;
-}
-
-/* ── NUTRITION ROW ── */
-.macro-pill {
-  display: inline-flex; flex-direction: column; align-items: center;
-  background: #F0FDF4; border: 1.5px solid #86EFAC;
-  border-radius: 12px; padding: 14px 20px; min-width: 90px;
-}
-.macro-pill-val  { font-size: 22px; font-weight: 900; color: #166534; font-family: 'Space Grotesk', sans-serif; }
-.macro-pill-lbl  { font-size: 10px; color: #4ADE80; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; }
-
-/* ── SHIMMER LOADING ── */
-.shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 400px 100%; animation: shimmer 1.5s infinite;
-  border-radius: 8px; height: 20px;
+.porcion-card {
+  background:#fff;border-radius:12px;padding:16px;
+  border-left:4px solid #50C878;margin-bottom:10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.04);
 }
 </style>
 """, unsafe_allow_html=True)
 
+
 # =============================================================================
-# 3. CAPA DE DATOS
+# DATOS
 # =============================================================================
 @st.cache_data(ttl=60)
-def cargar_base_datos() -> pd.DataFrame:
+def cargar_db() -> pd.DataFrame:
     try:
-        url = f"{CONFIG['sheet_url']}&nocache={datetime.datetime.now().timestamp()}"
-        df = pd.read_csv(url)
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
+        url = f"{CONFIG['sheet_url']}&nc={datetime.datetime.now().timestamp()}"
+        df  = pd.read_csv(url)
+        df  = df.loc[:, ~df.columns.str.contains('^Unnamed')]
         df.columns = df.columns.str.strip()
-        df = df.fillna("")
+        df  = df.fillna("")
         if "ID_Alumno"    not in df.columns: df["ID_Alumno"]    = ""
         if "Tipo_Registro" not in df.columns: df["Tipo_Registro"] = "INICIAL"
         return df
@@ -395,1040 +268,1230 @@ def cargar_base_datos() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def generar_id_secuencial(df: pd.DataFrame) -> str:
-    """Genera el próximo ID en formato 247XXX."""
-    if df.empty:
-        return "247001"
-    ids_existentes = df["ID_Alumno"].dropna().astype(str)
-    numeros = []
-    for id_val in ids_existentes:
-        if id_val.startswith("247") and id_val[3:].isdigit():
-            numeros.append(int(id_val[3:]))
-    if not numeros:
-        return "247001"
-    siguiente = max(numeros) + 1
-    return f"247{siguiente:03d}"
+def gen_id(df: pd.DataFrame) -> str:
+    ids = df["ID_Alumno"].dropna().astype(str) if not df.empty else []
+    nums = [int(i[3:]) for i in ids if i.startswith("247") and i[3:].isdigit()]
+    return f"247{(max(nums)+1 if nums else 1):03d}"
 
 
-def normalizar_datos_alumno(datos_raw: pd.Series) -> dict:
-    def buscar(key: str, defecto: str = "") -> str:
-        if key in datos_raw.index:
-            val = datos_raw[key]
-            if pd.notna(val) and str(val).strip() not in ("", "nan"):
-                return str(val).strip()
-        return defecto
+def normalizar(row: pd.Series) -> dict:
+    def g(k, d=""):
+        v = row.get(k, d)
+        return str(v).strip() if pd.notna(v) and str(v).strip() not in ("","nan") else d
     return {
-        "Nombre completo":    buscar("Nombre completo", "Atleta"),
-        "Edad":               buscar("Edad", "25"),
-        "Sexo":               buscar("Sexo", "Masculino"),
-        "Estatura":           buscar("Estatura", "175"),
-        "Peso actual":        buscar("Peso actual", "80"),
-        "Cintura inicial":    buscar("Cintura inicial", "85"),
-        "Peso objetivo":      buscar("Peso objetivo", "75"),
-        "Nivel de actividad": buscar("Nivel de actividad", "Moderadamente activo"),
-        "Objetivo principal": buscar("Objetivo principal", "Recomposición corporal"),
-        "Tiempo entrenando":  buscar("Tiempo entrenando", "Menos de 6 meses"),
-        "Lesión actual":      buscar("Lesión actual", "Ninguna"),
-        "Prohibido ejercicio":buscar("Prohibido ejercicio", "No"),
-        "Mala postura":       buscar("Mala postura", "No"),
-        "Días entrenar":      buscar("Días entrenar", "4 días por semana"),
-        "Tiempo por sesión":  buscar("Tiempo por sesión", "60 minutos"),
-        "Compromiso":         buscar("Compromiso", "10"),
-        "Menu_Proteinas":     buscar("Menu_Proteinas", "Pechuga de Pollo"),
-        "Menu_Carbohidratos": buscar("Menu_Carbohidratos", "Arroz Blanco"),
-        "Menu_Grasas":        buscar("Menu_Grasas", "Aguacate"),
-        "Menu_Verduras":      buscar("Menu_Verduras", "Brócoli"),
-        "P_Energia_Q1":       buscar("P_Energia_Q1", "5"),
-        "P_Sueno_Q1":         buscar("P_Sueno_Q1", "5"),
-        "P_Fuerza_Q1":        buscar("P_Fuerza_Q1", "5"),
-        "P_Hambre_Q1":        buscar("P_Hambre_Q1", "5"),
-        "Historial_Est":      buscar("Historial de Estancamiento", "Menos de 1 mes"),
-        "Recuperacion_Base":  buscar("Capacidad de Recuperación Base", "Normal"),
-        "Biofeedback_Dig":    buscar("Biofeedback Digestivo", "Sin molestias"),
-        "Estres_Ext":         buscar("Carga de Estrés Externo", "5"),
+        "Nombre completo":    g("Nombre completo","Atleta"),
+        "Edad":               g("Edad","25"),
+        "Sexo":               g("Sexo","Masculino"),
+        "Estatura":           g("Estatura","175"),
+        "Peso actual":        g("Peso actual","80"),
+        "Cintura inicial":    g("Cintura inicial","85"),
+        "Peso objetivo":      g("Peso objetivo","75"),
+        "Nivel de actividad": g("Nivel de actividad","Moderadamente activo"),
+        "Objetivo principal": g("Objetivo principal","Recomposición corporal"),
+        "Tiempo entrenando":  g("Tiempo entrenando","Menos de 6 meses"),
+        "Lesión actual":      g("Lesión actual","Ninguna"),
+        "Prohibido ejercicio":g("Prohibido ejercicio","No"),
+        "Mala postura":       g("Mala postura","No"),
+        "Días entrenar":      g("Días entrenar","4 días por semana"),
+        "Menu_Proteinas":     g("Menu_Proteinas","Pechuga de Pollo"),
+        "Menu_Carbohidratos": g("Menu_Carbohidratos","Arroz"),
+        "Menu_Grasas":        g("Menu_Grasas","Aguacate"),
+        "Menu_Verduras":      g("Menu_Verduras","Brócoli"),
+        "P_Energia_Q1":       g("P_Energia_Q1","5"),
+        "P_Sueno_Q1":         g("P_Sueno_Q1","5"),
+        "P_Fuerza_Q1":        g("P_Fuerza_Q1","5"),
+        "P_Hambre_Q1":        g("P_Hambre_Q1","5"),
+        "Historial_Est":      g("Historial de Estancamiento","No estoy estancado"),
+        "Recuperacion_Base":  g("Capacidad de Recuperación Base","Normal"),
+        "Biofeedback_Dig":    g("Biofeedback Digestivo","Sin molestias"),
+        "Estres_Ext":         g("Carga de Estrés Externo","5"),
     }
 
+
+def pf(v, d=0.0):
+    try: return float(str(v).replace("kg","").replace("cm","").replace("años","").strip().split()[0])
+    except: return d
+
+
+def calcular_metabolismo(n: dict) -> dict:
+    peso=pf(n["Peso actual"],80); cintura=pf(n["Cintura inicial"],85)
+    est=pf(n["Estatura"],175);    edad=pf(n["Edad"],25)
+    gen=n["Sexo"];                act=n["Nivel de actividad"]
+    meta=n["Objetivo principal"]
+
+    imc = peso/((est/100)**2) if est>0 else 0
+    ica = cintura/est if est>0 else 0
+    origen = ("Obesidad / Riesgo Metabólico" if ica>=0.53 else
+              "Sobrepeso Músculo-Graso"       if ica>=0.50 else
+              "Perfil Atlético / Magro"        if ica<0.43  else "Condición Normal")
+
+    tmb = (66.473+13.751*peso+5.0033*est-6.755*edad if "Masculino" in gen
+           else 655.095+9.5634*peso+1.8496*est-4.6756*edad)
+    factor = CONFIG["factores"].get(act,1.55)
+    tdee   = tmb*factor
+
+    if any(k in meta for k in ("Perder","grasa","Bajar")):
+        cals,bal = tdee-400,"Déficit Calórico (-400 kcal)"
+    elif any(k in meta for k in ("Ganar","muscular","Volumen")):
+        cals,bal = tdee+300,"Superávit Calórico (+300 kcal)"
+    else:
+        cals,bal = tdee,"Normocalórico (mantenimiento)"
+
+    prot  = round(peso*2.0,1)
+    grasa = round(peso*1.0,1)
+    carbs = round(max((cals-(prot*4)-(grasa*9))/4,50),1)
+
+    return {"imc":round(imc,1),"ica":round(ica,2),"origen":origen,
+            "tmb":round(tmb,0),"tdee":round(tdee,0),"cals":round(cals,0),
+            "prot":prot,"grasa":grasa,"carbs":carbs,"balance":bal,
+            "factor":factor,"edad":edad,"genero":gen,
+            "peso":peso,"cintura":cintura,"estatura":est}
+
+
+def calcular_porciones(norm: dict, mot: dict) -> dict:
+    """Calcula gramos exactos de cada alimento por comida."""
+    ref = CONFIG["porciones_ref"]
+    prot_c  = mot["prot"]  / 4
+    carbs_c = mot["carbs"] / 4
+    grasa_c = mot["grasa"] / 4
+
+    def gramos_para_macro(alimento, macro_g, macro_key):
+        if alimento not in ref: return 0
+        r = ref[alimento]
+        if r[macro_key] <= 0: return 0
+        return round((macro_g / r[macro_key]) * 100)
+
+    prot_alim  = norm["Menu_Proteinas"].split(",")[0].strip()
+    carb_alim  = norm["Menu_Carbohidratos"].split(",")[0].strip()
+    grasa_alim = norm["Menu_Grasas"].split(",")[0].strip()
+    verd_alim  = norm["Menu_Verduras"].split(",")[0].strip()
+
+    return {
+        "prot_alim":  prot_alim,
+        "carb_alim":  carb_alim,
+        "grasa_alim": grasa_alim,
+        "verd_alim":  verd_alim,
+        "prot_g":     gramos_para_macro(prot_alim,  prot_c,  "prot"),
+        "carbs_g":    gramos_para_macro(carb_alim,  carbs_c, "carbs"),
+        "grasa_g":    gramos_para_macro(grasa_alim, grasa_c, "grasa"),
+        "verd_g":     150,   # verduras siempre 150g libres
+        "prot_kcal":  round(prot_c*4),
+        "carbs_kcal": round(carbs_c*4),
+        "grasa_kcal": round(grasa_c*9),
+        "total_kcal": round(mot["cals"]/4),
+    }
+
+
 # =============================================================================
-# 4. MOTOR METABÓLICO
+# FOTOS — PERSISTENCIA EN DISCO
 # =============================================================================
-def _parse_float(valor, defecto: float) -> float:
+def ruta_foto(id_al: str, tipo: str, etapa: str) -> str:
+    """Retorna ruta en disco para una foto. tipo=frente/perfil/espalda, etapa=q1/q2"""
+    return os.path.join(CONFIG["foto_dir"], f"{id_al}_{etapa}_{tipo}.jpg")
+
+
+def guardar_foto_disco(id_al: str, tipo: str, etapa: str, file_obj) -> bool:
+    """Guarda foto en disco. Retorna True si OK."""
     try:
-        return float(str(valor).replace("kg","").replace("cm","").replace("años","").strip().split()[0])
-    except Exception:
-        return defecto
+        file_obj.seek(0)
+        img = Image.open(file_obj).convert("RGB")
+        img.thumbnail((800, 1200), Image.LANCZOS)
+        img.save(ruta_foto(id_al, tipo, etapa), "JPEG", quality=85)
+        return True
+    except Exception as e:
+        return False
 
 
-def calcular_metabolismo(datos: dict) -> dict:
-    peso     = _parse_float(datos.get("Peso actual", "80"), 80.0)
-    cintura  = _parse_float(datos.get("Cintura inicial", "85"), 85.0)
-    estatura = _parse_float(datos.get("Estatura", "175"), 175.0)
-    edad     = _parse_float(datos.get("Edad", "25"), 25.0)
-    genero   = str(datos.get("Sexo", "Masculino"))
-    actividad= str(datos.get("Nivel de actividad", "Moderadamente activo"))
-    meta     = str(datos.get("Objetivo principal", "Recomposición corporal"))
+def cargar_foto_disco(id_al: str, tipo: str, etapa: str):
+    """Carga foto desde disco. Retorna bytes o None."""
+    ruta = ruta_foto(id_al, tipo, etapa)
+    if os.path.exists(ruta):
+        with open(ruta, "rb") as f:
+            return f.read()
+    return None
 
-    imc = peso / ((estatura / 100) ** 2) if estatura > 0 else 0.0
-    ica = cintura / estatura if estatura > 0 else 0.0
 
-    origen_fisico = "Condición Normal"
-    if ica >= 0.53:  origen_fisico = "Obesidad / Riesgo Metabólico"
-    elif ica >= 0.50: origen_fisico = "Sobrepeso Músculo-Graso"
-    elif ica < 0.43:  origen_fisico = "Perfil Atlético / Magro"
-
-    if "Masculino" in genero:
-        tmb = 66.473 + (13.751 * peso) + (5.0033 * estatura) - (6.755 * edad)
+def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
+    """Muestra foto desde disco o placeholder."""
+    datos = cargar_foto_disco(id_al, tipo, etapa)
+    if datos:
+        col.image(datos, caption=f"📸 {label}", use_container_width=True)
     else:
-        tmb = 655.095 + (9.5634 * peso) + (1.8496 * estatura) - (4.6756 * edad)
-
-    factor = CONFIG["factores_actividad"].get(actividad, 1.55)
-    tdee   = tmb * factor
-
-    if any(k in meta for k in ("Perder", "Bajar", "grasa", "Déficit")):
-        cals, balance_str = tdee - 400, "Déficit Calórico (-400 kcal)"
-    elif any(k in meta for k in ("Ganar", "Subir", "Volumen", "muscular")):
-        cals, balance_str = tdee + 300, "Superávit Calórico (+300 kcal)"
-    else:
-        cals, balance_str = tdee, "Normocalórico (mantenimiento)"
-
-    prot  = round(peso * 2.0, 1)
-    grasa = round(peso * 1.0, 1)
-    carbs = round(max((cals - (prot * 4) - (grasa * 9)) / 4, 50.0), 1)
-
-    return {
-        "imc": round(imc, 1), "ica": round(ica, 2), "origen": origen_fisico,
-        "tmb": round(tmb, 0), "tdee": round(tdee, 0), "cals": round(cals, 0),
-        "prot": prot, "grasa": grasa, "carbs": carbs, "balance_str": balance_str,
-        "factor": factor, "edad": edad, "genero": genero,
-        "peso": peso, "cintura": cintura, "estatura": estatura,
-    }
-
-# =============================================================================
-# 5. PLAN DE ACCIÓN CLÍNICO
-# =============================================================================
-def generar_plan_accion(norm: dict, ult_rev: pd.Series, estado: str) -> list:
-    plan = []
-    adherencia  = str(ult_rev.get("Adherencia Real al Sistema", "100%"))
-    sobrecarga  = str(ult_rev.get("Sobrecarga Progresiva", "Sí, en la mayoría"))
-    tolerancia  = str(ult_rev.get("Tolerancia Metabólica", "Digestión rápida y normal"))
-
-    if "menos del 50%" in adherencia.lower() or "50%" in adherencia:
-        plan.append(("alert", "ADHERENCIA CRÍTICA: Reducir la complejidad del menú actual. Priorizar alimentos de fácil preparación y revisar picos de ansiedad."))
-    if estado == "RETROCESO" and "No" in sobrecarga:
-        plan.append(("warning", "AJUSTE NEUROMUSCULAR: Descarga programada (Deload) de 1 semana. Reducir volumen 30% para disipar fatiga sistémica."))
-    if "pesadez" in tolerancia.lower() or "inflamación" in tolerancia.lower():
-        plan.append(("warning", "BIOFEEDBACK: Ajuste en fuentes de carbohidratos. Rotar arroz/papa por avena/vegetales fibrosos."))
-    if estado == "AVANCE" and "Sí" in sobrecarga:
-        plan.append(("success", "LUZ VERDE (INTENSIDAD): Mantener balance calórico intacto. Autorizado para aumentar cargas en ejercicios compuestos +5%."))
-    if not plan:
-        plan.append(("success", "MANTENIMIENTO ÓPTIMO: Parámetros estables. Continuar protocolo actual sin modificaciones agresivas."))
-    return plan
-
-# =============================================================================
-# 6. MOTOR DE AVATAR — DICEBEAR CARTOON FITNESS (ALTA CALIDAD)
-# =============================================================================
-
-def _avatar_params(norm: dict, mot: dict) -> dict:
-    """
-    Calcula todos los parámetros visuales del avatar basándose en los datos
-    reales del cliente: género, complexión, tono de piel, cabello, ropa.
-    """
-    sexo     = str(norm.get("Sexo", "Masculino"))
-    imc      = mot.get("imc", 22.0)
-    objetivo = str(norm.get("Objetivo principal", ""))
-    nombre   = str(norm.get("Nombre completo", "Atleta"))
-    es_mujer = "Femen" in sexo or "femen" in sexo
-
-    # Tono de piel (0=claro, 100=oscuro) — basado en nombre/región como proxy neutro
-    skin_tone = "f5cfa0"  # neutral medio por defecto
-
-    # Color de cabello
-    hair_col = "4a2511" if not es_mujer else "6b2d0e"
-
-    # Ropa según objetivo y género
-    if "grasa" in objetivo or "Perder" in objetivo:
-        top_col  = "ff6b35" if not es_mujer else "e91e8c"
-        bot_col  = "1a1a2e" if not es_mujer else "1a1a2e"
-    elif "muscular" in objetivo or "Ganar" in objetivo:
-        top_col  = "1a3d24" if not es_mujer else "1a3d80"
-        bot_col  = "111827" if not es_mujer else "111827"
-    else:
-        top_col  = "1a3d24" if not es_mujer else "7c3d8a"
-        bot_col  = "1a1a2e" if not es_mujer else "6d28d9"
-
-    # Accesorio según nivel
-    nivel = str(norm.get("Tiempo entrenando", ""))
-    acc = "eyeglasses" if "Más de 3" in nivel else "none"
-
-    return {
-        "es_mujer": es_mujer,
-        "skin_tone": skin_tone,
-        "hair_col": hair_col,
-        "top_col": top_col,
-        "bot_col": bot_col,
-        "imc": imc,
-        "nombre": nombre,
-        "objetivo": objetivo,
-        "acc": acc,
-    }
-
-
-def construir_url_avatar(norm: dict, mot: dict, estado: str = "Q1") -> str:
-    """
-    Genera URL de avatar DiceBear estilo 'avataaars' (cartoon fitness).
-    Parámetros personalizados por datos del cliente.
-    """
-    p = _avatar_params(norm, mot)
-    es_mujer = p["es_mujer"]
-
-    # Estilo base: avataaars (alta calidad cartoon)
-    base = "https://api.dicebear.com/9.x/avataaars/svg"
-
-    # Tipo de cabello según género
-    if es_mujer:
-        hair_types = "longHairBraids,longHairCurly,longHairStraight,longHairBun"
-    else:
-        hair_types = "shortHairShortFlat,shortHairDreads01,shortHairFrizzle,shortHairTheCaesar"
-
-    # Top según género
-    if es_mujer:
-        top_type = "GraphicShirt"
-        clothing = "GraphicShirt"
-    else:
-        top_type = "ShirtVNeck"
-        clothing = "ShirtVNeck"
-
-    # Color outfit según estado Q2
-    if estado == "AVANCE":
-        cloth_color = "262E33"
-        mouth = "smile"
-    elif estado == "RETROCESO":
-        cloth_color = "929598"
-        mouth = "sad"
-    elif estado == "LENTO":
-        cloth_color = "65C9FF"
-        mouth = "default"
-    else:  # Q1
-        cloth_color = p["top_col"].lstrip("#") if not es_mujer else p["top_col"].lstrip("#")
-        mouth = "smile"
-
-    # Accesorios (gafas de sol si es avanzado)
-    accessories = "sunglasses" if "Más de 3" in str(norm.get("Tiempo entrenando","")) else "none"
-
-    # Ojos expresivos
-    eye_type = "default" if estado not in ("RETROCESO",) else "squint"
-
-    # Seed único por cliente para consistencia
-    import hashlib
-    seed = hashlib.md5(p["nombre"].encode()).hexdigest()[:8]
-
-    params = (
-        f"?seed={seed}"
-        f"&skinColor={p['skin_tone']}"
-        f"&hairColor={p['hair_col']}"
-        f"&top[]={hair_types.split(',')[0]}"
-        f"&clothesColor={cloth_color}"
-        f"&clothes[]={clothing}"
-        f"&eyes[]={eye_type}"
-        f"&mouth[]={mouth}"
-        f"&accessories[]={accessories}"
-        f"&backgroundColor=1E3A28"
-        f"&backgroundType=gradientLinear"
-        f"&radius=16"
-        f"&size=300"
-    )
-    return base + params
-
-
-def construir_url_avatar_q2(norm: dict, mot: dict, ult_rev: dict, estado: str) -> str:
-    """URL de avatar Q2 con expresión y accesorios según estado."""
-    return construir_url_avatar(norm, mot, estado)
-
-
-def render_avatar_fitness(url: str, nombre: str, estado: str = "Q1",
-                           info_extra: str = "", height: int = 260):
-    """
-    Muestra el avatar fitness con marco, badge de estado y nombre.
-    Compatible 100% con Streamlit — usa st.image con URL directa.
-    """
-    # Color del badge según estado
-    badge_colors = {
-        "AVANCE":    ("#22C55E", "#DCFCE7", "🚀 AVANCE"),
-        "RETROCESO": ("#EF4444", "#FEE2E2", "⚠️ RETROCESO"),
-        "LENTO":     ("#F59E0B", "#FEF9C3", "⏳ LENTO"),
-        "Q1":        ("#50C878", "#F0FDF4", "✅ ACTIVO"),
-    }
-    bc, bbg, blbl = badge_colors.get(estado, badge_colors["Q1"])
-
-    st.markdown(f"""
-    <div style="text-align:center;">
-      <div style="display:inline-block;border:3px solid {bc};border-radius:20px;
-                  padding:6px;background:linear-gradient(135deg,#0D1F14,#1A3D24);
-                  box-shadow:0 0 24px {bc}55;">
-        <img src="{url}" width="{height}" style="border-radius:14px;display:block;"/>
-      </div>
-      <div style="margin-top:10px;">
-        <span style="background:{bbg};color:{bc};border:1px solid {bc};
-                     padding:4px 14px;border-radius:20px;font-size:12px;
-                     font-weight:700;letter-spacing:1px;">{blbl}</span>
-      </div>
-      {f'<div style="font-size:11px;color:#7D9A84;margin-top:6px;">{info_extra}</div>' if info_extra else ""}
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def construir_avatar_q1(norm: dict, mot: dict) -> str:
-    """Devuelve URL del avatar Q1."""
-    return construir_url_avatar(norm, mot, "Q1")
-
-
-def construir_avatar_q2(norm: dict, mot: dict, ult_rev: dict, estado: str) -> str:
-    """Devuelve URL del avatar Q2."""
-    return construir_url_avatar(norm, mot, estado.upper())
-
-
-def render_avatar_svg(svg_str: str, height: int = 280):
-    """Compatibilidad: si recibe URL (str que empieza con http) usa st.image."""
-    if str(svg_str).startswith("http"):
-        st.markdown(
-            f'<div style="display:flex;justify-content:center;">'
-            f'<img src="{svg_str}" height="{height}" style="border-radius:16px;'
-            f'filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/></div>',
-            unsafe_allow_html=True
-        )
-    else:
-        import base64
-        b64 = base64.b64encode(svg_str.encode("utf-8")).decode("utf-8")
-        st.markdown(
-            f'<div style="display:flex;justify-content:center;">'
-            f'<img src="data:image/svg+xml;base64,{b64}" height="{height}" '
-            f'style="filter:drop-shadow(0 8px 24px rgba(80,200,120,0.3));"/></div>',
-            unsafe_allow_html=True
-        )
-
-
-# =============================================================================
-# 7. PDF GENERATOR
-# =============================================================================
-def _limpiar(texto: str) -> str:
-    return str(texto).encode("latin-1", "replace").decode("latin-1")
-
-
-def _tiene_lesion(norm: dict) -> bool:
-    return (norm.get("Lesión actual", "Ninguna").lower() != "ninguna" or
-            norm.get("Prohibido ejercicio", "No").lower() != "no")
-
-
-def generar_pdf_mm247(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str) -> bytes:
-    pdf = FPDF("P", "mm", "Letter")
-    pdf.set_auto_page_break(auto=True, margin=15)
-    con_lesion = _tiene_lesion(norm)
-    t_ent = norm.get("Tiempo entrenando", "Menos de 6 meses")
-    aplica_induccion = "Nunca" in t_ent or "Menos de 6 meses" in t_ent
-    num_dias = int(str(norm.get("Días entrenar","4")).strip()[0]) if str(norm.get("Días entrenar","4")).strip()[0].isdigit() else 4
-
-    def header(titulo: str):
-        pdf.add_page()
-        pdf.set_fill_color(80, 200, 120)
-        pdf.rect(0, 0, 216, 30, "F")
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Arial", "B", 24)
-        pdf.set_xy(10, 8); pdf.cell(100, 10, "MM247", 0, 0, "L")
-        pdf.set_font("Arial", "B", 12)
-        pdf.set_xy(160, 12); pdf.cell(45, 10, "CONFIDENCIAL", 0, 0, "R")
-        pdf.set_text_color(240, 255, 240)
-        pdf.set_font("Arial", "", 10)
-        pdf.set_xy(10, 18); pdf.cell(100, 10, f"ID: {id_al}", 0, 0, "L")
-        pdf.set_text_color(44, 62, 80)
-        pdf.set_font("Arial", "B", 14)
-        pdf.set_xy(10, 35); pdf.cell(196, 10, _limpiar(titulo), 0, 1, "C")
-        pdf.set_draw_color(229, 231, 235); pdf.set_line_width(0.5)
-        pdf.line(10, 45, 206, 45); pdf.ln(10)
-
-    def fila_dato(label: str, valor: str, col_w: int = 98):
-        pdf.set_font("Arial","B",10); pdf.cell(col_w,7,_limpiar(label),1,0,"L")
-        pdf.set_font("Arial","",10);  pdf.cell(col_w,7,_limpiar(valor),1,1,"L")
-
-    # HOJA 1
-    header("HOJA 1: PERFIL CLÍNICO Y LÍNEA BASE")
-    pdf.set_font("Arial","B",12); pdf.cell(0,10,_limpiar("1. DATOS GENERALES"),0,1)
-    fila_dato("Cliente", norm["Nombre completo"])
-    fila_dato("Edad / Sexo", f"{int(mot['edad'])} años / {mot['genero']}")
-    fila_dato("Estatura / Peso Base", f"{mot['estatura']} cm / {mot['peso']} kg")
-    fila_dato("Punto de Partida", f"{mot['origen']} (ICA: {mot['ica']})")
-    fila_dato("Objetivo principal", norm.get("Objetivo principal","--"))
-    pdf.ln(8)
-    pdf.set_font("Arial","B",12); pdf.set_text_color(239,68,68)
-    pdf.cell(0,10,_limpiar("2. ALERTAS BIOMECÁNICAS"),0,1)
-    pdf.set_fill_color(254,242,242); pdf.set_draw_color(239,68,68)
-    pdf.rect(10,pdf.get_y(),196,38,"FD")
-    pdf.set_xy(15,pdf.get_y()+4)
-    pdf.set_text_color(51,51,51); pdf.set_font("Arial","",10)
-    for linea in [f"Lesión Base: {norm['Lesión actual']}",f"Restricción Axial: {norm['Prohibido ejercicio']}",
-                  f"Estancamiento Previo: {norm['Historial_Est']}",f"Recuperación Base: {norm['Recuperacion_Base']}",
-                  f"Biofeedback Digestivo: {norm['Biofeedback_Dig']}"]:
-        pdf.set_x(15); pdf.cell(0,6,_limpiar(f"• {linea}"),0,1)
-
-    # HOJA 2 - Rutinas
-    header("HOJA 2: PROGRAMACIÓN NEUROMUSCULAR")
-    modo = "con_lesion" if con_lesion else "sin_lesion"
-    if aplica_induccion:
-        bloques = ["Inducción (1 Mes)"] * num_dias
-        nombres_bloque = [f"DÍA {i+1} — FULL BODY ACONDICIONAMIENTO" for i in range(num_dias)]
-    else:
-        bloques = ["Empuje","Tracción","Pierna","Empuje","Tracción"][:num_dias]
-        nombres_bloque = [f"DÍA {i+1} — {b.upper()}" for i,b in enumerate(bloques)]
-
-    for i, bloque in enumerate(bloques):
-        if bloque in CONFIG["rutinas"]:
-            ejercicios = CONFIG["rutinas"][bloque][modo]
-            pdf.set_fill_color(80,200,120); pdf.set_text_color(255,255,255); pdf.set_font("Arial","B",10)
-            pdf.cell(196,8,_limpiar(nombres_bloque[i]),0,1,"L",fill=True)
-            pdf.set_fill_color(243,244,246); pdf.set_text_color(51,51,51)
-            for txt,w in [("EJERCICIO",90),("SERIES",26),("REPS",40),("DESCANSO",40)]:
-                pdf.cell(w,7,_limpiar(txt),1,0,"C",fill=True)
-            pdf.ln(); pdf.set_font("Arial","",10)
-            for ej,series,reps,desc in ejercicios:
-                pdf.cell(90,7,_limpiar(ej),1,0,"L")
-                pdf.cell(26,7,_limpiar(series),1,0,"C")
-                pdf.cell(40,7,_limpiar(reps),1,0,"C")
-                pdf.cell(40,7,_limpiar(desc),1,1,"C")
-            pdf.ln(6)
-
-    # HOJA 3 - Nutrición
-    header("HOJA 3: PROTOCOLO NUTRICIONAL")
-    pdf.set_font("Arial","B",12); pdf.cell(0,10,_limpiar("1. MÉTRICAS METABÓLICAS"),0,1)
-    fila_dato("TMB (Harris-Benedict)", f"{mot['tmb']} kcal/día")
-    fila_dato(f"TDEE (factor {mot['factor']})", f"{mot['tdee']} kcal/día")
-    fila_dato("Balance objetivo", mot["balance_str"])
-    fila_dato("Calorías diarias prescritas", f"{mot['cals']} kcal")
-    pdf.ln(8)
-    pdf.set_font("Arial","B",12); pdf.cell(0,10,_limpiar("2. MACRONUTRIENTES DIARIOS"),0,1)
-    pdf.set_fill_color(80,200,120); pdf.set_text_color(255,255,255)
-    for h,w in [("PROTEÍNA",49),("CARBOHIDRATOS",49),("GRASAS",49),("CALORÍAS",49)]:
-        pdf.cell(w,8,_limpiar(h),1,0,"C",fill=True)
-    pdf.ln(); pdf.set_text_color(51,51,51); pdf.set_font("Arial","B",13)
-    for val,w in [(f"{mot['prot']}g",49),(f"{mot['carbs']}g",49),(f"{mot['grasa']}g",49),(f"{mot['cals']} kcal",49)]:
-        pdf.cell(w,10,_limpiar(val),1,0,"C")
-    pdf.ln(12)
-    pdf.set_font("Arial","B",12); pdf.cell(0,10,_limpiar("3. DISTRIBUCIÓN EN 4 TOMAS"),0,1)
-    p_c,c_c,g_c,k_c = round(mot["prot"]/4,1),round(mot["carbs"]/4,1),round(mot["grasa"]/4,1),round(mot["cals"]/4,0)
-    for comida in ["COMIDA 1","COMIDA 2","COMIDA 3","COMIDA 4"]:
-        pdf.set_fill_color(243,244,246); pdf.set_font("Arial","B",11)
-        pdf.cell(196,8,_limpiar(comida),0,1,"L",fill=True)
-        pdf.set_font("Arial","",10)
-        pdf.cell(0,6,_limpiar(f"  {k_c} kcal  |  {p_c}g Prot  |  {c_c}g Carbs  |  {g_c}g Grasa"),0,1)
-        pdf.cell(0,6,_limpiar(f"  Proteína: {norm['Menu_Proteinas']} | Carbs: {norm['Menu_Carbohidratos']}"),0,1)
-        pdf.cell(0,6,_limpiar(f"  Grasas: {norm['Menu_Grasas']} | Verduras: {norm['Menu_Verduras']}"),0,1)
-        pdf.ln(3)
-
-    # HOJA 4 - Auditoría clínica
-    if len(revs_df) > 0:
-        header("HOJA 4: AUDITORÍA CLÍNICA, DELTAS Y PLAN DE ACCIÓN")
-        ult = revs_df.iloc[-1]
-        peso_actual    = _parse_float(ult.get("Peso_Revision", mot["peso"]), mot["peso"])
-        cintura_actual = _parse_float(ult.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
-        estado = str(ult.get("Estado_Calculado","AVANCE")).upper()
-
-        pdf.set_font("Arial","B",12); pdf.cell(0,10,_limpiar("1. CRUCE BIOMÉTRICO (Q1 vs Q2)"),0,1)
-        pdf.set_fill_color(80,200,120); pdf.set_text_color(255,255,255)
-        for h,w in [("MÉTRICA",60),("Q1 (BASE)",45),("Q2 (ACTUAL)",45),("DELTA NETO",46)]:
-            pdf.cell(w,8,_limpiar(h),1,0,"C",fill=True)
-        pdf.ln(); pdf.set_text_color(51,51,51); pdf.set_font("Arial","",11)
-        dif_peso = round(peso_actual - mot["peso"], 1)
-        pdf.cell(60,8,"Peso Corporal",1,0,"C")
-        pdf.cell(45,8,f"{mot['peso']} kg",1,0,"C")
-        pdf.cell(45,8,f"{peso_actual} kg",1,0,"C")
-        pdf.set_text_color(34,197,94) if dif_peso<=0 else pdf.set_text_color(239,68,68)
-        pdf.cell(46,8,f"{dif_peso:+.1f} kg",1,1,"C")
-        pdf.set_text_color(51,51,51)
-        dif_cintura = round(cintura_actual - mot["cintura"], 1)
-        pdf.cell(60,8,"Cintura",1,0,"C")
-        pdf.cell(45,8,f"{mot['cintura']} cm",1,0,"C")
-        pdf.cell(45,8,f"{cintura_actual} cm",1,0,"C")
-        pdf.set_text_color(34,197,94) if dif_cintura<=0 else pdf.set_text_color(239,68,68)
-        pdf.cell(46,8,f"{dif_cintura:+.1f} cm",1,1,"C")
-        pdf.ln(8)
-        pdf.set_text_color(51,51,51); pdf.set_font("Arial","B",12)
-        pdf.cell(0,10,_limpiar("2. PLAN DE ACCIÓN CLÍNICO"),0,1)
-        plan_accion = generar_plan_accion(norm, ult, estado)
-        pdf.set_font("Arial","",10)
-        for tipo, accion in plan_accion:
-            pdf.set_x(15); pdf.multi_cell(180,6,_limpiar(f"-> {accion}"),0,"L")
-
-    return pdf.output(dest="S").encode("latin-1","ignore")
-
-# =============================================================================
-# 8. HELPERS DE NAVEGACIÓN
-# =============================================================================
-def guardar_y_navegar(datos: dict, destino: int):
-    st.session_state.db.update(datos)
-    st.session_state.step = destino
-    st.rerun()
-
-# =============================================================================
-# 9. COMPONENTES DE DASHBOARD
-# =============================================================================
-def render_hero(titulo: str, subtitulo: str, id_al: str = ""):
-    id_txt = f"<div style='font-size:11px;color:#8FC99E;letter-spacing:2px;margin-top:8px;'>ID: {id_al}</div>" if id_al else ""
-    st.markdown(f"""
-    <div class="hero-block">
-      <div class="hero-title">MM<span>247</span></div>
-      <div class="hero-sub">{subtitulo}</div>
-      <div style="font-size:15px;color:#C8E6D0;margin-top:12px;font-weight:600;">{titulo}</div>
-      {id_txt}
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_metric_card(label: str, valor: str, delta: str = "", delta_tipo: str = "neu"):
-    delta_html = f"<div class='metric-delta delta-{delta_tipo}'>{delta}</div>" if delta else ""
-    st.markdown(f"""
-    <div class="metric-card">
-      <div class="metric-label">{label}</div>
-      <div class="metric-val">{valor}</div>
-      {delta_html}
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_accion(tipo: str, texto: str):
-    st.markdown(f"<div class='accion-item {'' if tipo=='success' else tipo}'>{texto}</div>", unsafe_allow_html=True)
-
-
-def render_rutina_table(ejercicios: list, titulo: str):
-    st.markdown(f"<div class='rutina-header'>{titulo}</div>", unsafe_allow_html=True)
-    for ej, series, reps, desc in ejercicios:
-        st.markdown(f"""
-        <div class='rutina-row'>
-          <div>{ej}</div>
-          <div style='text-align:center;font-weight:700;color:#166534;'>{series}</div>
-          <div style='text-align:center;color:#50C878;font-weight:700;'>{reps}</div>
-          <div style='text-align:center;color:#9CA3AF;'>{desc}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# =============================================================================
-# 10. DASHBOARD Q1 — MI REGISTRO MM247
-# =============================================================================
-def mostrar_dashboard_q1(norm: dict, mot: dict, id_al: str):
-    nombre = norm.get("Nombre completo","Atleta")
-    render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
-
-    # ── Avatar DiceBear Q1 + perfil ────────────────────────────────────────────
-    ca, cb = st.columns([1, 3])
-    with ca:
-        lesion = norm.get("Lesión actual","Ninguna")
-        imc    = mot.get("imc", 22)
-        if imc < 18.5:   complexion_lbl = "🔹 Delgado/a"
-        elif imc < 25:   complexion_lbl = "🟢 Normal"
-        elif imc < 30:   complexion_lbl = "🟡 Sobrepeso"
-        else:            complexion_lbl = "🔴 Obesidad"
-
-        avatar_url = construir_avatar_q1(norm, mot)
-        render_avatar_fitness(
-            url        = avatar_url,
-            nombre     = nombre,
-            estado     = "Q1",
-            info_extra = f"{'👩' if 'Femen' in norm.get('Sexo','') else '👨'} {complexion_lbl} · {mot['estatura']}cm · {'🚨 '+lesion if lesion!='Ninguna' else '✅ Sin lesiones'}",
-            height     = 260,
-        )
-
-    with cb:
-        # Análisis de zonas de enfoque basado en datos reales
-        objetivo  = norm.get("Objetivo principal","")
-        estres    = _parse_float(norm.get("Estres_Ext","5"), 5.0)
-        recup     = norm.get("Recuperacion_Base","Normal")
-        biofeed   = norm.get("Biofeedback_Dig","Sin molestias")
-        nivel     = norm.get("Tiempo entrenando","")
-        postura   = norm.get("Mala postura","No")
-
-        zonas = []
-        if "Perder" in objetivo or "grasa" in objetivo:
-            zonas.append(("🔥","Quema de grasa","Déficit calórico activo · Cardio HIIT recomendado"))
-        if "Ganar" in objetivo or "muscular" in objetivo:
-            zonas.append(("💪","Hipertrofia muscular","Superávit calórico · Progresión de cargas clave"))
-        if "Recomposición" in objetivo:
-            zonas.append(("⚖️","Recomposición corporal","Balance calórico · Prioridad proteica alta"))
-        if lesion != "Ninguna":
-            zonas.append(("⚠️",f"Lesión: {lesion}","Protocolo adaptado · Evitar carga axial"))
-        if estres >= 7:
-            zonas.append(("🧠","Estrés elevado","Priorizar sueño · Reducir volumen de entrenamiento"))
-        if "pesadez" in biofeed.lower() or "Gases" in biofeed:
-            zonas.append(("🫀","Biofeedback digestivo","Ajuste de fuentes de carbohidratos recomendado"))
-        if "Nunca" in nivel or "Menos de 6" in nivel:
-            zonas.append(("🌱","Principiante","Inducción activa · Técnica antes que carga"))
-        if postura != "No":
-            zonas.append(("🦴",f"Corrección postural: {postura}","Ejercicios correctivos incluidos en rutina"))
-        if not zonas:
-            zonas.append(("✅","Perfil equilibrado","Continuar protocolo estándar de progresión"))
-
-        st.markdown(f"""
-        <div style="padding:12px 0 4px;">
-          <div style="font-size:26px;font-weight:900;color:#0D1F14;font-family:'Space Grotesk',sans-serif;">{nombre}</div>
-          <div style="font-size:12px;color:#50C878;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">
-            {mot['genero']} · {int(mot['edad'])} años · {mot['estatura']} cm · IMC {mot['imc']}
-          </div>
-          <div style="margin-top:8px;"><span class="badge-avance">✅ EXPEDIENTE ACTIVO</span></div>
-          <div style="font-size:13px;color:#6B7280;margin-top:6px;">
-            Objetivo: <strong style='color:#166534;'>{objetivo}</strong>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top:12px;'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:8px;'>ÁREAS DE ENFOQUE DETECTADAS</div>", unsafe_allow_html=True)
-        for icono, titulo_zona, desc_zona in zonas:
-            st.markdown(f"""
-            <div style='display:flex;align-items:flex-start;gap:10px;padding:8px 12px;
-                        background:#F0FDF4;border-left:3px solid #50C878;border-radius:0 8px 8px 0;
-                        margin-bottom:6px;'>
-              <span style='font-size:18px;'>{icono}</span>
-              <div>
-                <div style='font-size:12px;font-weight:700;color:#166534;'>{titulo_zona}</div>
-                <div style='font-size:11px;color:#6B7280;margin-top:2px;'>{desc_zona}</div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # Métricas biométricas
-    st.markdown("<div class='sec-head'>MÉTRICAS BIOMÉTRICAS BASE</div>", unsafe_allow_html=True)
-    m1, m2, m3, m4 = st.columns(4)
-    with m1: render_metric_card("Peso Base", f"{mot['peso']} kg")
-    with m2: render_metric_card("Cintura", f"{mot['cintura']} cm")
-    with m3: render_metric_card("IMC", str(mot['imc']))
-    with m4: render_metric_card("ICA", str(mot['ica']))
-
-    # Origen físico
-    st.markdown(f"""
-    <div class="panel-card" style="border-left:4px solid #50C878;">
-      <div style="font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;">ORIGEN FÍSICO CALCULADO</div>
-      <div style="font-size:20px;font-weight:900;color:#0D1F14;margin-top:6px;">{mot['origen']}</div>
-      <div style="font-size:12px;color:#6B7280;margin-top:4px;">
-        TMB: <strong>{mot['tmb']} kcal</strong> ·
-        TDEE: <strong>{mot['tdee']} kcal</strong> ·
-        Prescrito: <strong style='color:#166534;'>{mot['cals']} kcal ({mot['balance_str']})</strong>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Macronutrientes
-    st.markdown("<div class='sec-head'>PROTOCOLO NUTRICIONAL DIARIO</div>", unsafe_allow_html=True)
-    mn1, mn2, mn3, mn4 = st.columns(4)
-    with mn1:
-        st.markdown(f"""<div class='macro-pill'>
-          <div class='macro-pill-val'>{mot['prot']}g</div>
-          <div class='macro-pill-lbl'>Proteína</div>
-        </div>""", unsafe_allow_html=True)
-    with mn2:
-        st.markdown(f"""<div class='macro-pill'>
-          <div class='macro-pill-val'>{mot['carbs']}g</div>
-          <div class='macro-pill-lbl'>Carbohidratos</div>
-        </div>""", unsafe_allow_html=True)
-    with mn3:
-        st.markdown(f"""<div class='macro-pill'>
-          <div class='macro-pill-val'>{mot['grasa']}g</div>
-          <div class='macro-pill-lbl'>Grasas</div>
-        </div>""", unsafe_allow_html=True)
-    with mn4:
-        st.markdown(f"""<div class='macro-pill'>
-          <div class='macro-pill-val'>{mot['cals']}</div>
-          <div class='macro-pill-lbl'>kcal/día</div>
-        </div>""", unsafe_allow_html=True)
-
-    # Alimentos preferidos
-    st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-    st.markdown(f"""
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:4px 0;">
-      <div>
-        <div style="font-size:10px;color:#7D9A84;letter-spacing:1px;font-weight:700;">PROTEÍNAS</div>
-        <div style="font-size:13px;color:#0D1F14;font-weight:600;margin-top:4px;">{norm['Menu_Proteinas']}</div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:#7D9A84;letter-spacing:1px;font-weight:700;">CARBOHIDRATOS</div>
-        <div style="font-size:13px;color:#0D1F14;font-weight:600;margin-top:4px;">{norm['Menu_Carbohidratos']}</div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:#7D9A84;letter-spacing:1px;font-weight:700;">GRASAS</div>
-        <div style="font-size:13px;color:#0D1F14;font-weight:600;margin-top:4px;">{norm['Menu_Grasas']}</div>
-      </div>
-      <div>
-        <div style="font-size:10px;color:#7D9A84;letter-spacing:1px;font-weight:700;">VERDURAS</div>
-        <div style="font-size:13px;color:#0D1F14;font-weight:600;margin-top:4px;">{norm['Menu_Verduras']}</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Programación de entrenamiento
-    st.markdown("<div class='sec-head'>PROGRAMACIÓN NEUROMUSCULAR</div>", unsafe_allow_html=True)
-    con_lesion = _tiene_lesion(norm)
-    t_ent = norm.get("Tiempo entrenando","Menos de 6 meses")
-    aplica_induccion = "Nunca" in t_ent or "Menos de 6 meses" in t_ent
-    modo = "con_lesion" if con_lesion else "sin_lesion"
-    num_dias = int(str(norm.get("Días entrenar","4")).strip()[0]) if str(norm.get("Días entrenar","4")).strip()[0].isdigit() else 4
-
-    if aplica_induccion:
-        st.info("⚡ **Protocolo Inducción (1 Mes)** — Acondicionamiento articular y corrección técnica.")
-        bloques = ["Inducción (1 Mes)"] * num_dias
-        nombres_bloque = [f"DÍA {i+1} — FULL BODY" for i in range(num_dias)]
-    else:
-        bloques = ["Empuje","Tracción","Pierna","Empuje","Tracción"][:num_dias]
-        nombres_bloque = [f"DÍA {i+1} — {b.upper()}" for i, b in enumerate(bloques)]
-
-    tabs_dias = st.tabs(nombres_bloque)
-    for i, (tab, bloque) in enumerate(zip(tabs_dias, bloques)):
-        with tab:
-            if bloque in CONFIG["rutinas"]:
-                ejercicios = CONFIG["rutinas"][bloque][modo]
-                render_rutina_table(ejercicios, nombres_bloque[i])
-
-    # Parámetros espejo Q1
-    st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO — LÍNEA BASE</div>", unsafe_allow_html=True)
-    pe1, pe2, pe3, pe4 = st.columns(4)
-    items_espejo = [
-        (pe1, "Energía", norm.get("P_Energia_Q1","5"), "/10"),
-        (pe2, "Calidad Sueño", norm.get("P_Sueno_Q1","5"), "/10"),
-        (pe3, "Fuerza", norm.get("P_Fuerza_Q1","5"), "/10"),
-        (pe4, "Hambre/Ansiedad", norm.get("P_Hambre_Q1","5"), "/10"),
-    ]
-    for col, lbl, val, suf in items_espejo:
-        with col:
-            render_metric_card(lbl, f"{val}{suf}")
-
-    # Fotografías Q1
-    st.markdown("<div class='sec-head'>EVIDENCIA VISUAL (FOTOGRAFÍAS Q1)</div>", unsafe_allow_html=True)
-    import base64 as _b64show
-    pf1, pf2, pf3 = st.columns(3)
-
-    def _mostrar_foto_dash(col, key_b64, lbl):
-        data = st.session_state.db.get(key_b64, "")
-        if data and len(data) > 100:
-            try:
-                col.image(_b64show.b64decode(data), caption=f"📸 {lbl}", use_container_width=True)
-                return
-            except Exception:
-                pass
         col.markdown(f"""
         <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
                     border:2px dashed #50C87840;border-radius:12px;
                     min-height:180px;display:flex;flex-direction:column;
                     align-items:center;justify-content:center;padding:20px;">
-          <div style="font-size:32px;margin-bottom:8px;">📷</div>
-          <div style="font-size:10px;color:#50C87880;letter-spacing:1px;
-                      text-transform:uppercase;text-align:center;">{lbl}<br>Sin foto</div>
+          <div style="font-size:30px;">📷</div>
+          <div style="font-size:9px;color:#50C87860;letter-spacing:1px;
+                      text-transform:uppercase;text-align:center;margin-top:8px;">
+            {label}<br>Sin foto
+          </div>
         </div>""", unsafe_allow_html=True)
 
-    _mostrar_foto_dash(pf1, "foto_frente_b64",  "Frente Q1")
-    _mostrar_foto_dash(pf2, "foto_perfil_b64",  "Perfil Q1")
-    _mostrar_foto_dash(pf3, "foto_espalda_b64", "Espalda Q1")
+
+# =============================================================================
+# AVATAR — PILLOW LOCAL (SIN INTERNET)
+# =============================================================================
+def generar_avatar_pillow(norm: dict, mot: dict, estado: str = "Q1") -> bytes:
+    """
+    Genera avatar fitness de alta calidad con Pillow.
+    Diferencia género, complexión, objetivo, lesiones, estado Q2.
+    Retorna bytes PNG.
+    """
+    W, H = 320, 480
+    img  = Image.new("RGB", (W, H), "#0F2417")
+    d    = ImageDraw.Draw(img)
+
+    es_mujer = "Femen" in str(norm.get("Sexo","Masculino"))
+    imc      = mot.get("imc", 22.0)
+    objetivo = str(norm.get("Objetivo principal",""))
+    lesion   = str(norm.get("Lesión actual","Ninguna"))
+    nombre   = str(norm.get("Nombre completo","Atleta"))[:14].upper()
+    nivel    = str(norm.get("Tiempo entrenando",""))
+
+    # ── Paleta ────────────────────────────────────────────────────────────────
+    skin  = "#F5C5A3" if not es_mujer else "#F2B898"
+    hair  = (51, 35, 20)   if not es_mujer else (100, 50, 20)
+    acc_col = {"AVANCE":"#22C55E","RETROCESO":"#EF4444","LENTO":"#F59E0B"}.get(estado,"#50C878")
+    ring_rgb= {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}.get(estado,(80,200,120))
+
+    # ── Complexión según IMC ──────────────────────────────────────────────────
+    if imc < 18.5:   comp, torso_w, pierna_w = "delgado",  52, 16
+    elif imc < 25:   comp, torso_w, pierna_w = "normal",   64, 20
+    elif imc < 30:   comp, torso_w, pierna_w = "sobrepeso",76, 24
+    else:            comp, torso_w, pierna_w = "obeso",    88, 28
+
+    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
+        torso_w = min(torso_w + 12, 96)
+
+    cx = W // 2
+
+    # ── Fondo degradado ───────────────────────────────────────────────────────
+    for y in range(H):
+        t = y / H
+        r = int(15 + t * 10)
+        g = int(36 + t * 15)
+        b = int(23 + t * 8)
+        d.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # ── Grid decorativo ───────────────────────────────────────────────────────
+    for x in range(0, W, 24):
+        d.line([(x,0),(x,H)], fill=(80,200,120,15), width=1)
+    for y in range(0, H, 24):
+        d.line([(0,y),(W,y)], fill=(80,200,120,15), width=1)
+
+    # ── Anillo de estado ──────────────────────────────────────────────────────
+    cy_head = 72
+    r_ring  = 40
+    for i in range(3, 0, -1):
+        alpha = 30 * i
+        ring_color_a = ring_rgb + (alpha,)
+        ring_img = Image.new("RGBA", (W, H), (0,0,0,0))
+        ring_d   = ImageDraw.Draw(ring_img)
+        ring_d.ellipse(
+            [(cx-r_ring-i*6, cy_head-r_ring-i*6),
+             (cx+r_ring+i*6, cy_head+r_ring+i*6)],
+            outline=ring_rgb+(min(alpha,255),), width=2
+        )
+        img_rgba = img.convert("RGBA")
+        img_rgba.alpha_composite(ring_img)
+        img = img_rgba.convert("RGB")
+        d   = ImageDraw.Draw(img)
+
+    # ── Cabeza ────────────────────────────────────────────────────────────────
+    head_r = 34
+    # Cabello
+    if es_mujer:
+        d.ellipse([(cx-head_r-6, cy_head-head_r-4),(cx+head_r+6, cy_head+4)], fill=hair)
+        d.rectangle([(cx-head_r-10, cy_head-8),(cx-head_r+2, cy_head+head_r+16)], fill=hair)
+        d.rectangle([(cx+head_r-2,  cy_head-8),(cx+head_r+10, cy_head+head_r+16)], fill=hair)
+    else:
+        d.ellipse([(cx-head_r-2, cy_head-head_r-6),(cx+head_r+2, cy_head+2)], fill=hair)
+
+    # Cara
+    skin_rgb = tuple(int(skin[i:i+2],16) for i in (1,3,5))
+    d.ellipse([(cx-head_r, cy_head-head_r),(cx+head_r, cy_head+head_r)], fill=skin_rgb)
+
+    # Ojos
+    eye_col = (44, 24, 16)
+    d.ellipse([(cx-14, cy_head-8),(cx-5,  cy_head+2)],  fill=eye_col)
+    d.ellipse([(cx+5,  cy_head-8),(cx+14, cy_head+2)],  fill=eye_col)
+    d.ellipse([(cx-12, cy_head-7),(cx-10, cy_head-5)],  fill=(255,255,255))
+    d.ellipse([(cx+10, cy_head-7),(cx+12, cy_head-5)],  fill=(255,255,255))
+
+    # Cejas
+    d.arc([(cx-18, cy_head-20),(cx-2,  cy_head-10)], 200, 340, fill=hair, width=2)
+    d.arc([(cx+2,  cy_head-20),(cx+18, cy_head-10)], 200, 340, fill=hair, width=2)
+
+    # Boca según estado
+    if estado == "AVANCE":
+        d.arc([(cx-10, cy_head+8),(cx+10, cy_head+20)],  0,  180, fill=(139,69,19), width=2)
+    elif estado == "RETROCESO":
+        d.arc([(cx-10, cy_head+12),(cx+10, cy_head+22)], 180, 360, fill=(139,69,19), width=2)
+    else:
+        d.line([(cx-9, cy_head+15),(cx+9, cy_head+15)], fill=(139,69,19), width=2)
+
+    # Mejillas
+    d.ellipse([(cx-22, cy_head+4),(cx-10, cy_head+12)], fill=(232,150,140,100))
+    d.ellipse([(cx+10, cy_head+4),(cx+22, cy_head+12)], fill=(232,150,140,100))
+
+    # ── Cuello ────────────────────────────────────────────────────────────────
+    neck_top = cy_head + head_r
+    neck_bot = neck_top + 14
+    d.rectangle([(cx-8, neck_top),(cx+8, neck_bot)], fill=skin_rgb)
+
+    # ── Torso ─────────────────────────────────────────────────────────────────
+    sho_y   = neck_bot
+    waist_y = sho_y + 90
+    hip_y   = waist_y + 12
+    tw2     = torso_w // 2
+    sho_w   = torso_w + 10
+
+    # Trapecio/hombros
+    d.ellipse([(cx-sho_w//2-8, sho_y-4),(cx-sho_w//2+14, sho_y+14)], fill=skin_rgb)
+    d.ellipse([(cx+sho_w//2-14,sho_y-4),(cx+sho_w//2+8,  sho_y+14)], fill=skin_rgb)
+
+    # Torso en V / trapezoide
+    torso_pts = [
+        (cx-sho_w//2, sho_y+6),
+        (cx+sho_w//2, sho_y+6),
+        (cx+tw2,      waist_y),
+        (cx-tw2,      waist_y),
+    ]
+    d.polygon(torso_pts, fill=skin_rgb)
+
+    # Ropa encima del torso
+    if es_mujer:
+        outfit_col = (124, 61, 138)   # morado deportivo
+        # Top deportivo
+        top_pts = [
+            (cx-sho_w//2+4, sho_y+8),
+            (cx+sho_w//2-4, sho_y+8),
+            (cx+tw2,        waist_y),
+            (cx-tw2,        waist_y),
+        ]
+        d.polygon(top_pts, fill=outfit_col)
+        # Tirantes
+        d.line([(cx-sho_w//2+10, sho_y+8),(cx-8, sho_y)], fill=(160,90,180), width=4)
+        d.line([(cx+sho_w//2-10, sho_y+8),(cx+8, sho_y)], fill=(160,90,180), width=4)
+    else:
+        outfit_col = (26, 61, 36)    # verde oscuro deportivo
+        shirt_pts = [
+            (cx-sho_w//2+2, sho_y+6),
+            (cx+sho_w//2-2, sho_y+6),
+            (cx+tw2,        waist_y),
+            (cx-tw2,        waist_y),
+        ]
+        d.polygon(shirt_pts, fill=outfit_col)
+        # División pectoral
+        d.line([(cx, sho_y+10),(cx, sho_y+36)], fill=(0,0,0,40), width=2)
+        # Abs
+        for ay in range(sho_y+45, waist_y-5, 12):
+            d.line([(cx-8, ay),(cx+8, ay)], fill=(0,0,0,30), width=1)
+
+    # ── Brazos ────────────────────────────────────────────────────────────────
+    arm_w  = 14 if not es_mujer else 11
+    arm_y1 = sho_y + 8
+    arm_y2 = waist_y + 4
+
+    # Brazo izquierdo
+    d.line([(cx-sho_w//2, arm_y1),(cx-sho_w//2-16, arm_y2)],
+           fill=skin_rgb, width=arm_w)
+    # Brazo derecho
+    d.line([(cx+sho_w//2, arm_y1),(cx+sho_w//2+16, arm_y2)],
+           fill=skin_rgb, width=arm_w)
+    # Bíceps (solo hombre)
+    if not es_mujer:
+        mid_ay = (arm_y1 + arm_y2) // 2
+        d.ellipse([(cx-sho_w//2-24, mid_ay-10),(cx-sho_w//2-6, mid_ay+10)],
+                  fill=skin_rgb)
+        d.ellipse([(cx+sho_w//2+6,  mid_ay-10),(cx+sho_w//2+24, mid_ay+10)],
+                  fill=skin_rgb)
+
+    # ── Caderas y shorts ──────────────────────────────────────────────────────
+    hip_w  = tw2 + 10 if es_mujer else tw2 + 4
+    short_col = (109, 40, 217) if es_mujer else (17, 24, 39)
+    d.polygon([
+        (cx-tw2,   waist_y),
+        (cx+tw2,   waist_y),
+        (cx+hip_w, hip_y+18),
+        (cx-hip_w, hip_y+18),
+    ], fill=short_col)
+
+    # ── Piernas ───────────────────────────────────────────────────────────────
+    knee_y = hip_y + 80
+    foot_y = knee_y + 72
+    pw2    = pierna_w // 2
+
+    leg_col = (109, 40, 217) if es_mujer else (17, 24, 39)  # leggings/short color
+
+    # Pierna izquierda
+    d.line([(cx-pw2-8, hip_y+18),(cx-pw2-6, knee_y)], fill=leg_col,  width=pierna_w+4)
+    d.line([(cx-pw2-6, knee_y),  (cx-pw2-4, foot_y)], fill=skin_rgb, width=pierna_w)
+    # Pierna derecha
+    d.line([(cx+pw2+8, hip_y+18),(cx+pw2+6, knee_y)], fill=leg_col,  width=pierna_w+4)
+    d.line([(cx+pw2+6, knee_y),  (cx+pw2+4, foot_y)], fill=skin_rgb, width=pierna_w)
+
+    # Línea de cuádriceps
+    if not es_mujer:
+        d.line([(cx-pw2-4, hip_y+28),(cx-pw2-2, knee_y-8)], fill=(0,0,0,25), width=2)
+        d.line([(cx+pw2+4, hip_y+28),(cx+pw2+2, knee_y-8)], fill=(0,0,0,25), width=2)
+
+    # ── Zapatillas ────────────────────────────────────────────────────────────
+    shoe_col = ring_rgb
+    # Izquierda
+    d.ellipse([(cx-pw2-18, foot_y-4),(cx-pw2+8,  foot_y+14)], fill=(20,20,40))
+    d.ellipse([(cx-pw2-14, foot_y-2),(cx-pw2+6,  foot_y+8)],  fill=shoe_col)
+    # Derecha
+    d.ellipse([(cx+pw2-8,  foot_y-4),(cx+pw2+18, foot_y+14)], fill=(20,20,40))
+    d.ellipse([(cx+pw2-6,  foot_y-2),(cx+pw2+14, foot_y+8)],  fill=shoe_col)
+
+    # ── Zonas musculares señalizadas ──────────────────────────────────────────
+    overlay = Image.new("RGBA", (W, H), (0,0,0,0))
+    od = ImageDraw.Draw(overlay)
+
+    if "grasa" in objetivo or "Perder" in objetivo:
+        # Cintura y abdomen
+        od.rectangle([(cx-30, waist_y-28),(cx+30, waist_y-8)],
+                     fill=(255,107,53,70), outline=(255,107,53,200), width=2)
+        od.rectangle([(cx-hip_w+4, hip_y+10),(cx+hip_w-4, hip_y+32)],
+                     fill=(255,107,53,60), outline=(255,107,53,180), width=2)
+    elif "muscular" in objetivo or "Ganar" in objetivo:
+        # Pecho
+        od.rectangle([(cx-sho_w//2+6, sho_y+6),(cx+sho_w//2-6, sho_y+38)],
+                     fill=(59,130,246,70), outline=(59,130,246,200), width=2)
+        # Espalda/dorsal
+        od.rectangle([(cx-sho_w//2+6, sho_y+42),(cx+sho_w//2-6, sho_y+72)],
+                     fill=(139,92,246,70), outline=(139,92,246,200), width=2)
+        # Cuádriceps
+        od.rectangle([(cx-hip_w+4, hip_y+20),(cx-4, knee_y-10)],
+                     fill=(16,185,129,60), outline=(16,185,129,180), width=2)
+        od.rectangle([(cx+4, hip_y+20),(cx+hip_w-4, knee_y-10)],
+                     fill=(16,185,129,60), outline=(16,185,129,180), width=2)
+    else:  # recomposición
+        od.rectangle([(cx-20, waist_y-22),(cx+20, waist_y-6)],
+                     fill=(255,107,53,65), outline=(255,107,53,190), width=2)
+        od.rectangle([(cx-hip_w+4, hip_y+10),(cx+hip_w-4, hip_y+30)],
+                     fill=(236,72,153,60), outline=(236,72,153,180), width=2)
+
+    img_rgba = img.convert("RGBA")
+    img_rgba.alpha_composite(overlay)
+    img = img_rgba.convert("RGB")
+    d   = ImageDraw.Draw(img)
+
+    # ── Marcadores de lesión ──────────────────────────────────────────────────
+    if "Rodilla" in lesion:
+        for lx in [cx-pw2-6, cx+pw2+6]:
+            d.ellipse([(lx-10, knee_y-10),(lx+10, knee_y+10)], fill=(239,68,68))
+            d.text((lx-3, knee_y-6), "!", fill=(255,255,255))
+    elif "Hombro" in lesion:
+        for lx in [cx-sho_w//2-4, cx+sho_w//2+4]:
+            d.ellipse([(lx-10, sho_y),(lx+10, sho_y+20)], fill=(239,68,68))
+            d.text((lx-3, sho_y+4), "!", fill=(255,255,255))
+    elif "Espalda" in lesion:
+        d.ellipse([(cx-14, waist_y-26),(cx+14, waist_y-6)], fill=(239,68,68))
+        d.text((cx-5, waist_y-22), "!", fill=(255,255,255))
+    elif "Cervical" in lesion:
+        d.ellipse([(cx-10, neck_top),(cx+10, neck_top+20)], fill=(239,68,68))
+        d.text((cx-3, neck_top+4), "!", fill=(255,255,255))
+
+    # ── Badge nivel ───────────────────────────────────────────────────────────
+    if "Más de 3" in nivel:     niv_txt, niv_col = "PRO", (255,215,0)
+    elif "1 a 3" in nivel:      niv_txt, niv_col = "INT", (192,192,192)
+    elif "6 meses" in nivel:    niv_txt, niv_col = "MED", (205,127,50)
+    else:                        niv_txt, niv_col = "INI", (80,200,120)
+    d.ellipse([(W-46, 10),(W-10, 34)], fill=niv_col)
+    try:
+        fnt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 10)
+    except:
+        fnt = ImageFont.load_default()
+    d.text((W-38, 16), niv_txt, fill=(0,0,0), font=fnt)
+
+    # ── Badge estado Q2 ───────────────────────────────────────────────────────
+    if estado in ("AVANCE","RETROCESO","LENTO"):
+        badge_col = {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}[estado]
+        d.rounded_rectangle([(cx-38, 10),(cx+38, 28)], radius=10, fill=badge_col)
+        d.text((cx-30, 14), estado, fill=(255,255,255), font=fnt)
+
+    # ── Nombre ────────────────────────────────────────────────────────────────
+    d.text((cx-len(nombre)*3, H-22), nombre, fill=ring_rgb, font=fnt)
+
+    # ── Sombra suelo ──────────────────────────────────────────────────────────
+    shadow_img = Image.new("RGBA", (W, H), (0,0,0,0))
+    sd = ImageDraw.Draw(shadow_img)
+    sd.ellipse([(cx-40, foot_y+8),(cx+40, foot_y+20)], fill=(0,0,0,60))
+    img_rgba = img.convert("RGBA")
+    img_rgba.alpha_composite(shadow_img)
+    img = img_rgba.convert("RGB")
+
+    # Retornar como bytes PNG
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
 
 
-    # Alertas clínicas
+def render_avatar(norm: dict, mot: dict, estado: str = "Q1", height: int = 280):
+    """Genera y muestra el avatar Pillow en Streamlit."""
+    png_bytes = generar_avatar_pillow(norm, mot, estado)
+    col_a, col_b, col_c = st.columns([1, 2, 1])
+    with col_b:
+        st.image(png_bytes, width=height)
+
+
+# =============================================================================
+# PDF CON REPORTLAB (FOTOS + AVATAR)
+# =============================================================================
+def _limpiar(t): return str(t).encode("latin-1","replace").decode("latin-1")
+
+def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos_q2=None):
+    buf  = io.BytesIO()
+    W, H = letter
+
+    def color_mm(r,g,b): return rl_colors.Color(r/255,g/255,b/255)
+    VERDE   = color_mm(80,200,120)
+    OSCURO  = color_mm(13,31,20)
+    BLANCO  = rl_colors.white
+    GRIS    = color_mm(240,244,241)
+
+    c = rl_canvas.Canvas(buf, pagesize=letter)
+
+    def header_page(titulo):
+        # Barra verde superior
+        c.setFillColor(VERDE)
+        c.rect(0, H-50, W, 50, fill=1, stroke=0)
+        # Logo
+        c.setFillColor(OSCURO)
+        c.setFont("Helvetica-Bold", 22)
+        c.drawString(28, H-36, "MM247")
+        # Título
+        c.setFillColor(BLANCO)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawCentredString(W/2, H-36, _limpiar(titulo))
+        # ID
+        c.setFont("Helvetica", 9)
+        c.drawRightString(W-28, H-36, f"ID: {id_al}")
+        # Fecha
+        c.setFont("Helvetica", 8)
+        c.setFillColor(color_mm(100,120,100))
+        c.drawString(28, H-60, f"Generado: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}")
+        return H - 80  # y de inicio de contenido
+
+    def dato_fila(y, label, valor, c_left=60, col_w=220):
+        c.setFillColor(GRIS)
+        c.rect(c_left, y-4, col_w, 18, fill=1, stroke=0)
+        c.setFillColor(OSCURO)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(c_left+4, y+2, _limpiar(label))
+        c.setFont("Helvetica", 9)
+        c.drawString(c_left+col_w+8, y+2, _limpiar(str(valor)))
+        return y - 22
+
+    # ── HOJA 1: PERFIL CLÍNICO ────────────────────────────────────────────────
+    c.showPage() if False else None
+    y = header_page("HOJA 1 — PERFIL CLÍNICO Y LÍNEA BASE")
+
+    # Avatar al lado derecho
+    try:
+        av_bytes = generar_avatar_pillow(norm, mot, "Q1")
+        av_img   = Image.open(io.BytesIO(av_bytes))
+        av_img.thumbnail((160, 240))
+        av_path  = f"/tmp/mm247_fotos/av_{id_al}_q1.png"
+        av_img.save(av_path)
+        c.drawImage(av_path, W-180, y-220, width=150, height=220, preserveAspectRatio=True)
+    except Exception:
+        pass
+
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "DATOS GENERALES")
+    y -= 24
+
+    y = dato_fila(y, "Nombre", norm["Nombre completo"])
+    y = dato_fila(y, "Edad / Sexo", f"{int(mot['edad'])} años / {mot['genero']}")
+    y = dato_fila(y, "Estatura / Peso", f"{mot['estatura']} cm / {mot['peso']} kg")
+    y = dato_fila(y, "IMC / ICA", f"{mot['imc']} / {mot['ica']}")
+    y = dato_fila(y, "Origen físico", mot['origen'])
+    y = dato_fila(y, "Objetivo", norm["Objetivo principal"])
+    y = dato_fila(y, "Lesión", norm["Lesión actual"])
+    y = dato_fila(y, "Restricción axial", norm["Prohibido ejercicio"])
+    y = dato_fila(y, "Estancamiento previo", norm["Historial_Est"])
+    y = dato_fila(y, "Recuperación muscular", norm["Recuperacion_Base"])
+    y = dato_fila(y, "Biofeedback digestivo", norm["Biofeedback_Dig"])
+    y -= 16
+
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "MÉTRICAS METABÓLICAS")
+    y -= 24
+    y = dato_fila(y, "TMB (Harris-Benedict)", f"{mot['tmb']} kcal/día")
+    y = dato_fila(y, f"TDEE (factor {mot['factor']})", f"{mot['tdee']} kcal/día")
+    y = dato_fila(y, "Balance calórico", mot["balance"])
+    y = dato_fila(y, "Calorías prescritas/día", f"{mot['cals']} kcal")
+
+    # ── HOJA 2: NUTRICIÓN CON PORCIONES ──────────────────────────────────────
+    c.showPage()
+    y = header_page("HOJA 2 — PROTOCOLO NUTRICIONAL Y PORCIONES")
+
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "MACRONUTRIENTES DIARIOS")
+    y -= 30
+
+    # Tabla macros
+    macro_data = [
+        ["PROTEÍNA", "CARBOHIDRATOS", "GRASAS", "CALORÍAS TOTALES"],
+        [f"{mot['prot']}g", f"{mot['carbs']}g", f"{mot['grasa']}g", f"{mot['cals']} kcal"],
+    ]
+    col_ws = [120, 120, 100, 120]
+    x_start = 60
+    for ri, row in enumerate(macro_data):
+        x = x_start
+        for ci, cell in enumerate(row):
+            bg = (80,200,120) if ri==0 else (240,253,244)
+            c.setFillColorRGB(*[v/255 for v in bg])
+            c.rect(x, y-18, col_ws[ci], 22, fill=1, stroke=1)
+            c.setFillColor(BLANCO if ri==0 else OSCURO)
+            fn = "Helvetica-Bold" if ri==0 else "Helvetica-Bold"
+            c.setFont(fn, ri==0 and 8 or 11)
+            c.drawCentredString(x+col_ws[ci]//2, y-10, _limpiar(cell))
+            x += col_ws[ci]
+        y -= 24
+
+    y -= 20
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "DISTRIBUCIÓN EN 4 COMIDAS (PORCIONES EXACTAS)")
+    y -= 24
+
+    comidas = ["COMIDA 1 — DESAYUNO","COMIDA 2 — ALMUERZO","COMIDA 3 — MERIENDA","COMIDA 4 — CENA"]
+    for comida in comidas:
+        if y < 120:
+            c.showPage()
+            y = header_page("HOJA 2 (CONT.) — PORCIONES")
+        # Encabezado comida
+        c.setFillColor(OSCURO)
+        c.rect(60, y-16, 480, 20, fill=1, stroke=0)
+        c.setFillColor(VERDE)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(66, y-10, _limpiar(comida))
+        y -= 22
+
+        # Kcal totales
+        c.setFillColor(GRIS)
+        c.rect(60, y-14, 480, 18, fill=1, stroke=0)
+        c.setFillColor(color_mm(22,163,74))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(66, y-8, f"{por['total_kcal']} kcal  |  "
+                              f"{por['prot_kcal']} kcal prot  |  "
+                              f"{por['carbs_kcal']} kcal carbs  |  "
+                              f"{por['grasa_kcal']} kcal grasa")
+        y -= 20
+
+        # Porciones por alimento
+        items = [
+            ("🥩", "PROTEÍNA",      por['prot_alim'],  f"{por['prot_g']}g",  (59,130,246)),
+            ("🍚", "CARBOHIDRATOS", por['carb_alim'],  f"{por['carbs_g']}g", (245,158,11)),
+            ("🥑", "GRASA",         por['grasa_alim'], f"{por['grasa_g']}g", (16,185,129)),
+            ("🥦", "VERDURA LIBRE", por['verd_alim'],  "150g",               (34,197,94)),
+        ]
+        for emoji, macro_lbl, alim, gramos, col_rgb in items:
+            c.setFillColorRGB(*[v/255 for v in col_rgb], alpha=0.12)
+            c.rect(60, y-12, 480, 16, fill=1, stroke=0)
+            c.setFillColorRGB(*[v/255 for v in col_rgb])
+            c.rect(60, y-12, 4, 16, fill=1, stroke=0)
+            c.setFillColor(OSCURO)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(70, y-6, f"{macro_lbl}:")
+            c.setFont("Helvetica", 8)
+            c.drawString(140, y-6, _limpiar(alim))
+            c.setFont("Helvetica-Bold", 9)
+            c.setFillColorRGB(*[v/255 for v in col_rgb])
+            c.drawRightString(530, y-6, _limpiar(gramos))
+            y -= 18
+        y -= 8
+
+    # ── HOJA 3: ENTRENAMIENTO ────────────────────────────────────────────────
+    c.showPage()
+    y = header_page("HOJA 3 — PROGRAMACIÓN NEUROMUSCULAR")
+
+    con_lesion = (norm.get("Lesión actual","Ninguna").lower() != "ninguna" or
+                  norm.get("Prohibido ejercicio","No").lower() != "no")
+    t_ent      = norm.get("Tiempo entrenando","")
+    aplica_ind = "Nunca" in t_ent or "Menos de 6" in t_ent
+    modo       = "con_lesion" if con_lesion else "sin_lesion"
+    num_dias   = int(str(norm.get("Días entrenar","4")).strip()[0]) if str(norm.get("Días entrenar","4")).strip()[0].isdigit() else 4
+
+    if aplica_ind:
+        bloques = ["Inducción (1 Mes)"] * num_dias
+        nombres = [f"DÍA {i+1} — FULL BODY INDUCCIÓN" for i in range(num_dias)]
+    else:
+        bloques = ["Empuje","Tracción","Pierna","Empuje","Tracción"][:num_dias]
+        nombres = [f"DÍA {i+1} — {b.upper()}" for i,b in enumerate(bloques)]
+
+    for i, bloque in enumerate(bloques):
+        if bloque not in CONFIG["rutinas"]: continue
+        ejercicios = CONFIG["rutinas"][bloque][modo]
+        if y < 140:
+            c.showPage()
+            y = header_page("HOJA 3 (CONT.) — ENTRENAMIENTO")
+
+        c.setFillColor(OSCURO)
+        c.rect(60, y-16, 480, 20, fill=1, stroke=0)
+        c.setFillColor(VERDE)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(66, y-10, _limpiar(nombres[i]))
+        y -= 24
+
+        # Cabecera tabla
+        cols_w = [250, 60, 80, 90]
+        cols_x = [60, 310, 370, 450]
+        hdrs   = ["EJERCICIO","SERIES","REPS","DESCANSO"]
+        c.setFillColor(GRIS)
+        c.rect(60, y-14, 480, 18, fill=1, stroke=0)
+        for ci,(hdr,cx2) in enumerate(zip(hdrs,cols_x)):
+            c.setFillColor(color_mm(100,120,100))
+            c.setFont("Helvetica-Bold", 7)
+            c.drawString(cx2+2, y-8, hdr)
+        y -= 20
+
+        for j,(ej,ser,rep,desc) in enumerate(ejercicios):
+            if j%2==0:
+                c.setFillColor(rl_colors.Color(0.96,0.99,0.96))
+                c.rect(60, y-12, 480, 16, fill=1, stroke=0)
+            c.setFillColor(OSCURO)
+            c.setFont("Helvetica", 8)
+            c.drawString(62, y-6, _limpiar(ej))
+            c.setFont("Helvetica-Bold", 8)
+            c.drawCentredString(340, y-6, ser)
+            c.drawCentredString(410, y-6, rep)
+            c.setFont("Helvetica", 8)
+            c.drawCentredString(490, y-6, desc)
+            y -= 16
+        y -= 10
+
+    # ── HOJA 4: FOTOGRAFÍAS Q1 ────────────────────────────────────────────────
+    c.showPage()
+    y = header_page("HOJA 4 — EVIDENCIA FOTOGRÁFICA Q1")
+
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "FOTOGRAFÍAS INICIALES (LÍNEA BASE)")
+    y -= 24
+
+    foto_tipos  = ["frente","perfil","espalda"]
+    foto_labels = ["FRENTE","PERFIL","ESPALDA"]
+    foto_x      = [40, 210, 380]
+    foto_w      = 155
+    foto_h      = 220
+
+    for i, (tipo, lbl, fx) in enumerate(zip(foto_tipos, foto_labels, foto_x)):
+        datos = cargar_foto_disco(id_al, tipo, "q1")
+        c.setFillColor(OSCURO)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawCentredString(fx + foto_w//2, y, lbl)
+        if datos:
+            try:
+                tmp = f"/tmp/mm247_fotos/pdf_{id_al}_q1_{tipo}.jpg"
+                with open(tmp,"wb") as f: f.write(datos)
+                c.drawImage(tmp, fx, y-foto_h-10, width=foto_w, height=foto_h,
+                            preserveAspectRatio=True)
+            except Exception:
+                c.setFillColor(GRIS)
+                c.rect(fx, y-foto_h-10, foto_w, foto_h, fill=1, stroke=1)
+                c.setFillColor(color_mm(100,120,100))
+                c.drawCentredString(fx+foto_w//2, y-foto_h//2-10, "Sin foto")
+        else:
+            c.setFillColor(GRIS)
+            c.rect(fx, y-foto_h-10, foto_w, foto_h, fill=1, stroke=1)
+            c.setFillColor(color_mm(100,120,100))
+            c.drawCentredString(fx+foto_w//2, y-foto_h//2-10, "Sin foto")
+
+    y -= (foto_h + 30)
+
+    # Avatar Q1 en PDF
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(VERDE)
+    c.drawString(60, y, "AVATAR DE ANÁLISIS (ZONAS DE ENFOQUE Y SEÑALIZACIONES)")
+    y -= 16
+    try:
+        av_bytes = generar_avatar_pillow(norm, mot, "Q1")
+        av_path  = f"/tmp/mm247_fotos/av_pdf_{id_al}_q1.png"
+        with open(av_path,"wb") as f: f.write(av_bytes)
+        c.drawImage(av_path, W//2-80, y-240, width=160, height=240, preserveAspectRatio=True)
+    except Exception:
+        pass
+
+    # ── HOJA 5: AUDITORÍA Q2 (si existe) ────────────────────────────────────
+    if not revs_df.empty:
+        c.showPage()
+        y = header_page("HOJA 5 — AUDITORÍA CLÍNICA Q2")
+        ult        = revs_df.iloc[-1]
+        peso_q2    = pf(ult.get("Peso_Revision", mot["peso"]), mot["peso"])
+        cintura_q2 = pf(ult.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
+        estado     = str(ult.get("Estado_Calculado","AVANCE")).upper()
+        dif_p      = round(peso_q2 - mot["peso"],1)
+        dif_c      = round(cintura_q2 - mot["cintura"],1)
+
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(VERDE)
+        c.drawString(60, y, "CRUCE BIOMÉTRICO Q1 vs Q2")
+        y -= 28
+
+        for lbl2, v1, v2, dif in [
+            ("Peso Corporal",f"{mot['peso']} kg",f"{peso_q2} kg",f"{dif_p:+.1f} kg"),
+            ("Cintura",      f"{mot['cintura']} cm",f"{cintura_q2} cm",f"{dif_c:+.1f} cm"),
+        ]:
+            col_v = rl_colors.Color(0.13,0.77,0.37) if float(dif.split()[0])<=0 else rl_colors.Color(0.94,0.27,0.27)
+            c.setFillColor(GRIS); c.rect(60,y-14,140,18,fill=1,stroke=0)
+            c.setFillColor(OSCURO); c.setFont("Helvetica-Bold",9)
+            c.drawString(64,y-8,lbl2)
+            c.setFillColor(rl_colors.Color(0.96,0.99,0.96)); c.rect(200,y-14,100,18,fill=1,stroke=0)
+            c.setFillColor(OSCURO); c.setFont("Helvetica",9); c.drawCentredString(250,y-8,v1)
+            c.setFillColor(rl_colors.Color(0.96,0.99,0.96)); c.rect(305,y-14,100,18,fill=1,stroke=0)
+            c.drawCentredString(355,y-8,v2)
+            c.setFillColor(col_v); c.rect(410,y-14,100,18,fill=1,stroke=0)
+            c.setFont("Helvetica-Bold",10); c.setFillColor(BLANCO); c.drawCentredString(460,y-8,dif)
+            y -= 22
+
+        y -= 16
+        # Fotos Q2
+        c.setFont("Helvetica-Bold", 11)
+        c.setFillColor(VERDE)
+        c.drawString(60, y, "EVIDENCIA FOTOGRÁFICA Q2")
+        y -= 22
+
+        for tipo, lbl, fx in zip(foto_tipos, foto_labels, foto_x):
+            datos = cargar_foto_disco(id_al, tipo, "q2")
+            c.setFillColor(OSCURO); c.setFont("Helvetica-Bold",8)
+            c.drawCentredString(fx+foto_w//2, y, lbl+" Q2")
+            if datos:
+                try:
+                    tmp = f"/tmp/mm247_fotos/pdf_{id_al}_q2_{tipo}.jpg"
+                    with open(tmp,"wb") as f: f.write(datos)
+                    c.drawImage(tmp, fx, y-foto_h-8, width=foto_w, height=foto_h,
+                                preserveAspectRatio=True)
+                except Exception:
+                    c.setFillColor(GRIS); c.rect(fx,y-foto_h-8,foto_w,foto_h,fill=1,stroke=1)
+                    c.setFillColor(color_mm(100,120,100)); c.drawCentredString(fx+foto_w//2,y-foto_h//2-8,"Sin foto")
+            else:
+                c.setFillColor(GRIS); c.rect(fx,y-foto_h-8,foto_w,foto_h,fill=1,stroke=1)
+                c.setFillColor(color_mm(100,120,100)); c.drawCentredString(fx+foto_w//2,y-foto_h//2-8,"Sin foto")
+
+        y -= (foto_h + 30)
+
+        # Avatar Q2
+        c.setFont("Helvetica-Bold",10); c.setFillColor(VERDE)
+        c.drawString(60, y, f"AVATAR Q2 — DICTAMEN: {estado}")
+        y -= 16
+        try:
+            av2_bytes = generar_avatar_pillow(norm, mot, estado)
+            av2_path  = f"/tmp/mm247_fotos/av_pdf_{id_al}_q2.png"
+            with open(av2_path,"wb") as f: f.write(av2_bytes)
+            c.drawImage(av2_path, W//2-80, y-220, width=160, height=220, preserveAspectRatio=True)
+        except Exception:
+            pass
+
+    c.save()
+    return buf.getvalue()
+
+
+# =============================================================================
+# HELPERS UI
+# =============================================================================
+def render_hero(titulo, subtitulo, id_al=""):
+    id_html = f"<div style='font-size:11px;color:#8FC99E;margin-top:8px;'>ID: {id_al}</div>" if id_al else ""
+    st.markdown(f"""
+    <div class="hero-block">
+      <div class="hero-title">MM<span>247</span></div>
+      <div class="hero-sub">{subtitulo}</div>
+      <div style="font-size:14px;color:#C8E6D0;margin-top:10px;font-weight:600;">{titulo}</div>
+      {id_html}
+    </div>""", unsafe_allow_html=True)
+
+def metric_card(label, val, delta="", delta_pos=True):
+    dhtml = ""
+    if delta:
+        cls = "delta-pos" if delta_pos else "delta-neg"
+        dhtml = f"<div class='{cls}'>{delta}</div>"
+    st.markdown(f"""
+    <div class="metric-card">
+      <div class="metric-label">{label}</div>
+      <div class="metric-val">{val}</div>
+      {dhtml}
+    </div>""", unsafe_allow_html=True)
+
+def accion_item(tipo, texto):
+    css = {"ok":"accion-ok","warn":"accion-warn","alert":"accion-alert"}.get(tipo,"accion-ok")
+    st.markdown(f"<div class='{css}'>→ {texto}</div>", unsafe_allow_html=True)
+
+def guardar_y_navegar(datos, destino):
+    st.session_state.db.update(datos)
+    st.session_state.step = destino
+    st.rerun()
+
+def generar_plan(norm, ult, estado):
+    plan = []
+    adh = str(ult.get("Adherencia Real al Sistema",""))
+    sob = str(ult.get("Sobrecarga Progresiva",""))
+    tol = str(ult.get("Tolerancia Metabólica",""))
+    if "50%" in adh or "Abandoné" in adh:
+        plan.append(("alert","ADHERENCIA CRÍTICA: Simplificar el plan. Revisar picos de ansiedad alimentaria."))
+    if estado=="RETROCESO" and "No" in sob:
+        plan.append(("alert","DELOAD URGENTE: Reducir volumen 30% por 1 semana para disipar fatiga acumulada."))
+    if "pesadez" in tol.lower() or "Inflamación" in tol.lower():
+        plan.append(("warn","BIOFEEDBACK: Rotar carbohidratos. Eliminar gluten y lácteos 2 semanas."))
+    if estado=="AVANCE" and "Sí" in sob:
+        plan.append(("ok","LUZ VERDE: Aumentar cargas en compuestos +5%. Mantener balance calórico."))
+    if not plan:
+        plan.append(("ok","MANTENIMIENTO: Parámetros estables. Continuar sin modificaciones agresivas."))
+    return plan
+
+
+# =============================================================================
+# DASHBOARD Q1 — SOLO ADMIN
+# =============================================================================
+def dashboard_q1(norm, mot, por, id_al):
+    nombre = norm.get("Nombre completo","Atleta")
+    render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
+
+    # Avatar + zonas
+    col_av, col_info = st.columns([1, 2])
+    with col_av:
+        png = generar_avatar_pillow(norm, mot, "Q1")
+        st.image(png, width=240)
+        lesion = norm.get("Lesión actual","Ninguna")
+        imc = mot["imc"]
+        comp = ("🔹 Delgado/a" if imc<18.5 else "🟢 Normal" if imc<25 else "🟡 Sobrepeso" if imc<30 else "🔴 Obesidad")
+        st.markdown(f"""
+        <div style="font-size:11px;color:#7D9A84;text-align:center;line-height:2;margin-top:6px;">
+          {'👩' if 'Femen' in norm.get('Sexo','') else '👨'} {norm.get('Sexo','')} · {comp}<br>
+          {'🚨 '+lesion if lesion!='Ninguna' else '✅ Sin lesiones'}<br>
+          📏 {mot['estatura']} cm · ⚖️ {mot['peso']} kg
+        </div>""", unsafe_allow_html=True)
+
+    with col_info:
+        st.markdown(f"""
+        <div style="padding:10px 0;">
+          <div style="font-size:28px;font-weight:900;color:#0D1F14;font-family:'Space Grotesk',sans-serif;">{nombre}</div>
+          <div style="font-size:12px;color:#50C878;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">
+            {mot['genero']} · {int(mot['edad'])} años · IMC {mot['imc']} · {mot['origen']}
+          </div>
+          <div style="margin-top:8px;"><span class="badge-avance">✅ EXPEDIENTE ACTIVO</span></div>
+          <div style="font-size:13px;color:#6B7280;margin-top:8px;">
+            Objetivo: <strong style='color:#166534;'>{norm.get('Objetivo principal','')}</strong>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # Zonas de enfoque
+        objetivo = norm.get("Objetivo principal","")
+        estres   = pf(norm.get("Estres_Ext","5"),5)
+        zonas = []
+        if "grasa" in objetivo or "Perder" in objetivo:
+            zonas.append(("🔥","Quema de grasa","Déficit calórico · Cardio HIIT recomendado"))
+        if "muscular" in objetivo or "Ganar" in objetivo:
+            zonas.append(("💪","Hipertrofia","Superávit · Progresión de cargas"))
+        if "Recomposición" in objetivo:
+            zonas.append(("⚖️","Recomposición","Balance calórico · Alta proteína"))
+        if norm.get("Lesión actual","Ninguna") != "Ninguna":
+            zonas.append(("⚠️",f"Lesión: {norm['Lesión actual']}","Protocolo adaptado activo"))
+        if estres >= 7:
+            zonas.append(("🧠","Estrés elevado","Priorizar sueño · Reducir volumen"))
+        if "pesadez" in norm.get("Biofeedback_Dig","").lower():
+            zonas.append(("🫀","Biofeedback digestivo","Rotar carbohidratos"))
+        if "Nunca" in norm.get("Tiempo entrenando","") or "Menos de 6" in norm.get("Tiempo entrenando",""):
+            zonas.append(("🌱","Principiante","Inducción activa · Técnica primero"))
+
+        st.markdown("<div style='margin-top:12px;font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;'>ÁREAS DE ENFOQUE</div>", unsafe_allow_html=True)
+        for ico, tit, desc in zonas[:5]:
+            st.markdown(f"""
+            <div style="display:flex;gap:10px;padding:7px 10px;background:#F0FDF4;
+                        border-left:3px solid #50C878;border-radius:0 8px 8px 0;margin:4px 0;">
+              <span style="font-size:16px;">{ico}</span>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#166534;">{tit}</div>
+                <div style="font-size:10px;color:#6B7280;">{desc}</div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+    # Métricas biométricas
+    st.markdown("<div class='sec-head'>MÉTRICAS BIOMÉTRICAS</div>", unsafe_allow_html=True)
+    m1,m2,m3,m4 = st.columns(4)
+    with m1: metric_card("Peso Base",    f"{mot['peso']} kg")
+    with m2: metric_card("Cintura",      f"{mot['cintura']} cm")
+    with m3: metric_card("IMC",          str(mot['imc']))
+    with m4: metric_card("ICA",          str(mot['ica']))
+
+    # Metabolismo
+    st.markdown(f"""
+    <div class="panel-card" style="border-left:4px solid #50C878;">
+      <div style="font-size:11px;color:#7D9A84;font-weight:700;letter-spacing:1.5px;">ORIGEN FÍSICO CALCULADO</div>
+      <div style="font-size:20px;font-weight:900;color:#0D1F14;margin-top:4px;">{mot['origen']}</div>
+      <div style="font-size:12px;color:#6B7280;margin-top:4px;">
+        TMB: <strong>{mot['tmb']} kcal</strong> · TDEE: <strong>{mot['tdee']} kcal</strong> ·
+        Prescrito: <strong style='color:#166534;'>{mot['cals']} kcal ({mot['balance']})</strong>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # Macronutrientes + Porciones
+    st.markdown("<div class='sec-head'>PROTOCOLO NUTRICIONAL — PORCIONES POR COMIDA</div>", unsafe_allow_html=True)
+    mn1,mn2,mn3,mn4 = st.columns(4)
+    with mn1:
+        st.markdown(f"""<div class="macro-pill">
+          <div class="macro-pill-val">{mot['prot']}g</div>
+          <div class="macro-pill-lbl">Proteína/día</div>
+        </div>""", unsafe_allow_html=True)
+    with mn2:
+        st.markdown(f"""<div class="macro-pill">
+          <div class="macro-pill-val">{mot['carbs']}g</div>
+          <div class="macro-pill-lbl">Carbs/día</div>
+        </div>""", unsafe_allow_html=True)
+    with mn3:
+        st.markdown(f"""<div class="macro-pill">
+          <div class="macro-pill-val">{mot['grasa']}g</div>
+          <div class="macro-pill-lbl">Grasa/día</div>
+        </div>""", unsafe_allow_html=True)
+    with mn4:
+        st.markdown(f"""<div class="macro-pill">
+          <div class="macro-pill-val">{mot['cals']}</div>
+          <div class="macro-pill-lbl">kcal/día</div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    for i, comida in enumerate(["🌅 COMIDA 1 — DESAYUNO","☀️ COMIDA 2 — ALMUERZO","🌤️ COMIDA 3 — MERIENDA","🌙 COMIDA 4 — CENA"]):
+        st.markdown(f"""
+        <div class="porcion-card">
+          <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:8px;">{comida} — {por['total_kcal']} kcal</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font-size:12px;">
+            <div><span style="color:#3B82F6;font-weight:700;">🥩 {por['prot_alim']}</span><br>
+                 <span style="font-size:16px;font-weight:900;color:#1E40AF;">{por['prot_g']}g</span></div>
+            <div><span style="color:#F59E0B;font-weight:700;">🍚 {por['carb_alim']}</span><br>
+                 <span style="font-size:16px;font-weight:900;color:#D97706;">{por['carbs_g']}g</span></div>
+            <div><span style="color:#10B981;font-weight:700;">🥑 {por['grasa_alim']}</span><br>
+                 <span style="font-size:16px;font-weight:900;color:#059669;">{por['grasa_g']}g</span></div>
+            <div><span style="color:#22C55E;font-weight:700;">🥦 {por['verd_alim']}</span><br>
+                 <span style="font-size:16px;font-weight:900;color:#16A34A;">150g</span></div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+    # Rutina
+    st.markdown("<div class='sec-head'>PROGRAMACIÓN NEUROMUSCULAR</div>", unsafe_allow_html=True)
+    con_lesion = (norm.get("Lesión actual","Ninguna").lower()!="ninguna" or
+                  norm.get("Prohibido ejercicio","No").lower()!="no")
+    t_ent      = norm.get("Tiempo entrenando","")
+    aplica_ind = "Nunca" in t_ent or "Menos de 6" in t_ent
+    modo       = "con_lesion" if con_lesion else "sin_lesion"
+    nd         = int(str(norm.get("Días entrenar","4")).strip()[0]) if str(norm.get("Días entrenar","4")).strip()[0].isdigit() else 4
+
+    if aplica_ind:
+        bloques = ["Inducción (1 Mes)"]*nd
+        nombres = [f"DÍA {i+1} — FULL BODY" for i in range(nd)]
+    else:
+        bloques = ["Empuje","Tracción","Pierna","Empuje","Tracción"][:nd]
+        nombres = [f"DÍA {i+1} — {b.upper()}" for i,b in enumerate(bloques)]
+
+    tabs = st.tabs(nombres)
+    for tab, bloque, nom in zip(tabs, bloques, nombres):
+        with tab:
+            if bloque in CONFIG["rutinas"]:
+                ejs = CONFIG["rutinas"][bloque][modo]
+                st.markdown(f"<div class='rutina-header'>{nom}</div>", unsafe_allow_html=True)
+                for ej,ser,rep,desc in ejs:
+                    st.markdown(f"""<div class='rutina-row'>
+                      <div>{ej}</div>
+                      <div style='text-align:center;font-weight:700;color:#166534;'>{ser}</div>
+                      <div style='text-align:center;color:#50C878;font-weight:700;'>{rep}</div>
+                      <div style='text-align:center;color:#9CA3AF;'>{desc}</div>
+                    </div>""", unsafe_allow_html=True)
+
+    # Parámetros espejo
+    st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO — LÍNEA BASE</div>", unsafe_allow_html=True)
+    pe1,pe2,pe3,pe4 = st.columns(4)
+    with pe1: metric_card("Energía",       f"{norm.get('P_Energia_Q1','5')}/10")
+    with pe2: metric_card("Calidad Sueño", f"{norm.get('P_Sueno_Q1','5')}/10")
+    with pe3: metric_card("Fuerza",        f"{norm.get('P_Fuerza_Q1','5')}/10")
+    with pe4: metric_card("Hambre",        f"{norm.get('P_Hambre_Q1','5')}/10")
+
+    # Fotos Q1
+    st.markdown("<div class='sec-head'>EVIDENCIA VISUAL (FOTOGRAFÍAS Q1)</div>", unsafe_allow_html=True)
+    fc1,fc2,fc3 = st.columns(3)
+    mostrar_foto(fc1, id_al, "frente",  "q1", "Frente Q1")
+    mostrar_foto(fc2, id_al, "perfil",  "q1", "Perfil Q1")
+    mostrar_foto(fc3, id_al, "espalda", "q1", "Espalda Q1")
+
+    # Alertas biomecánicas
     st.markdown("<div class='sec-head'>ALERTAS BIOMECÁNICAS</div>", unsafe_allow_html=True)
     alertas = [
-        f"Lesión declarada: {norm['Lesión actual']}",
+        f"Lesión: {norm['Lesión actual']}",
         f"Restricción axial: {norm['Prohibido ejercicio']}",
         f"Estancamiento previo: {norm['Historial_Est']}",
-        f"Recuperación muscular: {norm['Recuperacion_Base']}",
-        f"Biofeedback digestivo: {norm['Biofeedback_Dig']}",
+        f"Recuperación: {norm['Recuperacion_Base']}",
+        f"Biofeedback: {norm['Biofeedback_Dig']}",
     ]
     for a in alertas:
-        color = "#EF4444" if any(k in a for k in ["Rodilla","Hombro","Espalda","Sí","pesadez","Inflamación"]) else "#50C878"
-        st.markdown(f"<div style='padding:8px 14px;border-left:3px solid {color};margin:4px 0;font-size:13px;background:#fff;border-radius:0 6px 6px 0;'>{a}</div>", unsafe_allow_html=True)
+        col = "#EF4444" if any(k in a for k in ["Rodilla","Hombro","Espalda","Sí","pesadez"]) else "#50C878"
+        st.markdown(f"<div style='padding:7px 12px;border-left:3px solid {col};margin:3px 0;font-size:13px;background:#fff;border-radius:0 6px 6px 0;'>{a}</div>", unsafe_allow_html=True)
 
 
 # =============================================================================
-# 11. DASHBOARD Q2 — MI AVANCE MM247 (AUDITORÍA COMPARATIVA)
+# DASHBOARD Q2 — SOLO ADMIN
 # =============================================================================
-def mostrar_dashboard_q2(norm: dict, mot: dict, revs_df: pd.DataFrame, id_al: str):
+def dashboard_q2(norm, mot, revs_df, id_al):
     nombre = norm.get("Nombre completo","Atleta")
-
     if revs_df.empty:
-        st.warning("⚠️ Aún no hay revisiones registradas para este ID. Completa tu auditoría Q2.")
+        st.info("⚠️ Sin auditoría Q2 registrada para este atleta.")
         return
 
-    ult = revs_df.iloc[-1]
-    estado = str(ult.get("Estado_Calculado","AVANCE")).upper()
-    peso_act    = _parse_float(ult.get("Peso_Revision", mot["peso"]), mot["peso"])
-    cintura_act = _parse_float(ult.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
+    ult        = revs_df.iloc[-1]
+    estado     = str(ult.get("Estado_Calculado","AVANCE")).upper()
+    peso_q2    = pf(ult.get("Peso_Revision", mot["peso"]), mot["peso"])
+    cintura_q2 = pf(ult.get("Cintura_Revision", mot["cintura"]), mot["cintura"])
+    dif_p      = round(peso_q2 - mot["peso"], 1)
+    dif_c      = round(cintura_q2 - mot["cintura"], 1)
 
-    render_hero("AUDITORÍA COMPARATIVA — Q1 vs Q2", "MI AVANCE MM247", id_al)
+    render_hero("AUDITORÍA COMPARATIVA Q1 vs Q2", "MI AVANCE MM247", id_al)
 
-    # ── Avatar inteligente Q2 + análisis dinámico ─────────────────────────────
-    ca, cb = st.columns([1, 3])
-    with ca:
-        dif_p_prev = round(peso_act - mot["peso"], 1)
-        dif_c_prev = round(cintura_act - mot["cintura"], 1)
-        col_p = "#22C55E" if dif_p_prev <= 0 else "#EF4444"
-        col_c = "#22C55E" if dif_c_prev <= 0 else "#EF4444"
+    # Avatar Q2 + análisis dinámico
+    col_av, col_info = st.columns([1, 2])
+    with col_av:
+        png = generar_avatar_pillow(norm, mot, estado)
+        st.image(png, width=240)
+        col_p = "#22C55E" if dif_p<=0 else "#EF4444"
+        col_c = "#22C55E" if dif_c<=0 else "#EF4444"
+        st.markdown(f"""
+        <div style="text-align:center;font-size:12px;margin-top:8px;line-height:2;">
+          <span style="color:{col_p};font-weight:700;">Peso {dif_p:+.1f} kg</span><br>
+          <span style="color:{col_c};font-weight:700;">Cintura {dif_c:+.1f} cm</span><br>
+          <span style="color:#7D9A84;">Fuerza: {ult.get('Progreso_Fuerza','5')}/10</span>
+        </div>""", unsafe_allow_html=True)
 
-        avatar_url_q2 = construir_avatar_q2(norm, mot, dict(ult), estado)
-        render_avatar_fitness(
-            url        = avatar_url_q2,
-            nombre     = nombre,
-            estado     = estado,
-            info_extra = (
-                f"<span style='color:{col_p};font-weight:700;'>Peso {dif_p_prev:+.1f}kg</span> · "
-                f"<span style='color:{col_c};font-weight:700;'>Cin {dif_c_prev:+.1f}cm</span>"
-            ),
-            height     = 280,
-        )
+    with col_info:
+        badge = {"AVANCE":"<span class='badge-avance'>🚀 EN AVANCE</span>",
+                 "RETROCESO":"<span class='badge-retroceso'>⚠️ RETROCESO</span>",
+                 "LENTO":"<span class='badge-lento'>⏳ LENTO</span>"}.get(estado,"")
+        st.markdown(f"""
+        <div style="padding:10px 0;">
+          <div style="font-size:26px;font-weight:900;color:#0D1F14;">{nombre}</div>
+          <div style="margin:8px 0;">{badge}</div>
+          <div style="font-size:12px;color:#6B7280;">
+            Adherencia: <strong>{ult.get('Adherencia Real al Sistema','--')}</strong><br>
+            Sobrecarga: <strong>{ult.get('Sobrecarga Progresiva','--')}</strong><br>
+            Tolerancia: <strong>{ult.get('Tolerancia Metabólica','--')}</strong>
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-    with cb:
-        badge_map = {
-            "AVANCE":    "<span class='badge-avance'>🚀 EN AVANCE</span>",
-            "RETROCESO": "<span class='badge-retroceso'>⚠️ RETROCESO DETECTADO</span>",
-            "LENTO":     "<span class='badge-lento'>⏳ PROGRESO LENTO</span>",
-        }
-
-        # Análisis dinámico basado en datos Q2
-        adherencia  = str(ult.get("Adherencia Real al Sistema",""))
-        sobrecarga  = str(ult.get("Sobrecarga Progresiva",""))
-        tolerancia  = str(ult.get("Tolerancia Metabólica",""))
-        fuerza_q2v  = _parse_float(ult.get("Progreso_Fuerza","5"), 5.0)
-        energia_q2  = _parse_float(ult.get("Energia","5"), 5.0)
-        sueno_q2    = _parse_float(ult.get("Calidad_Sueno","5"), 5.0)
+        # Análisis dinámico
+        adh = str(ult.get("Adherencia Real al Sistema",""))
+        sob = str(ult.get("Sobrecarga Progresiva",""))
+        tol = str(ult.get("Tolerancia Metabólica",""))
+        fza = pf(ult.get("Progreso_Fuerza","5"),5)
+        ene = pf(ult.get("Energia","5"),5)
 
         analisis = []
-        if "100%" in adherencia or "80-90%" in adherencia:
-            analisis.append(("✅","Adherencia alta","El cliente sigue el protocolo correctamente. Mantener estructura."))
-        elif "50%" in adherencia:
-            analisis.append(("⚠️","Adherencia media","Revisar obstáculos prácticos. Simplificar plan nutricional."))
+        if "100%" in adh or "80-90%" in adh:
+            analisis.append(("ok","Adherencia alta — protocolo seguido correctamente."))
+        elif "50%" in adh:
+            analisis.append(("warn","Adherencia media — simplificar plan, revisar obstáculos."))
         else:
-            analisis.append(("🚨","Adherencia crítica","Protocolo abandonado parcialmente. Reencuadre motivacional urgente."))
-
-        if "Sí, subí" in sobrecarga:
-            analisis.append(("💪","Sobrecarga progresiva ✓","Adaptación neuromuscular confirmada. Autorizado aumentar +5%."))
-        elif "mantuve" in sobrecarga:
-            analisis.append(("⏸️","Sin progresión de cargas","Estancamiento potencial. Revisar periodización."))
+            analisis.append(("alert","Adherencia crítica — reencuadre motivacional urgente."))
+        if "Sí, subí" in sob:
+            analisis.append(("ok","Sobrecarga progresiva confirmada — autorizado +5% en cargas."))
+        elif "mantuve" in sob:
+            analisis.append(("warn","Sin progresión — revisar periodización y descanso."))
         else:
-            analisis.append(("📉","Pérdida de fuerza","Posible sobreentrenamiento o déficit calórico excesivo."))
+            analisis.append(("alert","Pérdida de fuerza — posible sobreentrenamiento o déficit excesivo."))
+        if "pesadez" in tol.lower() or "Inflamación" in tol.lower():
+            analisis.append(("warn","Intolerancia digestiva — rotar carbohidratos."))
+        if ene <= 4:
+            analisis.append(("warn","Energía baja — revisar distribución calórica pre-entreno."))
+        if fza >= 8 and estado == "AVANCE":
+            analisis.append(("ok","Alto rendimiento — candidato para protocolo avanzado."))
 
-        if "pesadez" in tolerancia.lower() or "Inflamación" in tolerancia:
-            analisis.append(("🫀","Intolerancia digestiva","Rotar carbohidratos. Evitar gluten y lácteos 2 semanas."))
-        else:
-            analisis.append(("✅","Tolerancia metabólica OK","Sin ajustes digestivos requeridos."))
-
-        if energia_q2 <= 4:
-            analisis.append(("⚡","Energía baja","Revisar calidad de sueño y distribución calórica pre-entreno."))
-        if sueno_q2 <= 4:
-            analisis.append(("😴","Sueño deficiente","Factor limitante clave. Higiene de sueño como prioridad."))
-        if fuerza_q2v >= 8 and estado == "AVANCE":
-            analisis.append(("🏆","Alto rendimiento","Perfil de alto desempeño. Candidato para protocolo avanzado."))
-
-        st.markdown(f"""
-        <div style="padding:12px 0 4px;">
-          <div style="font-size:26px;font-weight:900;color:#0D1F14;">{nombre}</div>
-          <div style="margin:8px 0;">{badge_map.get(estado, badge_map['LENTO'])}</div>
-          <div style="font-size:12px;color:#6B7280;">
-            Adherencia: <strong>{adherencia}</strong> · Sobrecarga: <strong>{sobrecarga}</strong>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<div style='margin-top:10px;'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:8px;'>ANÁLISIS CLÍNICO DINÁMICO</div>", unsafe_allow_html=True)
-        for icono, titulo_an, desc_an in analisis:
-            color_borde = "#22C55E" if icono in ("✅","💪","🏆") else ("#EF4444" if icono in ("🚨","📉") else "#F59E0B")
-            st.markdown(f"""
-            <div style='display:flex;align-items:flex-start;gap:10px;padding:7px 12px;
-                        background:#fff;border-left:3px solid {color_borde};border-radius:0 8px 8px 0;
-                        margin-bottom:5px;box-shadow:0 1px 4px rgba(0,0,0,.04);'>
-              <span style='font-size:16px;'>{icono}</span>
-              <div>
-                <div style='font-size:12px;font-weight:700;color:#0D1F14;'>{titulo_an}</div>
-                <div style='font-size:11px;color:#6B7280;margin-top:1px;'>{desc_an}</div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin-top:10px;font-size:11px;color:#7D9A84;font-weight:700;letter-spacing:1.5px;'>ANÁLISIS CLÍNICO</div>", unsafe_allow_html=True)
+        for tipo, texto in analisis:
+            accion_item(tipo, texto)
 
     # Deltas biométricos
-    st.markdown("<div class='sec-head'>CRUCE BIOMÉTRICO — DELTAS Q1 → Q2</div>", unsafe_allow_html=True)
-    dif_peso    = round(peso_act - mot["peso"], 1)
-    dif_cintura = round(cintura_act - mot["cintura"], 1)
+    st.markdown("<div class='sec-head'>CRUCE BIOMÉTRICO Q1 → Q2</div>", unsafe_allow_html=True)
+    dc1,dc2,dc3,dc4 = st.columns(4)
+    with dc1: metric_card("Peso Q1",     f"{mot['peso']} kg")
+    with dc2: metric_card("Peso Q2",     f"{peso_q2} kg",    f"{dif_p:+.1f} kg", dif_p<=0)
+    with dc3: metric_card("Cintura Q1",  f"{mot['cintura']} cm")
+    with dc4: metric_card("Cintura Q2",  f"{cintura_q2} cm", f"{dif_c:+.1f} cm", dif_c<=0)
 
-    dc1, dc2, dc3, dc4 = st.columns(4)
-    with dc1:
-        render_metric_card("Peso Q1 (Base)", f"{mot['peso']} kg")
-    with dc2:
-        render_metric_card("Peso Q2 (Actual)", f"{peso_act} kg",
-                           f"{dif_peso:+.1f} kg", "pos" if dif_peso <= 0 else "neg")
-    with dc3:
-        render_metric_card("Cintura Q1 (Base)", f"{mot['cintura']} cm")
-    with dc4:
-        render_metric_card("Cintura Q2 (Actual)", f"{cintura_act} cm",
-                           f"{dif_cintura:+.1f} cm", "pos" if dif_cintura <= 0 else "neg")
-
-    # Gráficas comparativas
+    # Gráficas
     st.markdown("<div class='sec-head'>VISUALIZACIÓN COMPARATIVA</div>", unsafe_allow_html=True)
-    gc1, gc2 = st.columns(2)
-
+    gc1,gc2 = st.columns(2)
     with gc1:
-        st.markdown("<div class='chart-wrap'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:12px;'>EVOLUCIÓN DE PESO (kg)</div>", unsafe_allow_html=True)
-        df_peso = pd.DataFrame({
-            "Período": ["Q1 — Base", "Q2 — Actual"],
-            "Peso (kg)": [mot["peso"], peso_act]
-        })
-        st.bar_chart(df_peso.set_index("Período"), color="#50C878", height=220)
+        st.markdown("<div class='chart-wrap'><div style='font-size:11px;color:#7D9A84;font-weight:700;margin-bottom:10px;'>EVOLUCIÓN PESO (kg)</div>", unsafe_allow_html=True)
+        st.bar_chart(pd.DataFrame({"Peso(kg)":[mot["peso"],peso_q2]}, index=["Q1 Base","Q2 Actual"]), color="#50C878", height=200)
         st.markdown("</div>", unsafe_allow_html=True)
-
     with gc2:
-        st.markdown("<div class='chart-wrap'><div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;margin-bottom:12px;'>EVOLUCIÓN DE CINTURA (cm)</div>", unsafe_allow_html=True)
-        df_cin = pd.DataFrame({
-            "Período": ["Q1 — Base", "Q2 — Actual"],
-            "Cintura (cm)": [mot["cintura"], cintura_act]
-        })
-        st.bar_chart(df_cin.set_index("Período"), color="#3CB371", height=220)
+        st.markdown("<div class='chart-wrap'><div style='font-size:11px;color:#7D9A84;font-weight:700;margin-bottom:10px;'>EVOLUCIÓN CINTURA (cm)</div>", unsafe_allow_html=True)
+        st.bar_chart(pd.DataFrame({"Cintura(cm)":[mot["cintura"],cintura_q2]}, index=["Q1 Base","Q2 Actual"]), color="#3CB371", height=200)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Parámetros espejo comparados
-    st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO — COMPARATIVA Q1 vs Q2</div>", unsafe_allow_html=True)
-    items = [
-        ("Energía",         norm.get("P_Energia_Q1","5"), ult.get("Energia","5")),
-        ("Calidad Sueño",   norm.get("P_Sueno_Q1","5"),   ult.get("Calidad_Sueno","5")),
-        ("Fuerza",          norm.get("P_Fuerza_Q1","5"),  ult.get("Progreso_Fuerza","5")),
-        ("Hambre/Ansiedad", norm.get("P_Hambre_Q1","5"),  ult.get("Hambre","5")),
-    ]
-    radar_data = {}
-    for lbl, v1_str, v2_str in items:
-        v1 = _parse_float(v1_str, 5.0)
-        v2 = _parse_float(v2_str, 5.0)
-        radar_data[lbl] = {"Q1": v1, "Q2": v2}
-
-    df_radar = pd.DataFrame(radar_data).T
+    # Parámetros espejo Q1 vs Q2
+    st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO Q1 vs Q2</div>", unsafe_allow_html=True)
+    df_radar = pd.DataFrame({
+        "Q1": [pf(norm.get("P_Energia_Q1","5"),5), pf(norm.get("P_Sueno_Q1","5"),5),
+               pf(norm.get("P_Fuerza_Q1","5"),5),  pf(norm.get("P_Hambre_Q1","5"),5)],
+        "Q2": [pf(ult.get("Energia","5"),5), pf(ult.get("Calidad_Sueno","5"),5),
+               pf(ult.get("Progreso_Fuerza","5"),5), pf(ult.get("Hambre","5"),5)],
+    }, index=["Energía","Sueño","Fuerza","Hambre"])
     st.markdown("<div class='chart-wrap'>", unsafe_allow_html=True)
-    st.bar_chart(df_radar, height=250, color=["#50C878","#0D1F14"])
+    st.bar_chart(df_radar, height=220, color=["#50C878","#0D1F14"])
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Fotografías comparativas Q1 vs Q2
+    # Fotos comparativas
     st.markdown("<div class='sec-head'>EVIDENCIA VISUAL COMPARATIVA (Q1 vs Q2)</div>", unsafe_allow_html=True)
-    import base64 as b64lib
 
-    def _decode_foto(b64_str):
-        """Decodifica base64 a bytes. Retorna None si no hay datos válidos."""
-        if not b64_str or len(str(b64_str)) < 100:
-            return None
-        try:
-            return b64lib.b64decode(str(b64_str))
-        except Exception:
-            return None
-
-    def _col_foto(col, img_bytes, caption, tag_color="#50C878"):
-        if img_bytes:
-            col.image(img_bytes, caption=caption, use_container_width=True)
-        else:
-            col.markdown(f"""
-            <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
-                        border:2px dashed {tag_color}40;border-radius:10px;
-                        min-height:160px;display:flex;flex-direction:column;
-                        align-items:center;justify-content:center;padding:16px;">
-              <div style="font-size:28px;">📷</div>
-              <div style="font-size:9px;color:{tag_color}60;letter-spacing:1px;
-                          text-transform:uppercase;text-align:center;margin-top:6px;">{caption}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Fotos Q1 desde session_state o norm
-    f_q1_frente  = _decode_foto(st.session_state.db.get("foto_frente_b64",""))
-    f_q1_perfil  = _decode_foto(st.session_state.db.get("foto_perfil_b64",""))
-    f_q1_espalda = _decode_foto(st.session_state.db.get("foto_espalda_b64",""))
-
-    # Fotos Q2 desde session_state (recién subidas)
-    f_q2_frente  = _decode_foto(st.session_state.get("foto_frente_q2_b64",""))
-    f_q2_perfil  = _decode_foto(st.session_state.get("foto_perfil_q2_b64",""))
-    f_q2_espalda = _decode_foto(st.session_state.get("foto_espalda_q2_b64",""))
-
-    # Encabezado de columnas
-    lbl1, lbl2, lbl3, lbl4, lbl5, lbl6 = st.columns(6)
-    for col, txt, color in [
-        (lbl1,"FRENTE Q1","#50C878"),(lbl2,"PERFIL Q1","#50C878"),(lbl3,"ESPALDA Q1","#50C878"),
-        (lbl4,"FRENTE Q2","#4ADE80"),(lbl5,"PERFIL Q2","#4ADE80"),(lbl6,"ESPALDA Q2","#4ADE80"),
+    # Encabezados
+    eh = st.columns(6)
+    for col, lbl, color in [
+        (eh[0],"FRENTE Q1","#50C878"),(eh[1],"PERFIL Q1","#50C878"),(eh[2],"ESPALDA Q1","#50C878"),
+        (eh[3],"FRENTE Q2","#4ADE80"),(eh[4],"PERFIL Q2","#4ADE80"),(eh[5],"ESPALDA Q2","#4ADE80"),
     ]:
-        col.markdown(f"<div style='text-align:center;font-size:9px;font-weight:700;color:{color};letter-spacing:1px;padding:4px 0;'>{txt}</div>", unsafe_allow_html=True)
+        col.markdown(f"<div style='text-align:center;font-size:9px;font-weight:700;color:{color};padding:4px 0;'>{lbl}</div>", unsafe_allow_html=True)
 
-    fc1, fc2, fc3, fc4, fc5, fc6 = st.columns(6)
-    _col_foto(fc1, f_q1_frente,  "Frente Q1",  "#50C878")
-    _col_foto(fc2, f_q1_perfil,  "Perfil Q1",  "#50C878")
-    _col_foto(fc3, f_q1_espalda, "Espalda Q1", "#50C878")
-    _col_foto(fc4, f_q2_frente,  "Frente Q2",  "#4ADE80")
-    _col_foto(fc5, f_q2_perfil,  "Perfil Q2",  "#4ADE80")
-    _col_foto(fc6, f_q2_espalda, "Espalda Q2", "#4ADE80")
-
-    # Análisis adherencia y metabólico
-    st.markdown("<div class='sec-head'>ANÁLISIS CLÍNICO DETALLADO</div>", unsafe_allow_html=True)
-    aa1, aa2 = st.columns(2)
-    with aa1:
-        st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;'>ADHERENCIA Y DESEMPEÑO</div>", unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style='margin-top:12px;'>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F4F1;'>
-            <span style='font-size:13px;color:#4B5563;'>Adherencia al sistema</span>
-            <strong style='color:#166534;'>{ult.get('Adherencia Real al Sistema','--')}</strong>
-          </div>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F4F1;'>
-            <span style='font-size:13px;color:#4B5563;'>Sobrecarga progresiva</span>
-            <strong style='color:#166534;'>{ult.get('Sobrecarga Progresiva','--')}</strong>
-          </div>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;'>
-            <span style='font-size:13px;color:#4B5563;'>Tolerancia metabólica</span>
-            <strong style='color:#166534;'>{ult.get('Tolerancia Metabólica','--')}</strong>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with aa2:
-        st.markdown("<div class='panel-card'>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size:11px;color:#7D9A84;letter-spacing:1.5px;font-weight:700;'>RESUMEN DE CAMBIOS</div>", unsafe_allow_html=True)
-        color_peso    = "#22C55E" if dif_peso <= 0 else "#EF4444"
-        color_cintura = "#22C55E" if dif_cintura <= 0 else "#EF4444"
-        icono_peso    = "📉" if dif_peso < 0 else ("📈" if dif_peso > 0 else "➡️")
-        icono_cintura = "📉" if dif_cintura < 0 else ("📈" if dif_cintura > 0 else "➡️")
-        st.markdown(f"""
-        <div style='margin-top:12px;'>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F4F1;'>
-            <span style='font-size:13px;color:#4B5563;'>{icono_peso} Variación de peso</span>
-            <strong style='color:{color_peso};'>{dif_peso:+.1f} kg</strong>
-          </div>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F0F4F1;'>
-            <span style='font-size:13px;color:#4B5563;'>{icono_cintura} Variación de cintura</span>
-            <strong style='color:{color_cintura};'>{dif_cintura:+.1f} cm</strong>
-          </div>
-          <div style='display:flex;justify-content:space-between;padding:8px 0;'>
-            <span style='font-size:13px;color:#4B5563;'>🎯 Objetivo en curso</span>
-            <strong style='color:#166534;'>{norm.get('Objetivo principal','--')}</strong>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+    fc = st.columns(6)
+    mostrar_foto(fc[0], id_al, "frente",  "q1", "Frente Q1")
+    mostrar_foto(fc[1], id_al, "perfil",  "q1", "Perfil Q1")
+    mostrar_foto(fc[2], id_al, "espalda", "q1", "Espalda Q1")
+    mostrar_foto(fc[3], id_al, "frente",  "q2", "Frente Q2")
+    mostrar_foto(fc[4], id_al, "perfil",  "q2", "Perfil Q2")
+    mostrar_foto(fc[5], id_al, "espalda", "q2", "Espalda Q2")
 
     # Plan de acción
-    st.markdown("<div class='sec-head'>PLAN DE ACCIÓN CLÍNICO AUTOMATIZADO</div>", unsafe_allow_html=True)
-    plan = generar_plan_accion(norm, ult, estado)
+    st.markdown("<div class='sec-head'>PLAN DE ACCIÓN CLÍNICO</div>", unsafe_allow_html=True)
+    plan = generar_plan(norm, ult, estado)
     for tipo, texto in plan:
-        render_accion(tipo, f"→ {texto}")
+        accion_item(tipo, texto)
 
     # Dictamen final
-    st.markdown("<div class='sec-head'>DICTAMEN FINAL</div>", unsafe_allow_html=True)
-    color_dict = {"AVANCE":"linear-gradient(135deg,#50C878,#2E8B57)","RETROCESO":"linear-gradient(135deg,#EF4444,#B91C1C)","LENTO":"linear-gradient(135deg,#F59E0B,#D97706)"}
-    texto_dict = {
-        "AVANCE":    "El sistema reporta sobrecarga progresiva positiva y adherencia adecuada. Mantener protocolo e incrementar intensidad gradualmente.",
-        "RETROCESO": "Se detectan indicadores de retroceso. Revisar adherencia, aplicar deload y ajustar variables nutricionales según plan de acción.",
-        "LENTO":     "Progreso por debajo del esperado. Auditar fuentes de estrés externo, calidad de sueño y consistencia del protocolo.",
+    cols_dict = {"AVANCE":"linear-gradient(135deg,#50C878,#2E8B57)",
+                 "RETROCESO":"linear-gradient(135deg,#EF4444,#B91C1C)",
+                 "LENTO":"linear-gradient(135deg,#F59E0B,#D97706)"}
+    textos_dict = {
+        "AVANCE":    "Sistema positivo. Mantener protocolo e incrementar intensidad.",
+        "RETROCESO": "Indicadores de retroceso. Aplicar deload y revisar nutrición.",
+        "LENTO":     "Progreso por debajo del esperado. Auditar adherencia y sueño.",
     }
     st.markdown(f"""
-    <div style="background:{color_dict.get(estado, color_dict['AVANCE'])};border-radius:16px;padding:28px;text-align:center;color:#fff;margin-top:8px;">
-      <div style="font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:900;letter-spacing:4px;">{estado}</div>
-      <div style="font-size:13px;margin-top:8px;opacity:.9;max-width:600px;margin-left:auto;margin-right:auto;">{texto_dict.get(estado,'')}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    <div style="background:{cols_dict.get(estado,cols_dict['AVANCE'])};border-radius:16px;
+                padding:28px;text-align:center;color:#fff;margin-top:12px;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:34px;font-weight:900;letter-spacing:4px;">{estado}</div>
+      <div style="font-size:13px;margin-top:8px;opacity:.9;max-width:500px;margin-left:auto;margin-right:auto;">
+        {textos_dict.get(estado,'')}
+      </div>
+    </div>""", unsafe_allow_html=True)
 
 
 # =============================================================================
-# 12. FORMULARIOS DE REGISTRO (Q1 — MULTI PASO)
+# FORMULARIO Q1 — CLIENTE (SOLO VE CONFIRMACIÓN + ID)
 # =============================================================================
-def mostrar_formulario_q1(df_existente: pd.DataFrame):
+def formulario_q1(df_existente):
     render_hero("NUEVO EXPEDIENTE — REGISTRO INICIAL", "MI REGISTRO MM247")
 
     if "step" not in st.session_state: st.session_state.step = 1
@@ -1436,25 +1499,24 @@ def mostrar_formulario_q1(df_existente: pd.DataFrame):
 
     total = 6
     st.progress(st.session_state.step / total)
-    st.markdown(f"<div style='text-align:center;font-size:12px;color:#7D9A84;letter-spacing:2px;margin-bottom:20px;'>PASO {st.session_state.step} DE {total}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:center;font-size:11px;color:#7D9A84;letter-spacing:2px;margin-bottom:16px;'>PASO {st.session_state.step} DE {total}</div>", unsafe_allow_html=True)
 
-    # ── PASO 1: Datos Fisiológicos ────────────────────────────────────────────
+    # ── PASO 1: Datos fisiológicos ────────────────────────────────────────────
     if st.session_state.step == 1:
         with st.form("f_p1"):
             st.markdown("<div class='sec-head'>DATOS FISIOLÓGICOS BASE</div>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
+            c1,c2 = st.columns(2)
             with c1:
                 v_nom  = st.text_input("Nombre completo:", value=st.session_state.db.get("Nombre completo",""))
                 v_edad = st.selectbox("Edad:", [f"{i} años" for i in range(14,81)], index=11)
                 v_sexo = st.selectbox("Sexo:", ["Masculino","Femenino"])
                 v_est  = st.selectbox("Estatura:", [f"{i} cm" for i in range(120,221)], index=55)
+                v_act  = st.selectbox("Nivel de actividad:", list(CONFIG["factores"].keys()), index=2)
             with c2:
                 v_peso  = st.selectbox("Peso actual:", [f"{i} kg" for i in range(40,161)], index=40)
                 v_cint  = st.selectbox("Cintura actual:", [f"{i} cm" for i in range(50,150)], index=35)
-                v_meta_p= st.selectbox("Peso objetivo:", [f"{i} kg" for i in range(40,161)], index=35)
+                v_meta  = st.selectbox("Peso objetivo:", [f"{i} kg" for i in range(40,161)], index=35)
                 v_mail  = st.text_input("Correo electrónico:", value=st.session_state.db.get("Correo electrónico",""))
-                v_act   = st.selectbox("Nivel de actividad:", list(CONFIG["factores_actividad"].keys()), index=2)
-
             if st.form_submit_button("Siguiente ➡️"):
                 if not v_nom.strip():
                     st.error("El nombre es requerido.")
@@ -1462,175 +1524,172 @@ def mostrar_formulario_q1(df_existente: pd.DataFrame):
                     guardar_y_navegar({
                         "Nombre completo":v_nom,"Edad":v_edad,"Sexo":v_sexo,
                         "Estatura":v_est,"Peso actual":v_peso,"Cintura inicial":v_cint,
-                        "Peso objetivo":v_meta_p,"Correo electrónico":v_mail,
+                        "Peso objetivo":v_meta,"Correo electrónico":v_mail,
                         "Nivel de actividad":v_act
                     }, 2)
 
-    # ── PASO 2: Fotografías Q1 ────────────────────────────────────────────────
+    # ── PASO 2: Fotografías Q1 (guardado en disco) ────────────────────────────
     elif st.session_state.step == 2:
-        import base64 as _b64
-
         st.markdown("<div class='sec-head'>EVIDENCIA VISUAL — FOTOGRAFÍAS Q1</div>", unsafe_allow_html=True)
-        st.info("📸 Sube tus fotos y haz clic en **Guardar fotos** antes de continuar.")
+        st.info("📸 Sube tus 3 fotos y presiona **GUARDAR FOTOS** antes de continuar.")
 
-        f1, f2, f3 = st.columns(3)
-        up_fr = f1.file_uploader("📷 Frente",  type=["jpg","jpeg","png"], key="up_frente_q1")
-        up_pf = f2.file_uploader("📷 Perfil",  type=["jpg","jpeg","png"], key="up_perfil_q1")
-        up_es = f3.file_uploader("📷 Espalda", type=["jpg","jpeg","png"], key="up_espalda_q1")
+        # Necesitamos el ID temporal para guardar las fotos
+        # Usamos nombre como semilla temporal
+        nombre_temp = st.session_state.db.get("Nombre completo","tmp")
+        id_temp     = "TMP_" + hashlib.md5(nombre_temp.encode()).hexdigest()[:6].upper()
 
-        # Botón explícito de guardado — lee los archivos AHORA antes de cualquier rerun
-        if st.button("💾 GUARDAR FOTOS", key="btn_save_fotos", use_container_width=True):
+        f1,f2,f3 = st.columns(3)
+        up_fr = f1.file_uploader("📷 Frente",  type=["jpg","jpeg","png"], key="up_fr_q1")
+        up_pf = f2.file_uploader("📷 Perfil",  type=["jpg","jpeg","png"], key="up_pf_q1")
+        up_es = f3.file_uploader("📷 Espalda", type=["jpg","jpeg","png"], key="up_es_q1")
+
+        if st.button("💾 GUARDAR FOTOS", key="btn_guardar_fotos", use_container_width=True):
+            guardadas = 0
             if up_fr:
-                up_fr.seek(0)
-                st.session_state.db["foto_frente_b64"]  = _b64.b64encode(up_fr.read()).decode()
+                if guardar_foto_disco(id_temp, "frente", "q1", up_fr): guardadas += 1
             if up_pf:
-                up_pf.seek(0)
-                st.session_state.db["foto_perfil_b64"]  = _b64.b64encode(up_pf.read()).decode()
+                if guardar_foto_disco(id_temp, "perfil", "q1", up_pf): guardadas += 1
             if up_es:
-                up_es.seek(0)
-                st.session_state.db["foto_espalda_b64"] = _b64.b64encode(up_es.read()).decode()
+                if guardar_foto_disco(id_temp, "espalda","q1", up_es): guardadas += 1
+            st.session_state.db["id_temp_fotos"] = id_temp
+            st.session_state.db["fotos_guardadas_q1"] = guardadas
             st.rerun()
 
-        # Preview desde session_state — siempre persiste
+        # Preview desde disco (persiste)
+        id_temp_prev = st.session_state.db.get("id_temp_fotos", id_temp)
         n_fotos = 0
-        fp1, fp2, fp3 = st.columns(3)
-        for col, key_b64, lbl in [
-            (fp1,"foto_frente_b64","Frente"),
-            (fp2,"foto_perfil_b64","Perfil"),
-            (fp3,"foto_espalda_b64","Espalda"),
-        ]:
-            data = st.session_state.db.get(key_b64, "")
-            if data and len(data) > 100:
+        pv1,pv2,pv3 = st.columns(3)
+        for col, tipo, lbl in [(pv1,"frente","Frente"),(pv2,"perfil","Perfil"),(pv3,"espalda","Espalda")]:
+            datos = cargar_foto_disco(id_temp_prev, tipo, "q1")
+            if datos:
                 n_fotos += 1
-                try:
-                    col.image(_b64.b64decode(data), caption=f"✅ {lbl}", use_container_width=True)
-                except Exception:
-                    col.warning(f"Error mostrando {lbl}")
+                col.image(datos, caption=f"✅ {lbl} guardada", use_container_width=True)
             else:
                 col.markdown(f"""
                 <div style="background:#0D1F14;border:2px dashed #50C87840;border-radius:10px;
-                            min-height:140px;display:flex;align-items:center;justify-content:center;
-                            flex-direction:column;gap:8px;">
-                  <div style="font-size:28px;">📷</div>
-                  <div style="font-size:9px;color:#50C87860;letter-spacing:1px;">{lbl.upper()}<br>SIN FOTO</div>
+                            min-height:130px;display:flex;align-items:center;justify-content:center;
+                            flex-direction:column;gap:6px;">
+                  <div style="font-size:26px;">📷</div>
+                  <div style="font-size:9px;color:#50C87860;text-align:center;">{lbl.upper()}<br>SIN FOTO</div>
                 </div>""", unsafe_allow_html=True)
 
         if n_fotos == 3:
             st.success("✅ Las 3 fotos guardadas correctamente.")
         elif n_fotos > 0:
-            st.info(f"📷 {n_fotos}/3 fotos guardadas. Sube las restantes y haz clic en Guardar.")
+            st.info(f"📷 {n_fotos}/3 fotos guardadas.")
         else:
-            st.warning("📷 Sube tus fotos y presiona GUARDAR FOTOS.")
+            st.warning("Sube tus fotos y presiona GUARDAR FOTOS.")
 
-        b1, b2 = st.columns(2)
-        if b1.button("⬅️ Atrás", key="back_p2"):
-            guardar_y_navegar({}, 1)
+        b1,b2 = st.columns(2)
+        if b1.button("⬅️ Atrás", key="back_p2"): guardar_y_navegar({}, 1)
         if b2.button("Siguiente ➡️", key="next_p2"):
-            st.session_state.db["fotos_q1"] = "Cargadas" if n_fotos == 3 else "Pendientes"
-            guardar_y_navegar({}, 3)
+            guardar_y_navegar({"fotos_q1": "Cargadas" if n_fotos==3 else "Pendientes"}, 3)
 
     # ── PASO 3: Antecedentes ──────────────────────────────────────────────────
     elif st.session_state.step == 3:
         with st.form("f_p3"):
             st.markdown("<div class='sec-head'>ANTECEDENTES Y ESTANCAMIENTO</div>", unsafe_allow_html=True)
-            v_t_ent = st.selectbox("Tiempo entrenando:", ["Nunca","Menos de 6 meses","De 6 meses a 1 año","1 a 3 años","Más de 3 años"])
-            v_dias  = st.selectbox("Días disponibles/semana:", ["3 días por semana","4 días por semana","5 días por semana"])
-            v_est   = st.selectbox("Historial de estancamiento:", ["No estoy estancado","Menos de 1 mes","1 a 3 meses","Más de 6 meses"])
-            b1, b2 = st.columns(2)
-            if b1.form_submit_button("⬅️ Atrás"): guardar_y_navegar({"Tiempo entrenando":v_t_ent,"Días entrenar":v_dias,"Historial de Estancamiento":v_est}, 2)
-            if b2.form_submit_button("Siguiente ➡️"): guardar_y_navegar({"Tiempo entrenando":v_t_ent,"Días entrenar":v_dias,"Historial de Estancamiento":v_est}, 4)
+            v_tent = st.selectbox("Tiempo entrenando:", ["Nunca","Menos de 6 meses","De 6 meses a 1 año","1 a 3 años","Más de 3 años"])
+            v_dias = st.selectbox("Días disponibles/semana:", ["3 días por semana","4 días por semana","5 días por semana"])
+            v_est  = st.selectbox("Historial de estancamiento:", ["No estoy estancado","Menos de 1 mes","1 a 3 meses","Más de 6 meses"])
+            b1,b2 = st.columns(2)
+            if b1.form_submit_button("⬅️ Atrás"): guardar_y_navegar({"Tiempo entrenando":v_tent,"Días entrenar":v_dias,"Historial de Estancamiento":v_est}, 2)
+            if b2.form_submit_button("Siguiente ➡️"): guardar_y_navegar({"Tiempo entrenando":v_tent,"Días entrenar":v_dias,"Historial de Estancamiento":v_est}, 4)
 
-    # ── PASO 4: Perfil Clínico ────────────────────────────────────────────────
+    # ── PASO 4: Perfil clínico ────────────────────────────────────────────────
     elif st.session_state.step == 4:
         with st.form("f_p4"):
             st.markdown("<div class='sec-head'>PERFIL CLÍNICO Y BIOFEEDBACK</div>", unsafe_allow_html=True)
-            v_lesion = st.selectbox("Lesión actual:", ["Ninguna","Rodilla","Hombro","Espalda Baja","Cervicales"])
-            v_proh   = st.selectbox("Prohibición carga axial:", ["No","Sí, sobre columna","Sí, flexiones profundas"])
-            v_recup  = st.selectbox("Capacidad de recuperación (DOMS):", ["Recuperación rápida","Normal","Llego muy adolorido a la siguiente sesión"])
-            v_dig    = st.selectbox("Biofeedback digestivo:", ["Sin molestias","Inflamación ocasional","Gases y pesadez frecuente"])
-            v_estres = st.slider("Carga de estrés externo (1=Mínimo, 10=Extremo):", 1, 10, 5)
-            v_postura= st.selectbox("Problemas de postura:", ["No","Sí — cifosis","Sí — lordosis","Sí — escoliosis"])
-            b1, b2 = st.columns(2)
+            v_les   = st.selectbox("Lesión actual:", ["Ninguna","Rodilla","Hombro","Espalda Baja","Cervicales"])
+            v_proh  = st.selectbox("Prohibición carga axial:", ["No","Sí, sobre columna","Sí, flexiones profundas"])
+            v_rec   = st.selectbox("Capacidad de recuperación (DOMS):", ["Recuperación rápida","Normal","Llego muy adolorido a la siguiente sesión"])
+            v_dig   = st.selectbox("Biofeedback digestivo:", ["Sin molestias","Inflamación ocasional","Gases y pesadez frecuente"])
+            v_est2  = st.slider("Carga de estrés externo (1-10):", 1, 10, 5)
+            v_pos   = st.selectbox("Problemas de postura:", ["No","Sí — cifosis","Sí — lordosis","Sí — escoliosis"])
+            b1,b2   = st.columns(2)
             if b1.form_submit_button("⬅️ Atrás"):
-                guardar_y_navegar({"Lesión actual":v_lesion,"Prohibido ejercicio":v_proh,"Capacidad de Recuperación Base":v_recup,"Biofeedback Digestivo":v_dig,"Carga de Estrés Externo":str(v_estres),"Mala postura":v_postura}, 3)
+                guardar_y_navegar({"Lesión actual":v_les,"Prohibido ejercicio":v_proh,"Capacidad de Recuperación Base":v_rec,"Biofeedback Digestivo":v_dig,"Carga de Estrés Externo":str(v_est2),"Mala postura":v_pos}, 3)
             if b2.form_submit_button("Siguiente ➡️"):
-                guardar_y_navegar({"Lesión actual":v_lesion,"Prohibido ejercicio":v_proh,"Capacidad de Recuperación Base":v_recup,"Biofeedback Digestivo":v_dig,"Carga de Estrés Externo":str(v_estres),"Mala postura":v_postura}, 5)
+                guardar_y_navegar({"Lesión actual":v_les,"Prohibido ejercicio":v_proh,"Capacidad de Recuperación Base":v_rec,"Biofeedback Digestivo":v_dig,"Carga de Estrés Externo":str(v_est2),"Mala postura":v_pos}, 5)
 
-    # ── PASO 5: Nutrición y Metas ─────────────────────────────────────────────
+    # ── PASO 5: Nutrición ─────────────────────────────────────────────────────
     elif st.session_state.step == 5:
         with st.form("f_p5"):
             st.markdown("<div class='sec-head'>NUTRICIÓN Y METAS</div>", unsafe_allow_html=True)
-            v_obj    = st.selectbox("Objetivo principal:", ["Perder grasa","Ganar masa muscular","Recomposición corporal"])
-            v_prots  = st.multiselect("Proteínas preferidas:", ["Pechuga de Pollo","Bisteck","Atún","Huevos","Salmón"], default=["Pechuga de Pollo"])
-            v_carbs  = st.multiselect("Carbohidratos:", ["Arroz","Avena","Papa","Tortilla","Camote"], default=["Arroz"])
-            v_grasas = st.multiselect("Grasas saludables:", ["Aguacate","Almendras","Crema de Cacahuete","Aceite de Oliva"], default=["Aguacate"])
-            v_verds  = st.multiselect("Verduras:", ["Brócoli","Espinacas","Lechuga","Pepino","Calabacín"], default=["Brócoli"])
-            b1, b2 = st.columns(2)
+            v_obj   = st.selectbox("Objetivo principal:", ["Perder grasa","Ganar masa muscular","Recomposición corporal"])
+            v_prots = st.multiselect("Proteínas preferidas:", list(CONFIG["porciones_ref"].keys())[:5], default=["Pechuga de Pollo"])
+            v_carbs = st.multiselect("Carbohidratos:", ["Arroz","Avena","Papa","Tortilla","Camote"], default=["Arroz"])
+            v_gras  = st.multiselect("Grasas saludables:", ["Aguacate","Almendras","Crema de Cacahuete","Aceite de Oliva"], default=["Aguacate"])
+            v_verd  = st.multiselect("Verduras:", ["Brócoli","Espinacas","Lechuga","Pepino","Calabacín"], default=["Brócoli"])
+            b1,b2   = st.columns(2)
             if b1.form_submit_button("⬅️ Atrás"):
-                guardar_y_navegar({"Objetivo principal":v_obj,"Menu_Proteinas":", ".join(v_prots),"Menu_Carbohidratos":", ".join(v_carbs),"Menu_Grasas":", ".join(v_grasas),"Menu_Verduras":", ".join(v_verds)}, 4)
+                guardar_y_navegar({"Objetivo principal":v_obj,"Menu_Proteinas":", ".join(v_prots),"Menu_Carbohidratos":", ".join(v_carbs),"Menu_Grasas":", ".join(v_gras),"Menu_Verduras":", ".join(v_verd)}, 4)
             if b2.form_submit_button("Siguiente ➡️"):
-                guardar_y_navegar({"Objetivo principal":v_obj,"Menu_Proteinas":", ".join(v_prots),"Menu_Carbohidratos":", ".join(v_carbs),"Menu_Grasas":", ".join(v_grasas),"Menu_Verduras":", ".join(v_verds)}, 6)
+                guardar_y_navegar({"Objetivo principal":v_obj,"Menu_Proteinas":", ".join(v_prots),"Menu_Carbohidratos":", ".join(v_carbs),"Menu_Grasas":", ".join(v_gras),"Menu_Verduras":", ".join(v_verd)}, 6)
 
-    # ── PASO 6: Parámetros Espejo + ENVÍO ─────────────────────────────────────
+    # ── PASO 6: Parámetros espejo + ENVÍO ─────────────────────────────────────
     elif st.session_state.step == 6:
         with st.form("f_p6"):
             st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO — LÍNEA BASE</div>", unsafe_allow_html=True)
-            v_ener = st.slider("Energía promedio en el día (1-10):", 1, 10, 5)
+            v_ener = st.slider("Energía promedio (1-10):", 1, 10, 5)
             v_suen = st.slider("Calidad de sueño (1-10):", 1, 10, 5)
             v_fuer = st.slider("Fuerza actual (1-10):", 1, 10, 5)
-            v_hamb = st.slider("Nivel de hambre/ansiedad (1-10):", 1, 10, 5)
-
-            b1, b2 = st.columns(2)
+            v_hamb = st.slider("Hambre/ansiedad (1-10):", 1, 10, 5)
+            b1,b2  = st.columns(2)
             if b1.form_submit_button("⬅️ Atrás"):
                 guardar_y_navegar({"P_Energia_Q1":v_ener,"P_Sueno_Q1":v_suen,"P_Fuerza_Q1":v_fuer,"P_Hambre_Q1":v_hamb}, 5)
-
             if b2.form_submit_button("🚀 ACTIVAR MI EXPEDIENTE MM247"):
                 d = st.session_state.db
                 d.update({"P_Energia_Q1":v_ener,"P_Sueno_Q1":v_suen,"P_Fuerza_Q1":v_fuer,"P_Hambre_Q1":v_hamb})
 
-                id_nuevo = generar_id_secuencial(df_existente)
+                id_nuevo = gen_id(df_existente)
+
+                # Renombrar fotos temporales al ID real
+                id_temp = d.get("id_temp_fotos","")
+                if id_temp:
+                    for tipo in ["frente","perfil","espalda"]:
+                        src = ruta_foto(id_temp, tipo, "q1")
+                        dst = ruta_foto(id_nuevo, tipo, "q1")
+                        if os.path.exists(src):
+                            os.rename(src, dst)
 
                 payload = {
                     "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Tipo_Registro": "INICIAL",
-                    "ID_Alumno": id_nuevo,
-                    "Nombre completo":             str(d.get("Nombre completo","")),
-                    "Edad":                        str(d.get("Edad","")),
-                    "Sexo":                        str(d.get("Sexo","")),
-                    "Estatura":                    str(d.get("Estatura","")),
-                    "Peso actual":                 str(d.get("Peso actual","")),
-                    "Cintura inicial":             str(d.get("Cintura inicial","")),
-                    "Peso objetivo":               str(d.get("Peso objetivo","")),
-                    "Correo electrónico":          str(d.get("Correo electrónico","")),
-                    "Nivel de actividad":          str(d.get("Nivel de actividad","")),
-                    "Tiempo entrenando":           str(d.get("Tiempo entrenando","")),
-                    "Días entrenar":               str(d.get("Días entrenar","")),
-                    "Lesión actual":               str(d.get("Lesión actual","")),
-                    "Prohibido ejercicio":         str(d.get("Prohibido ejercicio","")),
-                    "Mala postura":                str(d.get("Mala postura","")),
-                    "Menu_Proteinas":              str(d.get("Menu_Proteinas","")),
-                    "Menu_Carbohidratos":          str(d.get("Menu_Carbohidratos","")),
-                    "Menu_Grasas":                 str(d.get("Menu_Grasas","")),
-                    "Menu_Verduras":               str(d.get("Menu_Verduras","")),
-                    "Objetivo principal":          str(d.get("Objetivo principal","")),
-                    "P_Energia_Q1":                str(v_ener),
-                    "P_Sueno_Q1":                  str(v_suen),
-                    "P_Fuerza_Q1":                 str(v_fuer),
-                    "P_Hambre_Q1":                 str(v_hamb),
-                    "Historial de Estancamiento":  str(d.get("Historial de Estancamiento","")),
+                    "Tipo_Registro": "INICIAL", "ID_Alumno": id_nuevo,
+                    "Nombre completo": str(d.get("Nombre completo","")),
+                    "Edad": str(d.get("Edad","")), "Sexo": str(d.get("Sexo","")),
+                    "Estatura": str(d.get("Estatura","")), "Peso actual": str(d.get("Peso actual","")),
+                    "Cintura inicial": str(d.get("Cintura inicial","")),
+                    "Peso objetivo": str(d.get("Peso objetivo","")),
+                    "Correo electrónico": str(d.get("Correo electrónico","")),
+                    "Nivel de actividad": str(d.get("Nivel de actividad","")),
+                    "Tiempo entrenando": str(d.get("Tiempo entrenando","")),
+                    "Días entrenar": str(d.get("Días entrenar","")),
+                    "Lesión actual": str(d.get("Lesión actual","")),
+                    "Prohibido ejercicio": str(d.get("Prohibido ejercicio","")),
+                    "Mala postura": str(d.get("Mala postura","")),
+                    "Menu_Proteinas": str(d.get("Menu_Proteinas","")),
+                    "Menu_Carbohidratos": str(d.get("Menu_Carbohidratos","")),
+                    "Menu_Grasas": str(d.get("Menu_Grasas","")),
+                    "Menu_Verduras": str(d.get("Menu_Verduras","")),
+                    "Objetivo principal": str(d.get("Objetivo principal","")),
+                    "P_Energia_Q1": str(v_ener), "P_Sueno_Q1": str(v_suen),
+                    "P_Fuerza_Q1": str(v_fuer), "P_Hambre_Q1": str(v_hamb),
+                    "Historial de Estancamiento": str(d.get("Historial de Estancamiento","")),
                     "Capacidad de Recuperación Base": str(d.get("Capacidad de Recuperación Base","")),
-                    "Biofeedback Digestivo":       str(d.get("Biofeedback Digestivo","")),
-                    "Carga de Estrés Externo":     str(d.get("Carga de Estrés Externo","")),
-                    "Foto_Frente_Q1":              "Recibida" if d.get("foto_frente_b64") else "Pendiente",
-                    "Foto_Perfil_Q1":              "Recibida" if d.get("foto_perfil_b64") else "Pendiente",
-                    "Foto_Espalda_Q1":             "Recibida" if d.get("foto_espalda_b64") else "Pendiente",
+                    "Biofeedback Digestivo": str(d.get("Biofeedback Digestivo","")),
+                    "Carga de Estrés Externo": str(d.get("Carga de Estrés Externo","")),
+                    "Foto_Frente_Q1": "Guardada" if cargar_foto_disco(id_nuevo,"frente","q1") else "Pendiente",
+                    "Foto_Perfil_Q1": "Guardada" if cargar_foto_disco(id_nuevo,"perfil","q1") else "Pendiente",
+                    "Foto_Espalda_Q1":"Guardada" if cargar_foto_disco(id_nuevo,"espalda","q1") else "Pendiente",
                 }
 
                 with st.spinner("Compilando tu ecosistema MM247..."):
                     try:
                         resp = requests.post(CONFIG["webhook_url"], json=payload, timeout=10)
                         if resp.status_code == 200:
-                            # Mostrar ID generado
+                            st.cache_data.clear()
+                            # CLIENTE SOLO VE CONFIRMACIÓN + ID
                             st.markdown(f"""
                             <div class="id-box">
                               <div class="id-box-label">TU ID DE ATLETA MM247</div>
@@ -1638,82 +1697,79 @@ def mostrar_formulario_q1(df_existente: pd.DataFrame):
                               <div style="font-size:12px;margin-top:10px;opacity:.85;">
                                 Guarda este código — lo necesitarás para registrar tu avance
                               </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            </div>""", unsafe_allow_html=True)
                             st.balloons()
-
-                            # Mostrar Dashboard Q1 inmediatamente
-                            st.markdown("---")
-                            st.markdown("<div style='text-align:center;font-size:14px;color:#50C878;font-weight:700;letter-spacing:2px;'>TU EXPEDIENTE ESTÁ LISTO</div>", unsafe_allow_html=True)
-                            norm_temp = {k: str(v) for k, v in d.items()}
-                            mot_temp  = calcular_metabolismo(norm_temp)
-                            mostrar_dashboard_q1(norm_temp, mot_temp, id_nuevo)
-
-                            st.cache_data.clear()
+                            st.markdown("""
+                            <div class="confirm-box" style="margin-top:24px;">
+                              <div style="font-size:32px;">🎉</div>
+                              <div style="font-size:20px;font-weight:900;color:#166534;margin-top:8px;">¡Expediente Activado!</div>
+                              <div style="font-size:14px;color:#4B7A5A;margin-top:8px;">
+                                Tu registro ha sido recibido exitosamente.<br>
+                                Tu entrenador revisará tu expediente y te contactará pronto.<br><br>
+                                <strong>Próximo paso:</strong> Cuando tu entrenador te lo indique,<br>
+                                regresa aquí con tu ID para registrar tu avance en <em>Mi Avance MM247</em>.
+                              </div>
+                            </div>""", unsafe_allow_html=True)
                             st.session_state.step = 1
                             st.session_state.db   = {}
                         else:
-                            st.error("Error al conectar con la base de datos. Inténtalo de nuevo.")
+                            st.error("Error al conectar con la base de datos. Intenta de nuevo.")
                     except Exception as e:
                         st.error(f"Error de conexión: {e}")
 
 
 # =============================================================================
-# 13. FORMULARIO AUDITORÍA Q2
+# FORMULARIO Q2 — CLIENTE (SOLO VE CONFIRMACIÓN)
 # =============================================================================
-def mostrar_formulario_q2(df_existente: pd.DataFrame):
-    render_hero("AUDITORÍA DE AVANCE — REGISTRO PERIÓDICO", "MI AVANCE MM247")
+def formulario_q2(df_existente):
+    render_hero("AUDITORÍA DE AVANCE — REGISTRO", "MI AVANCE MM247")
 
     st.markdown("""
-    <div class="panel-card" style="border-left:4px solid #50C878;margin-bottom:24px;">
-      <div style="font-size:13px;color:#4B5563;line-height:1.6;">
-        Ingresa tu <strong style='color:#166534;'>ID de Atleta</strong> generado al registrarte y
-        completa tu auditoría de avance. El sistema calculará tus deltas y generará un plan de acción
-        personalizado.
+    <div class="panel-card" style="border-left:4px solid #50C878;margin-bottom:20px;">
+      <div style="font-size:13px;color:#4B5563;line-height:1.7;">
+        Ingresa tu <strong style='color:#166534;'>ID de Atleta</strong> y completa tu auditoría.<br>
+        Tu entrenador recibirá el reporte y te dará retroalimentación personalizada.
       </div>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
-    import base64 as _b64q2
+    # ID fuera del form para usarlo en guardar fotos
+    id_ing = st.text_input("🔑 ID de Atleta (Ej: 247001):",
+                            placeholder="Ingresa tu ID MM247",
+                            key="q2_id_inp").strip().upper()
 
-    id_ing = st.text_input("🔑 ID de Atleta (Ej: 247001):", placeholder="Ingresa tu ID MM247",
-                            key="q2_id_input").strip().upper()
+    # Fotos Q2 con guardado en disco
+    st.markdown("<div class='sec-head'>FOTOGRAFÍAS ACTUALES (Q2)</div>", unsafe_allow_html=True)
+    st.info("📸 Sube tus 3 fotos actuales y presiona **GUARDAR FOTOS Q2**.")
 
-    st.markdown("<div class='sec-head'>EVIDENCIA VISUAL — FOTOGRAFÍAS Q2</div>", unsafe_allow_html=True)
-    st.info("📸 Sube tus 3 fotos y presiona **GUARDAR FOTOS Q2** antes de auditar.")
+    fq1,fq2,fq3 = st.columns(3)
+    up_fr2 = fq1.file_uploader("📷 Frente Actual",  type=["png","jpg","jpeg"], key="up_fr_q2")
+    up_pf2 = fq2.file_uploader("📷 Perfil Actual",  type=["png","jpg","jpeg"], key="up_pf_q2")
+    up_es2 = fq3.file_uploader("📷 Espalda Actual", type=["png","jpg","jpeg"], key="up_es_q2")
 
-    fq1, fq2, fq3 = st.columns(3)
-    up_fr2 = fq1.file_uploader("📷 Frente Actual",  type=["png","jpg","jpeg"], key="up_frente_q2")
-    up_pf2 = fq2.file_uploader("📷 Perfil Actual",  type=["png","jpg","jpeg"], key="up_perfil_q2")
-    up_es2 = fq3.file_uploader("📷 Espalda Actual", type=["png","jpg","jpeg"], key="up_espalda_q2")
+    if st.button("💾 GUARDAR FOTOS Q2", key="btn_guardar_fotos_q2", use_container_width=True):
+        if not id_ing:
+            st.error("Ingresa tu ID primero.")
+        else:
+            guardadas = 0
+            if up_fr2:
+                if guardar_foto_disco(id_ing, "frente", "q2", up_fr2): guardadas += 1
+            if up_pf2:
+                if guardar_foto_disco(id_ing, "perfil", "q2", up_pf2): guardadas += 1
+            if up_es2:
+                if guardar_foto_disco(id_ing, "espalda","q2", up_es2): guardadas += 1
+            st.session_state["fotos_q2_guardadas"] = guardadas
+            st.session_state["id_q2_fotos"] = id_ing
+            st.rerun()
 
-    if st.button("💾 GUARDAR FOTOS Q2", key="btn_save_fotos_q2", use_container_width=True):
-        if up_fr2:
-            up_fr2.seek(0)
-            st.session_state["foto_frente_q2_b64"]  = _b64q2.b64encode(up_fr2.read()).decode()
-        if up_pf2:
-            up_pf2.seek(0)
-            st.session_state["foto_perfil_q2_b64"]  = _b64q2.b64encode(up_pf2.read()).decode()
-        if up_es2:
-            up_es2.seek(0)
-            st.session_state["foto_espalda_q2_b64"] = _b64q2.b64encode(up_es2.read()).decode()
-        st.rerun()
-
-    # Preview desde session_state
-    pv1, pv2, pv3 = st.columns(3)
+    # Preview desde disco
+    id_prev = st.session_state.get("id_q2_fotos", id_ing)
     n_fotos_q2 = 0
-    for col, skey, lbl in [
-        (pv1,"foto_frente_q2_b64","Frente Q2"),
-        (pv2,"foto_perfil_q2_b64","Perfil Q2"),
-        (pv3,"foto_espalda_q2_b64","Espalda Q2"),
-    ]:
-        data = st.session_state.get(skey, "")
-        if data and len(data) > 100:
+    pv1,pv2,pv3 = st.columns(3)
+    for col, tipo, lbl in [(pv1,"frente","Frente Q2"),(pv2,"perfil","Perfil Q2"),(pv3,"espalda","Espalda Q2")]:
+        datos = cargar_foto_disco(id_prev, tipo, "q2") if id_prev else None
+        if datos:
             n_fotos_q2 += 1
-            try:
-                col.image(_b64q2.b64decode(data), caption=f"✅ {lbl}", use_container_width=True)
-            except Exception:
-                pass
+            col.image(datos, caption=f"✅ {lbl}", use_container_width=True)
         else:
             col.markdown(f"""
             <div style="background:#0D1F14;border:2px dashed #50C87840;border-radius:10px;
@@ -1728,258 +1784,245 @@ def mostrar_formulario_q2(df_existente: pd.DataFrame):
     elif n_fotos_q2 > 0:
         st.info(f"📷 {n_fotos_q2}/3 fotos guardadas.")
 
-    with st.form("f_auditoria", clear_on_submit=False):
-
+    # Formulario de datos
+    with st.form("f_aud", clear_on_submit=False):
         st.markdown("<div class='sec-head'>MÉTRICAS ACTUALES</div>", unsafe_allow_html=True)
-        m1, m2 = st.columns(2)
+        m1,m2    = st.columns(2)
         peso_rev = m1.number_input("Peso Actual (kg):", min_value=30.0, value=70.0, step=0.1)
         cint_rev = m2.number_input("Cintura Actual (cm):", min_value=40.0, value=80.0, step=0.5)
 
         st.markdown("<div class='sec-head'>ADHERENCIA Y DESEMPEÑO</div>", unsafe_allow_html=True)
-        adherencia = st.selectbox("Adherencia real al sistema:", ["100% Perfecto","80-90% Con fallos mínimos","Cerca del 50%","Menos del 50% / Abandoné"])
-
-        sobrecarga = st.selectbox("Sobrecarga progresiva:", ["Sí, subí peso/reps","Me mantuve igual","No, perdí fuerza"])
-        tolerancia = st.selectbox("Tolerancia metabólica:", ["Digestión rápida y normal","Ligera pesadez","Mucha pesadez / Inflamación constante"])
+        adherencia = st.selectbox("Adherencia real al sistema:", [
+            "100% Perfecto","80-90% Con fallos mínimos","Cerca del 50%","Menos del 50% / Abandoné"])
+        sobrecarga = st.selectbox("Sobrecarga progresiva:", [
+            "Sí, subí peso/reps","Me mantuve igual","No, perdí fuerza"])
+        tolerancia = st.selectbox("Tolerancia metabólica:", [
+            "Digestión rápida y normal","Ligera pesadez","Mucha pesadez / Inflamación constante"])
 
         st.markdown("<div class='sec-head'>PARÁMETROS ESPEJO ACTUALES (1-10)</div>", unsafe_allow_html=True)
-        cp1, cp2 = st.columns(2)
-        e_rev = cp1.slider("Energía:",        1, 10, 5)
-        s_rev = cp2.slider("Calidad Sueño:",  1, 10, 5)
-        f_rev = cp1.slider("Fuerza:",         1, 10, 5)
-        h_rev = cp2.slider("Hambre/Ansiedad:",1, 10, 5)
+        cp1,cp2 = st.columns(2)
+        e_rev = cp1.slider("Energía:",         1, 10, 5)
+        s_rev = cp2.slider("Calidad Sueño:",   1, 10, 5)
+        f_rev = cp1.slider("Fuerza:",          1, 10, 5)
+        h_rev = cp2.slider("Hambre/Ansiedad:", 1, 10, 5)
 
-        if st.form_submit_button("🚀 GENERAR MI AUDITORÍA DE AVANCE"):
+        if st.form_submit_button("🚀 ENVIAR MI AUDITORÍA"):
             if not id_ing:
-                st.error("El ID es obligatorio para cruzar tus datos.")
+                st.error("El ID es obligatorio.")
             elif df_existente.empty or id_ing not in df_existente["ID_Alumno"].values:
-                st.error(f"❌ ID '{id_ing}' no encontrado. Verifica tu ID o regístrate en Mi Registro MM247.")
+                st.error(f"❌ ID '{id_ing}' no encontrado. Verifica tu ID.")
             else:
-                # Calcular estado
                 puntos = 0
                 if f_rev >= 7 and "Sí" in sobrecarga: puntos += 2
                 if "100%" in adherencia or "80-90%" in adherencia: puntos += 1
                 estado_calc = "AVANCE" if puntos >= 2 else "RETROCESO"
 
                 payload_rev = {
-                    "Fecha":          datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "Tipo_Registro":  "REVISION",
-                    "ID_Alumno":      id_ing,
-                    "Peso_Revision":  str(peso_rev),
-                    "Cintura_Revision": str(cint_rev),
-                    "Energia":        str(e_rev),
-                    "Calidad_Sueno":  str(s_rev),
-                    "Progreso_Fuerza":str(f_rev),
-                    "Hambre":         str(h_rev),
+                    "Fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "Tipo_Registro": "REVISION", "ID_Alumno": id_ing,
+                    "Peso_Revision": str(peso_rev), "Cintura_Revision": str(cint_rev),
+                    "Energia": str(e_rev), "Calidad_Sueno": str(s_rev),
+                    "Progreso_Fuerza": str(f_rev), "Hambre": str(h_rev),
                     "Adherencia Real al Sistema": adherencia,
-                    "Sobrecarga Progresiva":      sobrecarga,
-                    "Tolerancia Metabólica":      tolerancia,
-                    "Foto_Frente_Q2":  "Recibida" if f2_frente  else "Pendiente",
-                    "Foto_Perfil_Q2":  "Recibida" if f2_perfil  else "Pendiente",
-                    "Foto_Espalda_Q2": "Recibida" if f2_espalda else "Pendiente",
+                    "Sobrecarga Progresiva": sobrecarga,
+                    "Tolerancia Metabólica": tolerancia,
+                    "Foto_Frente_Q2":  "Guardada" if cargar_foto_disco(id_ing,"frente","q2")  else "Pendiente",
+                    "Foto_Perfil_Q2":  "Guardada" if cargar_foto_disco(id_ing,"perfil","q2")  else "Pendiente",
+                    "Foto_Espalda_Q2": "Guardada" if cargar_foto_disco(id_ing,"espalda","q2") else "Pendiente",
                     "Estado_Calculado": estado_calc,
                 }
-
-                # Guardar fotos Q2 en session_state para visualización inmediata
-                import base64 as b64lib
-                def _to_b64(f):
-                    if f is None: return ""
-                    f.seek(0)
-                    return b64lib.b64encode(f.read()).decode("utf-8")
-                st.session_state["foto_frente_q2_b64"]  = _to_b64(f2_frente)
-                st.session_state["foto_perfil_q2_b64"]  = _to_b64(f2_perfil)
-                st.session_state["foto_espalda_q2_b64"] = _to_b64(f2_espalda)
 
                 with st.spinner("Procesando tu auditoría..."):
                     try:
                         resp = requests.post(CONFIG["webhook_url"], json=payload_rev, timeout=10)
                         if resp.status_code == 200:
                             st.cache_data.clear()
-                            st.success(f"✅ Auditoría registrada. Dictamen: **{estado_calc}**")
-
-                            # Cargar datos Q1 y mostrar dashboard Q2
-                            df_fresh = cargar_base_datos()
-                            df_c1    = df_fresh[df_fresh["Tipo_Registro"] == "INICIAL"]
-                            df_c2    = df_fresh[df_fresh["Tipo_Registro"] == "REVISION"]
-                            d_brutos = df_c1[df_c1["ID_Alumno"] == id_ing].iloc[0]
-                            d_norm   = normalizar_datos_alumno(d_brutos)
-                            m_calc   = calcular_metabolismo(d_norm)
-                            r_df     = df_c2[df_c2["ID_Alumno"] == id_ing]
-
-                            mostrar_dashboard_q2(d_norm, m_calc, r_df, id_ing)
+                            # CLIENTE SOLO VE CONFIRMACIÓN
+                            st.markdown(f"""
+                            <div class="confirm-box">
+                              <div style="font-size:40px;">✅</div>
+                              <div style="font-size:22px;font-weight:900;color:#166534;margin-top:10px;">
+                                ¡Auditoría Registrada!
+                              </div>
+                              <div style="font-size:14px;color:#4B7A5A;margin-top:10px;line-height:1.8;">
+                                Tu información ha sido enviada exitosamente.<br>
+                                Tu entrenador analizará tus resultados y te dará retroalimentación.<br><br>
+                                <strong>ID registrado:</strong> {id_ing}
+                              </div>
+                            </div>""", unsafe_allow_html=True)
                         else:
-                            st.error("Error al conectar con la base de datos.")
+                            st.error("Error al conectar. Intenta de nuevo.")
                     except Exception as e:
                         st.error(f"Error: {e}")
 
 
 # =============================================================================
-# 14. DASHBOARD ADMINISTRADOR
+# DASHBOARD ADMINISTRADOR
 # =============================================================================
-def mostrar_dashboard_admin(df_existente: pd.DataFrame):
+def dashboard_admin(df_existente):
     render_hero("PANEL DE CONTROL MAESTRO", "CONTROL CLÍNICO AVANZADO")
 
     if df_existente.empty:
-        st.warning("Base de datos vacía. En espera de registros Q1.")
+        st.warning("Base de datos vacía.")
         return
 
-    df_c1 = df_existente[df_existente["Tipo_Registro"] == "INICIAL"].copy()
-    df_c2 = df_existente[df_existente["Tipo_Registro"] == "REVISION"].copy()
-    ids_unicos = df_c1["ID_Alumno"].replace("",pd.NA).dropna().unique()
+    df_c1 = df_existente[df_existente["Tipo_Registro"]=="INICIAL"].copy()
+    df_c2 = df_existente[df_existente["Tipo_Registro"]=="REVISION"].copy()
+    ids   = df_c1["ID_Alumno"].replace("",pd.NA).dropna().unique()
 
-    # KPIs globales
-    st.markdown("<div class='sec-head'>KPIs GLOBALES DEL SISTEMA</div>", unsafe_allow_html=True)
-    k1, k2, k3, k4 = st.columns(4)
-    total_atletas   = len(ids_unicos)
-    con_auditoria   = len(df_c2["ID_Alumno"].unique())
-    en_avance       = len(df_c2[df_c2["Estado_Calculado"].str.upper() == "AVANCE"]["ID_Alumno"].unique()) if not df_c2.empty else 0
-    en_retroceso    = len(df_c2[df_c2["Estado_Calculado"].str.upper() == "RETROCESO"]["ID_Alumno"].unique()) if not df_c2.empty else 0
+    # KPIs
+    st.markdown("<div class='sec-head'>KPIs GLOBALES</div>", unsafe_allow_html=True)
+    k1,k2,k3,k4 = st.columns(4)
+    con_q2    = len(df_c2["ID_Alumno"].unique())
+    en_avance = len(df_c2[df_c2.get("Estado_Calculado","") == "AVANCE"]["ID_Alumno"].unique()) if "Estado_Calculado" in df_c2.columns else 0
 
-    with k1: render_metric_card("Total Atletas", str(total_atletas))
-    with k2: render_metric_card("Con Auditoría Q2", str(con_auditoria))
-    with k3: render_metric_card("En Avance", str(en_avance), delta_tipo="pos")
-    with k4: render_metric_card("En Retroceso", str(en_retroceso), delta_tipo="neg")
+    with k1: metric_card("Total Atletas",   str(len(ids)))
+    with k2: metric_card("Con Auditoría Q2",str(con_q2))
+    with k3: metric_card("En Avance",       str(en_avance), delta_pos=True)
+    with k4: metric_card("Sin Q2 aún",      str(len(ids)-con_q2))
 
     # Lista + detalle
-    col_list, col_det = st.columns([1, 2])
+    col_list, col_det = st.columns([1,2])
 
     with col_list:
         st.markdown("<div class='sec-head'>ATLETAS ACTIVOS</div>", unsafe_allow_html=True)
-        for id_al in ids_unicos:
-            datos_al = df_c1[df_c1["ID_Alumno"] == id_al].iloc[0]
-            nombre_corto = str(datos_al.get("Nombre completo","Atleta"))[:16]
-            tiene_q2 = id_al in df_c2["ID_Alumno"].values
-            icono = "🟢" if tiene_q2 else "🔵"
-            if st.button(f"{icono} {id_al} — {nombre_corto}", key=f"btn_{id_al}", use_container_width=True):
-                st.session_state.alumno_seleccionado = id_al
+        for id_al in ids:
+            fila    = df_c1[df_c1["ID_Alumno"]==id_al].iloc[0]
+            nombre  = str(fila.get("Nombre completo","Atleta"))[:18]
+            tiene_q2= id_al in df_c2["ID_Alumno"].values
+            icono   = "🟢" if tiene_q2 else "🔵"
+            if st.button(f"{icono} {id_al} — {nombre}", key=f"btn_{id_al}", use_container_width=True):
+                st.session_state.alumno_sel = id_al
 
     with col_det:
-        if "alumno_seleccionado" in st.session_state:
-            id_sel   = st.session_state.alumno_seleccionado
-            d_brutos = df_c1[df_c1["ID_Alumno"] == id_sel].iloc[0]
-            d_norm   = normalizar_datos_alumno(d_brutos)
-            m_calc   = calcular_metabolismo(d_norm)
-            r_df     = df_c2[df_c2["ID_Alumno"] == id_sel]
+        if "alumno_sel" not in st.session_state: return
 
-            st.markdown(f"<div class='sec-head'>EXPEDIENTE: {id_sel}</div>", unsafe_allow_html=True)
+        id_sel  = st.session_state.alumno_sel
+        d_brutos= df_c1[df_c1["ID_Alumno"]==id_sel].iloc[0]
+        d_norm  = normalizar(d_brutos)
+        m_calc  = calcular_metabolismo(d_norm)
+        por     = calcular_porciones(d_norm, m_calc)
+        r_df    = df_c2[df_c2["ID_Alumno"]==id_sel]
 
-            estado_actual = "SIN AUDITORÍA"
-            if not r_df.empty:
-                estado_actual = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
+        st.markdown(f"<div class='sec-head'>EXPEDIENTE: {id_sel}</div>", unsafe_allow_html=True)
 
-            # Avatar DiceBear en admin
-            ca2, cb2 = st.columns([1, 3])
-            with ca2:
-                est_render = estado_actual if not r_df.empty else "Q1"
-                if not r_df.empty:
-                    url_admin = construir_avatar_q2(d_norm, m_calc, dict(r_df.iloc[-1]), est_render)
-                else:
-                    url_admin = construir_avatar_q1(d_norm, m_calc)
-                render_avatar_fitness(url_admin, d_norm.get("Nombre completo",""), est_render, height=220)
-            with cb2:
-                badge_map = {
-                    "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
-                    "RETROCESO":     "<span class='badge-retroceso'>⚠️ RETROCESO</span>",
-                    "SIN AUDITORÍA": "<span class='badge-lento'>📋 SIN Q2 AÚN</span>",
-                }
-                sexo_icon = "👩" if "Femen" in m_calc.get("genero","") else "👨"
-                st.markdown(f"""
-                <div style="padding:8px 0;">
-                  <div style="font-size:20px;font-weight:900;color:#0D1F14;">{d_norm.get('Nombre completo','')}</div>
-                  <div style="margin:6px 0;">{badge_map.get(estado_actual, badge_map['SIN AUDITORÍA'])}</div>
-                  <div style="font-size:12px;color:#6B7280;">
-                    {sexo_icon} {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg · {m_calc['estatura']} cm
-                  </div>
-                  <div style="font-size:11px;color:#7D9A84;margin-top:4px;">
-                    IMC: {m_calc['imc']} · {m_calc['origen']}
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
+        estado_act = "SIN AUDITORÍA"
+        if not r_df.empty:
+            estado_act = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
 
-            # Deltas
-            peso_act    = _parse_float(r_df.iloc[-1].get("Peso_Revision", m_calc["peso"]) if not r_df.empty else m_calc["peso"], m_calc["peso"])
-            cintura_act = _parse_float(r_df.iloc[-1].get("Cintura_Revision", m_calc["cintura"]) if not r_df.empty else m_calc["cintura"], m_calc["cintura"])
-            dif_p = round(peso_act - m_calc["peso"], 1)
-            dif_c = round(cintura_act - m_calc["cintura"], 1)
+        # Mini avatar
+        col_av2, col_st2 = st.columns([1,3])
+        with col_av2:
+            png_admin = generar_avatar_pillow(d_norm, m_calc, estado_act if estado_act!="SIN AUDITORÍA" else "Q1")
+            st.image(png_admin, width=160)
+        with col_st2:
+            badge_map = {
+                "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
+                "RETROCESO":     "<span class='badge-retroceso'>⚠️ RETROCESO</span>",
+                "LENTO":         "<span class='badge-lento'>⏳ LENTO</span>",
+                "SIN AUDITORÍA": "<span class='badge-lento'>📋 SIN Q2</span>",
+            }
+            sexo_ic = "👩" if "Femen" in m_calc.get("genero","") else "👨"
+            st.markdown(f"""
+            <div style="padding:8px 0;">
+              <div style="font-size:20px;font-weight:900;color:#0D1F14;">{d_norm.get('Nombre completo','')}</div>
+              <div style="margin:6px 0;">{badge_map.get(estado_act, badge_map['SIN AUDITORÍA'])}</div>
+              <div style="font-size:12px;color:#6B7280;">
+                {sexo_ic} {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg · {m_calc['estatura']} cm<br>
+                IMC: {m_calc['imc']} · {m_calc['origen']}
+              </div>
+            </div>""", unsafe_allow_html=True)
 
-            ma, mb, mc = st.columns(3)
-            with ma: render_metric_card("Peso", f"{peso_act} kg", f"{dif_p:+.1f} kg", "pos" if dif_p<=0 else "neg")
-            with mb: render_metric_card("Cintura", f"{cintura_act} cm", f"{dif_c:+.1f} cm", "pos" if dif_c<=0 else "neg")
-            with mc: render_metric_card("TDEE", str(m_calc["cals"]), "kcal/día", "neu")
+        # Deltas
+        peso_act   = pf(r_df.iloc[-1].get("Peso_Revision",m_calc["peso"]) if not r_df.empty else m_calc["peso"], m_calc["peso"])
+        cint_act   = pf(r_df.iloc[-1].get("Cintura_Revision",m_calc["cintura"]) if not r_df.empty else m_calc["cintura"], m_calc["cintura"])
+        dif_p2     = round(peso_act - m_calc["peso"],1)
+        dif_c2     = round(cint_act - m_calc["cintura"],1)
 
-            # Tabs de expediente
-            tab_q1_admin, tab_q2_admin = st.tabs(["📋 Dashboard Q1", "📊 Dashboard Q2"])
-            with tab_q1_admin:
-                mostrar_dashboard_q1(d_norm, m_calc, id_sel)
-            with tab_q2_admin:
-                mostrar_dashboard_q2(d_norm, m_calc, r_df, id_sel)
+        ma,mb,mc = st.columns(3)
+        with ma: metric_card("Peso", f"{peso_act} kg", f"{dif_p2:+.1f} kg", dif_p2<=0)
+        with mb: metric_card("Cintura", f"{cint_act} cm", f"{dif_c2:+.1f} cm", dif_c2<=0)
+        with mc: metric_card("TDEE Prescrito", f"{m_calc['cals']} kcal")
 
-            # PDF
-            try:
-                pdf_bytes = generar_pdf_mm247(d_norm, m_calc, r_df, id_sel)
-                st.download_button(
-                    "🖨️ DESCARGAR EXPEDIENTE PDF COMPLETO",
-                    data=pdf_bytes,
-                    file_name=f"MM247_Clinica_{id_sel}.pdf",
-                    mime="application/pdf"
-                )
-            except Exception as err:
-                st.error(f"Error generando PDF: {err}")
+        # Tabs Q1 / Q2
+        tab_q1, tab_q2 = st.tabs(["📋 Dashboard Q1 — Línea Base", "📊 Dashboard Q2 — Auditoría"])
+        with tab_q1:
+            dashboard_q1(d_norm, m_calc, por, id_sel)
+        with tab_q2:
+            dashboard_q2(d_norm, m_calc, r_df, id_sel)
+
+        # PDF
+        st.markdown("<div class='sec-head'>EXPORTAR EXPEDIENTE</div>", unsafe_allow_html=True)
+        try:
+            pdf_bytes = generar_pdf(d_norm, m_calc, por, r_df, id_sel)
+            st.download_button(
+                "🖨️ DESCARGAR EXPEDIENTE COMPLETO (PDF)",
+                data=pdf_bytes,
+                file_name=f"MM247_Expediente_{id_sel}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception as err:
+            st.error(f"Error generando PDF: {err}")
 
 
 # =============================================================================
-# 15. SIDEBAR Y ENRUTADOR PRINCIPAL
+# SIDEBAR Y ENRUTADOR PRINCIPAL
 # =============================================================================
-df_existente = cargar_base_datos()
+df_existente = cargar_db()
 
 with st.sidebar:
-    st.markdown("<div class='sidebar-logo'>MM247</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-tagline'>MIND · MUSCLE · ECOSYSTEM</div>", unsafe_allow_html=True)
-    st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align:center;padding:20px 0 10px;">
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:900;
+                  letter-spacing:4px;background:linear-gradient(135deg,#50C878,#B8F0CB);
+                  -webkit-background-clip:text;-webkit-text-fill-color:transparent;">MM247</div>
+      <div style="font-size:9px;letter-spacing:3px;color:#50C87880;text-transform:uppercase;
+                  margin-top:4px;">MIND · MUSCLE · ECOSYSTEM</div>
+    </div>
+    <hr style="border:none;border-top:1px solid #50C87825;margin:12px 0;">
+    """, unsafe_allow_html=True)
 
-    # ── Acceso Maestro ──────────────────────────────────────────────────────
-    admin_pass = st.text_input("⚙️ Acceso Maestro", type="password", key="admin_pass_input")
+    admin_pass = st.text_input("⚙️ Acceso Maestro", type="password", key="admin_pw")
 
-    st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size:10px;color:#50C87870;letter-spacing:2px;text-transform:uppercase;padding:4px 0;'>ÁREA DE CLIENTES</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <hr style="border:none;border-top:1px solid #50C87825;margin:12px 0;">
+    <div style="font-size:10px;color:#50C87870;letter-spacing:2px;text-transform:uppercase;padding:4px 0;">
+      ÁREA DE CLIENTES
+    </div>""", unsafe_allow_html=True)
 
-    # ── Botones de navegación clientes ─────────────────────────────────────
     if "vista" not in st.session_state:
         st.session_state.vista = "registro"
 
-    btn_reg_active = "active" if st.session_state.vista == "registro" else ""
-    btn_av_active  = "active" if st.session_state.vista == "avance"   else ""
-
-    if st.button("📝  Mi Registro MM247", key="btn_nav_registro", use_container_width=True):
+    if st.button("📝  Mi Registro MM247", key="btn_reg", use_container_width=True):
         st.session_state.vista = "registro"
-        if "step" in st.session_state: st.session_state.step = 1
-        if "db"   in st.session_state: st.session_state.db   = {}
+        st.session_state.step  = 1
+        st.session_state.db    = {}
         st.rerun()
 
-    if st.button("📈  Mi Avance MM247", key="btn_nav_avance", use_container_width=True):
+    if st.button("📈  Mi Avance MM247", key="btn_av", use_container_width=True):
         st.session_state.vista = "avance"
         st.rerun()
 
-    st.markdown("<hr class='sidebar-divider'>", unsafe_allow_html=True)
     st.markdown("""
-    <div style='background:#0D1F14;border:1px solid #50C87830;border-radius:8px;padding:10px 12px;margin-top:8px;'>
-      <div style='font-size:9px;letter-spacing:2px;color:#50C87870;text-transform:uppercase;'>Sistema</div>
-      <div style='font-size:10px;color:#4B7A5A;margin-top:4px;'>v7.0 · Mind Muscle Ecosystem</div>
-    </div>
-    """, unsafe_allow_html=True)
+    <hr style="border:none;border-top:1px solid #50C87825;margin:12px 0;">
+    <div style="background:#0D1F14;border:1px solid #50C87830;border-radius:8px;
+                padding:10px 12px;margin-top:8px;">
+      <div style="font-size:9px;letter-spacing:2px;color:#50C87870;">Sistema</div>
+      <div style="font-size:10px;color:#4B7A5A;margin-top:3px;">v8.0 · MM247 Ecosystem</div>
+    </div>""", unsafe_allow_html=True)
 
-# ── ENRUTADOR PRINCIPAL ─────────────────────────────────────────────────────
-if admin_pass == CONFIG["admin_password"]:
-    mostrar_dashboard_admin(df_existente)
+# ── ENRUTADOR ────────────────────────────────────────────────────────────────
+if admin_pass == CONFIG["admin_pass"]:
+    dashboard_admin(df_existente)
 
-elif admin_pass and admin_pass != CONFIG["admin_password"]:
+elif admin_pass and admin_pass != CONFIG["admin_pass"]:
     st.error("🔑 Clave maestra incorrecta.")
 
 else:
-    # Vista clientes según selección del sidebar
-    vista = st.session_state.get("vista", "registro")
-
+    vista = st.session_state.get("vista","registro")
     if vista == "registro":
-        mostrar_formulario_q1(df_existente)
-
+        formulario_q1(df_existente)
     elif vista == "avance":
-        mostrar_formulario_q2(df_existente)
+        formulario_q2(df_existente)
+
