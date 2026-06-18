@@ -483,261 +483,155 @@ def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
 # =============================================================================
 # AVATAR — PILLOW LOCAL (SIN INTERNET)
 # =============================================================================
-def generar_avatar_pillow(norm: dict, mot: dict, estado: str = "Q1") -> bytes:
+def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, estado: str = "Q1") -> bytes:
     """
-    Avatar cartoon fitness con geometría verificada y supersampling 4x.
-    Plano vertical fijo: cabeza, cuello, torso trapezoidal, brazos rectos,
-    caderas, piernas separadas correctas hasta los pies.
+    Toma la foto real de frente del cliente y dibuja overlays de análisis:
+    - Zona de enfoque muscular según objetivo (proporcional al cuerpo en la foto)
+    - Marcador de lesión en la zona anatómica correspondiente
+    - Badge de estado (Q1 / AVANCE / RETROCESO / LENTO)
+    Retorna la foto procesada como PNG bytes.
     """
     from PIL import Image, ImageDraw, ImageFont
 
-    S = 4
-    W, H = 300 * S, 450 * S
-    img = Image.new("RGBA", (W, H), (15, 35, 22, 255))
-    d   = ImageDraw.Draw(img)
+    img = Image.open(io.BytesIO(foto_bytes)).convert("RGBA")
+    W, H = img.size
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
 
-    def s(v): return int(v * S)
-
-    es_mujer = "Femen" in str(norm.get("Sexo", "Masculino"))
-    imc      = mot.get("imc", 22.0)
     objetivo = str(norm.get("Objetivo principal", ""))
     lesion   = str(norm.get("Lesión actual", "Ninguna"))
-    nivel    = str(norm.get("Tiempo entrenando", ""))
-    nombre   = str(norm.get("Nombre completo", "Atleta"))[:14].upper()
 
-    skin   = (245, 197, 163) if not es_mujer else (242, 184, 138)
-    shadow = (200, 155, 120) if not es_mujer else (195, 145, 105)
-    hair   = (51, 35, 20)    if not es_mujer else (101, 52, 15)
-
+    # ── Color de estado ──────────────────────────────────────────────────
     if estado == "AVANCE":
-        accent = (34, 197, 94); outfit = (22, 101, 52)
+        ring_col = (34, 197, 94, 255)
     elif estado == "RETROCESO":
-        accent = (239, 68, 68); outfit = (127, 29, 29)
+        ring_col = (239, 68, 68, 255)
     elif estado == "LENTO":
-        accent = (245, 158, 11); outfit = (120, 53, 15)
+        ring_col = (245, 158, 11, 255)
     else:
-        accent = (80, 200, 120)
-        outfit = (26, 61, 36) if not es_mujer else (124, 61, 138)
+        ring_col = (80, 200, 120, 255)
 
+    # ── Proporciones corporales estimadas (basado en proporción humana estándar) ──
+    # La cabeza ocupa aprox. el primer 12% de la altura de una foto de cuerpo completo
+    # Hombros ~18%, cintura ~45%, caderas ~52%, rodillas ~75%, pies ~98%
+    y_cabeza  = int(H * 0.10)
+    y_hombros = int(H * 0.20)
+    y_pecho   = int(H * 0.28)
+    y_cintura = int(H * 0.45)
+    y_cadera  = int(H * 0.52)
+    y_rodilla = int(H * 0.76)
     cx = W // 2
 
-    # ── PLANO VERTICAL FIJO (verificado visualmente) ───────────────────────
-    head_top, head_bot = s(20), s(80)
-    cy_h = (head_top + head_bot) // 2
-    hr   = (head_bot - head_top) // 2
-
-    neck_y  = head_bot
-    sho_y   = s(95)
-    waist_y = s(210)
-    hip_y   = s(240)
-    knee_y  = s(330)
-    foot_y  = s(415)
-
-    # ── Anchos según IMC ─────────────────────────────────────────────────
-    if imc < 18.5:   tw, hw, lw = s(50), s(55), s(16)
-    elif imc < 25:   tw, hw, lw = s(62), s(68), s(20)
-    elif imc < 30:   tw, hw, lw = s(76), s(84), s(24)
-    else:            tw, hw, lw = s(90), s(98), s(28)
-    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
-        tw = min(tw + s(10), s(95))
-    sw = tw + s(14)
-
-    # ── Fondo degradado ──────────────────────────────────────────────────
-    for r in range(s(200), 0, -3):
-        t = r / s(200)
-        c = (int(15+t*15), int(35+t*25), int(22+t*15), 255)
-        d.ellipse([(cx-r, cy_h-r), (cx+r, cy_h+r)], fill=c)
-    # Grid sutil
-    for gx in range(0, W, s(15)):
-        d.line([(gx,0),(gx,H)], fill=(80,200,120,8))
-    for gy in range(0, H, s(15)):
-        d.line([(0,gy),(W,gy)], fill=(80,200,120,8))
-
-    # ── Anillo de estado pulsante (capas) ───────────────────────────────
-    rr = hr + s(20)
-    for i in range(3, 0, -1):
-        ri = rr + i*s(5)
-        ring = Image.new("RGBA", (W,H), (0,0,0,0))
-        rd = ImageDraw.Draw(ring)
-        rd.ellipse([(cx-ri,cy_h-ri),(cx+ri,cy_h+ri)], outline=accent+(90-i*20,), width=s(3))
-        img = Image.alpha_composite(img, ring); d = ImageDraw.Draw(img)
-    d.ellipse([(cx-rr,cy_h-rr),(cx+rr,cy_h+rr)], outline=accent, width=s(3))
-
-    # ── Cabello ──────────────────────────────────────────────────────────
-    if es_mujer:
-        d.ellipse([(cx-hr-s(12), head_top-s(8)),(cx+hr+s(12), cy_h+s(4))], fill=hair)
-        d.ellipse([(cx-hr-s(18), cy_h-s(10)),  (cx-hr+s(6),  head_bot+s(55))], fill=hair)
-        d.ellipse([(cx+hr-s(6),  cy_h-s(10)),  (cx+hr+s(18), head_bot+s(55))], fill=hair)
-    else:
-        d.ellipse([(cx-hr-s(5), head_top-s(10)),(cx+hr+s(5), cy_h+s(2))], fill=hair)
-        d.ellipse([(cx-hr-s(3), cy_h-s(6)),    (cx-hr+s(12), cy_h+s(14))], fill=hair)
-        d.ellipse([(cx+hr-s(12),cy_h-s(6)),    (cx+hr+s(3),  cy_h+s(14))], fill=hair)
-
-    # ── Cabeza ───────────────────────────────────────────────────────────
-    d.ellipse([(cx-hr,head_top),(cx+hr,head_bot)], fill=skin, outline=shadow, width=s(2))
-
-    # Ojos
-    ey, er = cy_h - s(4), s(8)
-    for ex in [cx-s(14), cx+s(14)]:
-        d.ellipse([(ex-er,ey-er),(ex+er,ey+er)], fill=(255,255,255), outline=(30,15,5), width=s(1))
-        d.ellipse([(ex-s(4),ey-s(4)),(ex+s(4),ey+s(4))], fill=(45,28,15))
-        d.ellipse([(ex-s(1),ey-s(2)),(ex+s(2),ey+s(1))], fill=(255,255,255))
-
-    # Cejas
-    for bx in [cx-s(14), cx+s(14)]:
-        d.arc([(bx-s(11),ey-s(12)),(bx+s(11),ey-s(2))], 195, 345, fill=hair, width=s(2))
-
-    # Nariz
-    d.line([(cx, cy_h+s(2)),(cx, cy_h+s(8))], fill=shadow, width=s(2))
-
-    # Boca según estado
-    my = cy_h + s(15)
-    if estado == "AVANCE":
-        d.arc([(cx-s(10),my-s(3)),(cx+s(10),my+s(6))], 0, 180, fill=(150,70,55), width=s(3))
-    elif estado == "RETROCESO":
-        d.arc([(cx-s(10),my),(cx+s(10),my+s(8))], 180, 360, fill=(150,70,55), width=s(3))
-    else:
-        d.line([(cx-s(9),my+s(2)),(cx+s(9),my+s(2))], fill=(150,70,55), width=s(3))
-
-    # Mejillas
-    for chx in [cx-s(18), cx+s(18)]:
-        ch = Image.new("RGBA",(W,H),(0,0,0,0)); cd=ImageDraw.Draw(ch)
-        cd.ellipse([(chx-s(8),my-s(6)),(chx+s(8),my+s(3))], fill=(235,130,120,60))
-        img = Image.alpha_composite(img, ch); d = ImageDraw.Draw(img)
-
-    # ── Cuello ───────────────────────────────────────────────────────────
-    nw = s(9)
-    d.rectangle([(cx-nw,neck_y),(cx+nw,sho_y)], fill=skin)
-
-    # ── Torso (trapecio hombros→cintura) ───────────────────────────────
-    torso = [(cx-sw//2,sho_y),(cx+sw//2,sho_y),(cx+tw//2,waist_y),(cx-tw//2,waist_y)]
-    d.polygon(torso, fill=skin, outline=shadow, width=s(1))
-
-    ropa = [(cx-sw//2+s(3),sho_y+s(4)),(cx+sw//2-s(3),sho_y+s(4)),
-            (cx+tw//2-s(2),waist_y),(cx-tw//2+s(2),waist_y)]
-    d.polygon(ropa, fill=outfit)
-
-    if es_mujer:
-        for side in [-1,1]:
-            d.line([(cx+side*sw//2-side*s(8), sho_y+s(4)),(cx+side*s(6), sho_y-s(3))],
-                   fill=accent, width=s(4))
-    else:
-        d.line([(cx, sho_y+s(6)),(cx, sho_y+s(40))], fill=(0,0,0,40), width=s(2))
-        for ay in range(sho_y+s(45), waist_y-s(8), s(14)):
-            d.line([(cx-s(10),ay),(cx+s(10),ay)], fill=(0,0,0,25), width=s(1))
-
-    # Hombros redondeados
-    for sx in [cx-sw//2, cx+sw//2]:
-        d.ellipse([(sx-s(10),sho_y-s(6)),(sx+s(10),sho_y+s(12))], fill=skin, outline=shadow, width=s(1))
-
-    # ── Brazos rectos a los lados ────────────────────────────────────────
-    arm_w   = s(16) if not es_mujer else s(12)
-    arm_bot = waist_y + s(15)
-    for side in [-1, 1]:
-        ax = cx + side*sw//2
-        d.line([(ax, sho_y+s(5)),(ax+side*s(3), arm_bot)], fill=skin, width=arm_w)
-        d.ellipse([(ax+side*s(3)-s(8),arm_bot-s(6)),(ax+side*s(3)+s(8),arm_bot+s(9))], fill=skin)
-        if not es_mujer:
-            bx = ax + side*s(2); by = sho_y + s(28)
-            d.ellipse([(bx-s(11),by-s(8)),(bx+s(11),by+s(8))], fill=skin, outline=shadow, width=s(1))
-
-    # ── Caderas ──────────────────────────────────────────────────────────
-    short_col = (109,40,217) if es_mujer else (17,24,39)
-    hip_poly  = [(cx-tw//2,waist_y),(cx+tw//2,waist_y),(cx+hw//2,hip_y),(cx-hw//2,hip_y)]
-    d.polygon(hip_poly, fill=short_col)
-
-    # ── Piernas separadas, rectas hip→knee→foot ─────────────────────────
-    leg_gap = s(6)
-    leg_x = {}
-    for side in [-1, 1]:
-        lx = cx + side*(leg_gap + lw//2)
-        leg_x[side] = lx
-        d.line([(lx,hip_y),(lx,knee_y)], fill=skin, width=lw+s(6))
-        d.line([(lx,hip_y),(lx,knee_y)], fill=short_col, width=lw)
-        d.line([(lx,knee_y),(lx,foot_y)], fill=skin, width=lw)
-        d.ellipse([(lx-s(9),knee_y-s(9)),(lx+s(9),knee_y+s(9))], fill=skin, outline=shadow, width=s(1))
-        # Zapatilla
-        d.ellipse([(lx-s(15),foot_y-s(4)),(lx+s(15),foot_y+s(13))], fill=(20,20,40))
-        d.ellipse([(lx-s(12),foot_y-s(2)),(lx+s(10),foot_y+s(8))], fill=accent)
-        d.line([(lx-s(9),foot_y+s(1)),(lx+s(7),foot_y+s(1))], fill=(255,255,255,90), width=s(1))
-
-    # ── Zonas musculares señalizadas ─────────────────────────────────────
-    ov = Image.new("RGBA",(W,H),(0,0,0,0)); od = ImageDraw.Draw(ov)
-    if "grasa" in objetivo or "Perder" in objetivo:
-        od.rectangle([(cx-s(22),waist_y-s(18)),(cx+s(22),waist_y-s(2))],
-                     fill=(255,107,53,75), outline=(255,107,53,220), width=s(2))
-        od.rectangle([(cx-hw//2+s(4),hip_y-s(10)),(cx+hw//2-s(4),hip_y+s(8))],
-                     fill=(255,107,53,55), outline=(255,107,53,170), width=s(2))
-    elif "muscular" in objetivo or "Ganar" in objetivo:
-        od.rectangle([(cx-sw//2+s(6),sho_y+s(6)),(cx+sw//2-s(6),sho_y+s(30))],
-                     fill=(59,130,246,70), outline=(59,130,246,210), width=s(2))
-        od.rectangle([(cx-sw//2+s(6),sho_y+s(34)),(cx+sw//2-s(6),sho_y+s(56))],
-                     fill=(139,92,246,60), outline=(139,92,246,190), width=s(2))
-        for side in [-1,1]:
-            lx = leg_x[side]
-            od.rectangle([(lx-s(12),hip_y+s(6)),(lx+s(12),knee_y-s(10))],
-                         fill=(16,185,129,55), outline=(16,185,129,180), width=s(2))
-    else:
-        od.rectangle([(cx-s(16),waist_y-s(14)),(cx+s(16),waist_y-s(2))],
-                     fill=(255,107,53,65), outline=(255,107,53,200), width=s(2))
-        od.rectangle([(cx-hw//2+s(4),hip_y-s(8)),(cx+hw//2-s(4),hip_y+s(8))],
-                     fill=(236,72,153,55), outline=(236,72,153,180), width=s(2))
-    img = Image.alpha_composite(img, ov); d = ImageDraw.Draw(img)
-
-    # ── Marcadores de lesión ─────────────────────────────────────────────
-    if "Rodilla" in lesion:
-        for side in [-1,1]:
-            lx = leg_x[side]
-            for r,a in [(s(13),160),(s(9),220),(s(5),255)]:
-                d.ellipse([(lx-r,knee_y-r),(lx+r,knee_y+r)], fill=(239,68,68,a))
-    elif "Hombro" in lesion:
-        for sx2 in [cx-sw//2, cx+sw//2]:
-            for r,a in [(s(13),160),(s(9),220),(s(5),255)]:
-                d.ellipse([(sx2-r,sho_y-r),(sx2+r,sho_y+r)], fill=(239,68,68,a))
-    elif "Espalda" in lesion:
-        d.ellipse([(cx-s(16),waist_y-s(20)),(cx+s(16),waist_y-s(2))], fill=(239,68,68,200))
-    elif "Cervical" in lesion:
-        d.ellipse([(cx-s(11),neck_y),(cx+s(11),neck_y+s(16))], fill=(239,68,68,200))
-
-    # ── Badge nivel ──────────────────────────────────────────────────────
-    if "Más de 3" in nivel:   nb,nc = "PRO",(255,215,0)
-    elif "1 a 3" in nivel:    nb,nc = "INT",(192,192,192)
-    elif "6 meses" in nivel:  nb,nc = "MED",(205,127,50)
-    else:                      nb,nc = "INI",(80,200,120)
-    d.ellipse([(W-s(40),s(10)),(W-s(10),s(30))], fill=nc)
+    # ── Badge de estado (esquina superior) ──────────────────────────────
+    badge_w = int(W * 0.28)
+    badge_h = int(H * 0.045)
+    d.rounded_rectangle(
+        [(cx - badge_w//2, int(H*0.02)), (cx + badge_w//2, int(H*0.02) + badge_h)],
+        radius=badge_h//2, fill=ring_col
+    )
     try:
-        fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", s(8))
+        fnt_size = max(12, int(H * 0.022))
+        fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fnt_size)
     except Exception:
         fnt = ImageFont.load_default()
-    d.text((W-s(34),s(14)), nb, fill=(0,0,0), font=fnt)
+    label_estado = estado if estado in ("AVANCE","RETROCESO","LENTO") else "LÍNEA BASE"
+    bbox = d.textbbox((0,0), label_estado, font=fnt)
+    tw_txt = bbox[2]-bbox[0]
+    d.text((cx - tw_txt//2, int(H*0.02) + badge_h//2 - fnt_size//2),
+           label_estado, fill=(255,255,255,255), font=fnt)
 
-    if estado in ("AVANCE","RETROCESO","LENTO"):
-        bd = {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}[estado]
-        bw2 = s(55)
-        d.rounded_rectangle([(cx-bw2,s(8)),(cx+bw2,s(26))], radius=s(8), fill=bd)
-        d.text((cx-s(24),s(11)), estado, fill=(255,255,255), font=fnt)
+    # ── Anillo alrededor de la cabeza ────────────────────────────────────
+    head_r = int(W * 0.13)
+    d.ellipse([(cx-head_r, y_cabeza-head_r//2), (cx+head_r, y_cabeza+head_r)],
+              outline=ring_col, width=max(2, int(W*0.006)))
 
-    # Sombra suelo
-    d.ellipse([(cx-s(38),foot_y+s(12)),(cx+s(38),foot_y+s(22))], fill=(0,0,0,70))
+    # ── Zona de enfoque según objetivo ───────────────────────────────────
+    zona_w = int(W * 0.32)
 
-    # Nombre
-    d.text((cx-s(48), H-s(24)), nombre, fill=accent, font=fnt)
+    def caja(y_top, y_bot, color, label):
+        d.rectangle([(cx-zona_w//2, y_top), (cx+zona_w//2, y_bot)],
+                    fill=color+(70,), outline=color+(220,), width=max(2,int(W*0.005)))
+        fs = max(10, int(H*0.018))
+        try:
+            f2 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
+        except Exception:
+            f2 = ImageFont.load_default()
+        bb = d.textbbox((0,0), label, font=f2)
+        lw_txt = bb[2]-bb[0]
+        d.text((cx-lw_txt//2, (y_top+y_bot)//2 - fs//2), label, fill=(255,255,255,255), font=f2)
 
-    # ── Reducir 4x → calidad final con antialias ─────────────────────────
-    final = img.resize((300,450), Image.LANCZOS)
+    if "grasa" in objetivo or "Perder" in objetivo:
+        caja(y_cintura - int(H*0.04), y_cintura + int(H*0.03), (255,107,53), "ABDOMEN")
+        caja(y_cadera, y_cadera + int(H*0.05), (255,107,53), "CARDIO")
+    elif "muscular" in objetivo or "Ganar" in objetivo:
+        caja(y_pecho - int(H*0.02), y_pecho + int(H*0.05), (59,130,246), "PECHO")
+        caja(y_hombros, y_hombros + int(H*0.03), (139,92,246), "HOMBROS")
+        caja(y_rodilla - int(H*0.10), y_rodilla - int(H*0.02), (16,185,129), "CUÁDRICEPS")
+    else:
+        caja(y_pecho, y_pecho + int(H*0.04), (59,130,246), "PECHO")
+        caja(y_cintura - int(H*0.02), y_cintura + int(H*0.03), (255,107,53), "ABS")
+        caja(y_cadera, y_cadera + int(H*0.04), (236,72,153), "GLÚTEO")
+
+    # ── Marcador de lesión en zona anatómica ─────────────────────────────
+    def marcador(yc, label):
+        r = int(W * 0.045)
+        for ri, alpha in [(r*1.6,140),(r*1.2,200),(r,255)]:
+            d.ellipse([(cx-ri, yc-ri),(cx+ri, yc+ri)], fill=(239,68,68,alpha))
+        fs = max(9, int(H*0.015))
+        try:
+            f3 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
+        except Exception:
+            f3 = ImageFont.load_default()
+        bb = d.textbbox((0,0), "!", font=f3)
+        d.text((cx-(bb[2]-bb[0])//2, yc-fs//2), "!", fill=(255,255,255,255), font=f3)
+
+    if "Rodilla" in lesion:
+        marcador(y_rodilla, "RODILLA")
+    elif "Hombro" in lesion:
+        d.ellipse([(cx-int(W*0.20)-int(W*0.05), y_hombros-int(W*0.05)),
+                   (cx-int(W*0.20)+int(W*0.05), y_hombros+int(W*0.05))], fill=(239,68,68,220))
+        d.ellipse([(cx+int(W*0.20)-int(W*0.05), y_hombros-int(W*0.05)),
+                   (cx+int(W*0.20)+int(W*0.05), y_hombros+int(W*0.05))], fill=(239,68,68,220))
+    elif "Espalda" in lesion:
+        marcador(y_cintura, "ESPALDA")
+    elif "Cervical" in lesion:
+        marcador(y_hombros - int(H*0.04), "CERVICAL")
+
+    # ── Componer overlay sobre la foto ───────────────────────────────────
+    result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
-    final.save(buf, "PNG", optimize=True)
+    result.save(buf, "JPEG", quality=90)
     buf.seek(0)
     return buf.getvalue()
 
 
-def render_avatar(norm: dict, mot: dict, estado: str = "Q1", height: int = 280):
-    """Genera y muestra avatar HD."""
-    png = generar_avatar_pillow(norm, mot, estado)
-    col_a, col_b, col_c = st.columns([1, 2, 1])
-    with col_b:
-        st.image(png, width=height)
-
+def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", height: int = 320):
+    """
+    Muestra la foto de frente del cliente con señalizaciones de análisis dibujadas.
+    Si no hay foto de frente disponible, muestra mensaje informativo.
+    """
+    foto_frente = cargar_foto_disco(id_al, "frente", etapa)
+    if foto_frente:
+        try:
+            procesada = analizar_foto_con_senalizaciones(foto_frente, norm, mot, estado)
+            col_a, col_b, col_c = st.columns([1, 2, 1])
+            with col_b:
+                st.image(procesada, width=height)
+        except Exception as e:
+            st.warning(f"No se pudo procesar el análisis visual: {e}")
+    else:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
+                    border:2px dashed #50C87850;border-radius:16px;
+                    padding:40px;text-align:center;margin:16px 0;">
+          <div style="font-size:40px;">📸</div>
+          <div style="font-size:14px;color:#8FC99E;margin-top:10px;font-weight:600;">
+            Sube tu foto de frente para ver el análisis visual
+          </div>
+          <div style="font-size:11px;color:#50C87880;margin-top:6px;">
+            Las señalizaciones de zonas de enfoque se generan sobre tu fotografía real
+          </div>
+        </div>""", unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -792,14 +686,16 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
     c.showPage() if False else None
     y = header_page("HOJA 1 — PERFIL CLÍNICO Y LÍNEA BASE")
 
-    # Avatar al lado derecho
+    # Análisis visual sobre foto real (lado derecho)
     try:
-        av_bytes = generar_avatar_pillow(norm, mot, "Q1")
-        av_img   = Image.open(io.BytesIO(av_bytes))
-        av_img.thumbnail((160, 240))
-        av_path  = f"/tmp/mm247_fotos/av_{id_al}_q1.png"
-        av_img.save(av_path)
-        c.drawImage(av_path, W-180, y-220, width=150, height=220, preserveAspectRatio=True)
+        foto_frente = cargar_foto_disco(id_al, "frente", "q1")
+        if foto_frente:
+            av_bytes = analizar_foto_con_senalizaciones(foto_frente, norm, mot, "Q1")
+            av_img   = Image.open(io.BytesIO(av_bytes))
+            av_img.thumbnail((160, 240))
+            av_path  = f"/tmp/mm247_fotos/an_{id_al}_q1.jpg"
+            av_img.save(av_path)
+            c.drawImage(av_path, W-180, y-220, width=150, height=220, preserveAspectRatio=True)
     except Exception:
         pass
 
@@ -1027,16 +923,22 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
 
     y -= (foto_h + 30)
 
-    # Avatar Q1 en PDF
+    # Análisis visual sobre foto real en PDF
     c.setFont("Helvetica-Bold", 10)
     c.setFillColor(VERDE)
-    c.drawString(60, y, "AVATAR DE ANÁLISIS (ZONAS DE ENFOQUE Y SEÑALIZACIONES)")
+    c.drawString(60, y, "ANÁLISIS VISUAL (ZONAS DE ENFOQUE Y SEÑALIZACIONES)")
     y -= 16
     try:
-        av_bytes = generar_avatar_pillow(norm, mot, "Q1")
-        av_path  = f"/tmp/mm247_fotos/av_pdf_{id_al}_q1.png"
-        with open(av_path,"wb") as f: f.write(av_bytes)
-        c.drawImage(av_path, W//2-80, y-240, width=160, height=240, preserveAspectRatio=True)
+        foto_frente_an = cargar_foto_disco(id_al, "frente", "q1")
+        if foto_frente_an:
+            av_bytes = analizar_foto_con_senalizaciones(foto_frente_an, norm, mot, "Q1")
+            av_path  = f"/tmp/mm247_fotos/an_pdf_{id_al}_q1.jpg"
+            with open(av_path,"wb") as f: f.write(av_bytes)
+            c.drawImage(av_path, W//2-80, y-240, width=160, height=240, preserveAspectRatio=True)
+        else:
+            c.setFillColor(color_mm(150,150,150))
+            c.setFont("Helvetica", 9)
+            c.drawCentredString(W//2, y-100, "Sin foto de frente disponible para análisis")
     except Exception:
         pass
 
@@ -1098,15 +1000,21 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
 
         y -= (foto_h + 30)
 
-        # Avatar Q2
+        # Análisis visual Q2 sobre foto real
         c.setFont("Helvetica-Bold",10); c.setFillColor(VERDE)
-        c.drawString(60, y, f"AVATAR Q2 — DICTAMEN: {estado}")
+        c.drawString(60, y, f"ANÁLISIS VISUAL Q2 — DICTAMEN: {estado}")
         y -= 16
         try:
-            av2_bytes = generar_avatar_pillow(norm, mot, estado)
-            av2_path  = f"/tmp/mm247_fotos/av_pdf_{id_al}_q2.png"
-            with open(av2_path,"wb") as f: f.write(av2_bytes)
-            c.drawImage(av2_path, W//2-80, y-220, width=160, height=220, preserveAspectRatio=True)
+            foto_frente_q2 = cargar_foto_disco(id_al, "frente", "q2")
+            if foto_frente_q2:
+                av2_bytes = analizar_foto_con_senalizaciones(foto_frente_q2, norm, mot, estado)
+                av2_path  = f"/tmp/mm247_fotos/an_pdf_{id_al}_q2.jpg"
+                with open(av2_path,"wb") as f: f.write(av2_bytes)
+                c.drawImage(av2_path, W//2-80, y-220, width=160, height=220, preserveAspectRatio=True)
+            else:
+                c.setFillColor(color_mm(150,150,150))
+                c.setFont("Helvetica", 9)
+                c.drawCentredString(W//2, y-100, "Sin foto de frente Q2 disponible")
         except Exception:
             pass
 
@@ -1174,11 +1082,10 @@ def dashboard_q1(norm, mot, por, id_al):
     pasos  = calcular_pasos_diarios(norm, mot)
     render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
 
-    # Avatar + zonas
+    # Análisis visual sobre foto real + zonas
     col_av, col_info = st.columns([1, 2])
     with col_av:
-        png = generar_avatar_pillow(norm, mot, "Q1")
-        st.image(png, width=240)
+        mostrar_analisis_visual(id_al, norm, mot, etapa="q1", estado="Q1", height=260)
         lesion = norm.get("Lesión actual","Ninguna")
         imc = mot["imc"]
         comp = ("🔹 Delgado/a" if imc<18.5 else "🟢 Normal" if imc<25 else "🟡 Sobrepeso" if imc<30 else "🔴 Obesidad")
@@ -1388,11 +1295,10 @@ def dashboard_q2(norm, mot, revs_df, id_al):
 
     render_hero("AUDITORÍA COMPARATIVA Q1 vs Q2", "MI AVANCE MM247", id_al)
 
-    # Avatar Q2 + análisis dinámico
+    # Foto de frente Q2 con señalizaciones de avance/retroceso
     col_av, col_info = st.columns([1, 2])
     with col_av:
-        png = generar_avatar_pillow(norm, mot, estado)
-        st.image(png, width=240)
+        mostrar_analisis_visual(id_al, norm, mot, etapa="q2", estado=estado, height=260)
         col_p = "#22C55E" if dif_p<=0 else "#EF4444"
         col_c = "#22C55E" if dif_c<=0 else "#EF4444"
         st.markdown(f"""
@@ -1946,11 +1852,12 @@ def dashboard_admin(df_existente):
         if not r_df.empty:
             estado_act = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
 
-        # Mini avatar
+        # Análisis visual sobre foto real
         col_av2, col_st2 = st.columns([1,3])
         with col_av2:
-            png_admin = generar_avatar_pillow(d_norm, m_calc, estado_act if estado_act!="SIN AUDITORÍA" else "Q1")
-            st.image(png_admin, width=160)
+            etapa_admin = "q2" if not r_df.empty else "q1"
+            estado_render = estado_act if estado_act != "SIN AUDITORÍA" else "Q1"
+            mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, height=200)
         with col_st2:
             badge_map = {
                 "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
