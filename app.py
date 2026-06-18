@@ -382,6 +382,56 @@ def calcular_porciones(norm: dict, mot: dict) -> dict:
     }
 
 
+def calcular_pasos_diarios(norm: dict, mot: dict) -> dict:
+    """
+    Calcula pasos diarios recomendados según objetivo, peso, IMC y nivel de actividad.
+    Basado en gasto calórico estimado por pasos (~0.04-0.05 kcal/paso según peso).
+    """
+    objetivo = str(norm.get("Objetivo principal",""))
+    actividad= str(norm.get("Nivel de actividad",""))
+    peso     = mot["peso"]
+    imc      = mot["imc"]
+
+    # Base según nivel de actividad declarado
+    base_map = {
+        "Sedentario": 6000,
+        "Poco activo": 7500,
+        "Moderadamente activo": 9000,
+        "Muy activo": 11000,
+    }
+    base = base_map.get(actividad, 8000)
+
+    # Ajuste por objetivo
+    if "grasa" in objetivo or "Perder" in objetivo:
+        ajuste = 2000   # más pasos para déficit
+    elif "muscular" in objetivo or "Ganar" in objetivo:
+        ajuste = -500    # menos prioridad cardio, preservar energía para fuerza
+    else:
+        ajuste = 500     # recomposición: pasos moderados extra
+
+    # Ajuste por IMC (sobrepeso necesita más pasos de bajo impacto)
+    if imc >= 30:
+        ajuste += 1500
+    elif imc >= 25:
+        ajuste += 800
+
+    pasos_meta = max(5000, base + ajuste)
+    pasos_meta = round(pasos_meta / 500) * 500  # redondear a 500
+
+    # Calorías estimadas quemadas por los pasos
+    kcal_por_paso = 0.0005 * peso  # aproximación
+    kcal_pasos = round(pasos_meta * kcal_por_paso)
+
+    # Distancia aproximada (paso promedio 0.75m)
+    km_aprox = round((pasos_meta * 0.75) / 1000, 1)
+
+    return {
+        "pasos_meta": pasos_meta,
+        "kcal_pasos": kcal_pasos,
+        "km_aprox": km_aprox,
+    }
+
+
 # =============================================================================
 # FOTOS — PERSISTENCIA EN DISCO
 # =============================================================================
@@ -435,308 +485,259 @@ def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
 # =============================================================================
 def generar_avatar_pillow(norm: dict, mot: dict, estado: str = "Q1") -> bytes:
     """
-    Genera avatar fitness de alta calidad con Pillow.
-    Diferencia género, complexión, objetivo, lesiones, estado Q2.
-    Retorna bytes PNG.
+    Avatar cartoon fitness con geometría verificada y supersampling 4x.
+    Plano vertical fijo: cabeza, cuello, torso trapezoidal, brazos rectos,
+    caderas, piernas separadas correctas hasta los pies.
     """
-    W, H = 320, 480
-    img  = Image.new("RGB", (W, H), "#0F2417")
-    d    = ImageDraw.Draw(img)
+    from PIL import Image, ImageDraw, ImageFont
 
-    es_mujer = "Femen" in str(norm.get("Sexo","Masculino"))
+    S = 4
+    W, H = 300 * S, 450 * S
+    img = Image.new("RGBA", (W, H), (15, 35, 22, 255))
+    d   = ImageDraw.Draw(img)
+
+    def s(v): return int(v * S)
+
+    es_mujer = "Femen" in str(norm.get("Sexo", "Masculino"))
     imc      = mot.get("imc", 22.0)
-    objetivo = str(norm.get("Objetivo principal",""))
-    lesion   = str(norm.get("Lesión actual","Ninguna"))
-    nombre   = str(norm.get("Nombre completo","Atleta"))[:14].upper()
-    nivel    = str(norm.get("Tiempo entrenando",""))
+    objetivo = str(norm.get("Objetivo principal", ""))
+    lesion   = str(norm.get("Lesión actual", "Ninguna"))
+    nivel    = str(norm.get("Tiempo entrenando", ""))
+    nombre   = str(norm.get("Nombre completo", "Atleta"))[:14].upper()
 
-    # ── Paleta ────────────────────────────────────────────────────────────────
-    skin  = "#F5C5A3" if not es_mujer else "#F2B898"
-    hair  = (51, 35, 20)   if not es_mujer else (100, 50, 20)
-    acc_col = {"AVANCE":"#22C55E","RETROCESO":"#EF4444","LENTO":"#F59E0B"}.get(estado,"#50C878")
-    ring_rgb= {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}.get(estado,(80,200,120))
+    skin   = (245, 197, 163) if not es_mujer else (242, 184, 138)
+    shadow = (200, 155, 120) if not es_mujer else (195, 145, 105)
+    hair   = (51, 35, 20)    if not es_mujer else (101, 52, 15)
 
-    # ── Complexión según IMC ──────────────────────────────────────────────────
-    if imc < 18.5:   comp, torso_w, pierna_w = "delgado",  52, 16
-    elif imc < 25:   comp, torso_w, pierna_w = "normal",   64, 20
-    elif imc < 30:   comp, torso_w, pierna_w = "sobrepeso",76, 24
-    else:            comp, torso_w, pierna_w = "obeso",    88, 28
-
-    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
-        torso_w = min(torso_w + 12, 96)
+    if estado == "AVANCE":
+        accent = (34, 197, 94); outfit = (22, 101, 52)
+    elif estado == "RETROCESO":
+        accent = (239, 68, 68); outfit = (127, 29, 29)
+    elif estado == "LENTO":
+        accent = (245, 158, 11); outfit = (120, 53, 15)
+    else:
+        accent = (80, 200, 120)
+        outfit = (26, 61, 36) if not es_mujer else (124, 61, 138)
 
     cx = W // 2
 
-    # ── Fondo degradado ───────────────────────────────────────────────────────
-    for y in range(H):
-        t = y / H
-        r = int(15 + t * 10)
-        g = int(36 + t * 15)
-        b = int(23 + t * 8)
-        d.line([(0, y), (W, y)], fill=(r, g, b))
+    # ── PLANO VERTICAL FIJO (verificado visualmente) ───────────────────────
+    head_top, head_bot = s(20), s(80)
+    cy_h = (head_top + head_bot) // 2
+    hr   = (head_bot - head_top) // 2
 
-    # ── Grid decorativo ───────────────────────────────────────────────────────
-    for x in range(0, W, 24):
-        d.line([(x,0),(x,H)], fill=(80,200,120,15), width=1)
-    for y in range(0, H, 24):
-        d.line([(0,y),(W,y)], fill=(80,200,120,15), width=1)
+    neck_y  = head_bot
+    sho_y   = s(95)
+    waist_y = s(210)
+    hip_y   = s(240)
+    knee_y  = s(330)
+    foot_y  = s(415)
 
-    # ── Anillo de estado ──────────────────────────────────────────────────────
-    cy_head = 72
-    r_ring  = 40
+    # ── Anchos según IMC ─────────────────────────────────────────────────
+    if imc < 18.5:   tw, hw, lw = s(50), s(55), s(16)
+    elif imc < 25:   tw, hw, lw = s(62), s(68), s(20)
+    elif imc < 30:   tw, hw, lw = s(76), s(84), s(24)
+    else:            tw, hw, lw = s(90), s(98), s(28)
+    if any(k in objetivo for k in ("Ganar","muscular","Volumen")):
+        tw = min(tw + s(10), s(95))
+    sw = tw + s(14)
+
+    # ── Fondo degradado ──────────────────────────────────────────────────
+    for r in range(s(200), 0, -3):
+        t = r / s(200)
+        c = (int(15+t*15), int(35+t*25), int(22+t*15), 255)
+        d.ellipse([(cx-r, cy_h-r), (cx+r, cy_h+r)], fill=c)
+    # Grid sutil
+    for gx in range(0, W, s(15)):
+        d.line([(gx,0),(gx,H)], fill=(80,200,120,8))
+    for gy in range(0, H, s(15)):
+        d.line([(0,gy),(W,gy)], fill=(80,200,120,8))
+
+    # ── Anillo de estado pulsante (capas) ───────────────────────────────
+    rr = hr + s(20)
     for i in range(3, 0, -1):
-        alpha = 30 * i
-        ring_color_a = ring_rgb + (alpha,)
-        ring_img = Image.new("RGBA", (W, H), (0,0,0,0))
-        ring_d   = ImageDraw.Draw(ring_img)
-        ring_d.ellipse(
-            [(cx-r_ring-i*6, cy_head-r_ring-i*6),
-             (cx+r_ring+i*6, cy_head+r_ring+i*6)],
-            outline=ring_rgb+(min(alpha,255),), width=2
-        )
-        img_rgba = img.convert("RGBA")
-        img_rgba.alpha_composite(ring_img)
-        img = img_rgba.convert("RGB")
-        d   = ImageDraw.Draw(img)
+        ri = rr + i*s(5)
+        ring = Image.new("RGBA", (W,H), (0,0,0,0))
+        rd = ImageDraw.Draw(ring)
+        rd.ellipse([(cx-ri,cy_h-ri),(cx+ri,cy_h+ri)], outline=accent+(90-i*20,), width=s(3))
+        img = Image.alpha_composite(img, ring); d = ImageDraw.Draw(img)
+    d.ellipse([(cx-rr,cy_h-rr),(cx+rr,cy_h+rr)], outline=accent, width=s(3))
 
-    # ── Cabeza ────────────────────────────────────────────────────────────────
-    head_r = 34
-    # Cabello
+    # ── Cabello ──────────────────────────────────────────────────────────
     if es_mujer:
-        d.ellipse([(cx-head_r-6, cy_head-head_r-4),(cx+head_r+6, cy_head+4)], fill=hair)
-        d.rectangle([(cx-head_r-10, cy_head-8),(cx-head_r+2, cy_head+head_r+16)], fill=hair)
-        d.rectangle([(cx+head_r-2,  cy_head-8),(cx+head_r+10, cy_head+head_r+16)], fill=hair)
+        d.ellipse([(cx-hr-s(12), head_top-s(8)),(cx+hr+s(12), cy_h+s(4))], fill=hair)
+        d.ellipse([(cx-hr-s(18), cy_h-s(10)),  (cx-hr+s(6),  head_bot+s(55))], fill=hair)
+        d.ellipse([(cx+hr-s(6),  cy_h-s(10)),  (cx+hr+s(18), head_bot+s(55))], fill=hair)
     else:
-        d.ellipse([(cx-head_r-2, cy_head-head_r-6),(cx+head_r+2, cy_head+2)], fill=hair)
+        d.ellipse([(cx-hr-s(5), head_top-s(10)),(cx+hr+s(5), cy_h+s(2))], fill=hair)
+        d.ellipse([(cx-hr-s(3), cy_h-s(6)),    (cx-hr+s(12), cy_h+s(14))], fill=hair)
+        d.ellipse([(cx+hr-s(12),cy_h-s(6)),    (cx+hr+s(3),  cy_h+s(14))], fill=hair)
 
-    # Cara
-    skin_rgb = tuple(int(skin[i:i+2],16) for i in (1,3,5))
-    d.ellipse([(cx-head_r, cy_head-head_r),(cx+head_r, cy_head+head_r)], fill=skin_rgb)
+    # ── Cabeza ───────────────────────────────────────────────────────────
+    d.ellipse([(cx-hr,head_top),(cx+hr,head_bot)], fill=skin, outline=shadow, width=s(2))
 
     # Ojos
-    eye_col = (44, 24, 16)
-    d.ellipse([(cx-14, cy_head-8),(cx-5,  cy_head+2)],  fill=eye_col)
-    d.ellipse([(cx+5,  cy_head-8),(cx+14, cy_head+2)],  fill=eye_col)
-    d.ellipse([(cx-12, cy_head-7),(cx-10, cy_head-5)],  fill=(255,255,255))
-    d.ellipse([(cx+10, cy_head-7),(cx+12, cy_head-5)],  fill=(255,255,255))
+    ey, er = cy_h - s(4), s(8)
+    for ex in [cx-s(14), cx+s(14)]:
+        d.ellipse([(ex-er,ey-er),(ex+er,ey+er)], fill=(255,255,255), outline=(30,15,5), width=s(1))
+        d.ellipse([(ex-s(4),ey-s(4)),(ex+s(4),ey+s(4))], fill=(45,28,15))
+        d.ellipse([(ex-s(1),ey-s(2)),(ex+s(2),ey+s(1))], fill=(255,255,255))
 
     # Cejas
-    d.arc([(cx-18, cy_head-20),(cx-2,  cy_head-10)], 200, 340, fill=hair, width=2)
-    d.arc([(cx+2,  cy_head-20),(cx+18, cy_head-10)], 200, 340, fill=hair, width=2)
+    for bx in [cx-s(14), cx+s(14)]:
+        d.arc([(bx-s(11),ey-s(12)),(bx+s(11),ey-s(2))], 195, 345, fill=hair, width=s(2))
+
+    # Nariz
+    d.line([(cx, cy_h+s(2)),(cx, cy_h+s(8))], fill=shadow, width=s(2))
 
     # Boca según estado
+    my = cy_h + s(15)
     if estado == "AVANCE":
-        d.arc([(cx-10, cy_head+8),(cx+10, cy_head+20)],  0,  180, fill=(139,69,19), width=2)
+        d.arc([(cx-s(10),my-s(3)),(cx+s(10),my+s(6))], 0, 180, fill=(150,70,55), width=s(3))
     elif estado == "RETROCESO":
-        d.arc([(cx-10, cy_head+12),(cx+10, cy_head+22)], 180, 360, fill=(139,69,19), width=2)
+        d.arc([(cx-s(10),my),(cx+s(10),my+s(8))], 180, 360, fill=(150,70,55), width=s(3))
     else:
-        d.line([(cx-9, cy_head+15),(cx+9, cy_head+15)], fill=(139,69,19), width=2)
+        d.line([(cx-s(9),my+s(2)),(cx+s(9),my+s(2))], fill=(150,70,55), width=s(3))
 
     # Mejillas
-    d.ellipse([(cx-22, cy_head+4),(cx-10, cy_head+12)], fill=(232,150,140,100))
-    d.ellipse([(cx+10, cy_head+4),(cx+22, cy_head+12)], fill=(232,150,140,100))
+    for chx in [cx-s(18), cx+s(18)]:
+        ch = Image.new("RGBA",(W,H),(0,0,0,0)); cd=ImageDraw.Draw(ch)
+        cd.ellipse([(chx-s(8),my-s(6)),(chx+s(8),my+s(3))], fill=(235,130,120,60))
+        img = Image.alpha_composite(img, ch); d = ImageDraw.Draw(img)
 
-    # ── Cuello ────────────────────────────────────────────────────────────────
-    neck_top = cy_head + head_r
-    neck_bot = neck_top + 14
-    d.rectangle([(cx-8, neck_top),(cx+8, neck_bot)], fill=skin_rgb)
+    # ── Cuello ───────────────────────────────────────────────────────────
+    nw = s(9)
+    d.rectangle([(cx-nw,neck_y),(cx+nw,sho_y)], fill=skin)
 
-    # ── Torso ─────────────────────────────────────────────────────────────────
-    sho_y   = neck_bot
-    waist_y = sho_y + 90
-    hip_y   = waist_y + 12
-    tw2     = torso_w // 2
-    sho_w   = torso_w + 10
+    # ── Torso (trapecio hombros→cintura) ───────────────────────────────
+    torso = [(cx-sw//2,sho_y),(cx+sw//2,sho_y),(cx+tw//2,waist_y),(cx-tw//2,waist_y)]
+    d.polygon(torso, fill=skin, outline=shadow, width=s(1))
 
-    # Trapecio/hombros
-    d.ellipse([(cx-sho_w//2-8, sho_y-4),(cx-sho_w//2+14, sho_y+14)], fill=skin_rgb)
-    d.ellipse([(cx+sho_w//2-14,sho_y-4),(cx+sho_w//2+8,  sho_y+14)], fill=skin_rgb)
+    ropa = [(cx-sw//2+s(3),sho_y+s(4)),(cx+sw//2-s(3),sho_y+s(4)),
+            (cx+tw//2-s(2),waist_y),(cx-tw//2+s(2),waist_y)]
+    d.polygon(ropa, fill=outfit)
 
-    # Torso en V / trapezoide
-    torso_pts = [
-        (cx-sho_w//2, sho_y+6),
-        (cx+sho_w//2, sho_y+6),
-        (cx+tw2,      waist_y),
-        (cx-tw2,      waist_y),
-    ]
-    d.polygon(torso_pts, fill=skin_rgb)
-
-    # Ropa encima del torso
     if es_mujer:
-        outfit_col = (124, 61, 138)   # morado deportivo
-        # Top deportivo
-        top_pts = [
-            (cx-sho_w//2+4, sho_y+8),
-            (cx+sho_w//2-4, sho_y+8),
-            (cx+tw2,        waist_y),
-            (cx-tw2,        waist_y),
-        ]
-        d.polygon(top_pts, fill=outfit_col)
-        # Tirantes
-        d.line([(cx-sho_w//2+10, sho_y+8),(cx-8, sho_y)], fill=(160,90,180), width=4)
-        d.line([(cx+sho_w//2-10, sho_y+8),(cx+8, sho_y)], fill=(160,90,180), width=4)
+        for side in [-1,1]:
+            d.line([(cx+side*sw//2-side*s(8), sho_y+s(4)),(cx+side*s(6), sho_y-s(3))],
+                   fill=accent, width=s(4))
     else:
-        outfit_col = (26, 61, 36)    # verde oscuro deportivo
-        shirt_pts = [
-            (cx-sho_w//2+2, sho_y+6),
-            (cx+sho_w//2-2, sho_y+6),
-            (cx+tw2,        waist_y),
-            (cx-tw2,        waist_y),
-        ]
-        d.polygon(shirt_pts, fill=outfit_col)
-        # División pectoral
-        d.line([(cx, sho_y+10),(cx, sho_y+36)], fill=(0,0,0,40), width=2)
-        # Abs
-        for ay in range(sho_y+45, waist_y-5, 12):
-            d.line([(cx-8, ay),(cx+8, ay)], fill=(0,0,0,30), width=1)
+        d.line([(cx, sho_y+s(6)),(cx, sho_y+s(40))], fill=(0,0,0,40), width=s(2))
+        for ay in range(sho_y+s(45), waist_y-s(8), s(14)):
+            d.line([(cx-s(10),ay),(cx+s(10),ay)], fill=(0,0,0,25), width=s(1))
 
-    # ── Brazos ────────────────────────────────────────────────────────────────
-    arm_w  = 14 if not es_mujer else 11
-    arm_y1 = sho_y + 8
-    arm_y2 = waist_y + 4
+    # Hombros redondeados
+    for sx in [cx-sw//2, cx+sw//2]:
+        d.ellipse([(sx-s(10),sho_y-s(6)),(sx+s(10),sho_y+s(12))], fill=skin, outline=shadow, width=s(1))
 
-    # Brazo izquierdo
-    d.line([(cx-sho_w//2, arm_y1),(cx-sho_w//2-16, arm_y2)],
-           fill=skin_rgb, width=arm_w)
-    # Brazo derecho
-    d.line([(cx+sho_w//2, arm_y1),(cx+sho_w//2+16, arm_y2)],
-           fill=skin_rgb, width=arm_w)
-    # Bíceps (solo hombre)
-    if not es_mujer:
-        mid_ay = (arm_y1 + arm_y2) // 2
-        d.ellipse([(cx-sho_w//2-24, mid_ay-10),(cx-sho_w//2-6, mid_ay+10)],
-                  fill=skin_rgb)
-        d.ellipse([(cx+sho_w//2+6,  mid_ay-10),(cx+sho_w//2+24, mid_ay+10)],
-                  fill=skin_rgb)
+    # ── Brazos rectos a los lados ────────────────────────────────────────
+    arm_w   = s(16) if not es_mujer else s(12)
+    arm_bot = waist_y + s(15)
+    for side in [-1, 1]:
+        ax = cx + side*sw//2
+        d.line([(ax, sho_y+s(5)),(ax+side*s(3), arm_bot)], fill=skin, width=arm_w)
+        d.ellipse([(ax+side*s(3)-s(8),arm_bot-s(6)),(ax+side*s(3)+s(8),arm_bot+s(9))], fill=skin)
+        if not es_mujer:
+            bx = ax + side*s(2); by = sho_y + s(28)
+            d.ellipse([(bx-s(11),by-s(8)),(bx+s(11),by+s(8))], fill=skin, outline=shadow, width=s(1))
 
-    # ── Caderas y shorts ──────────────────────────────────────────────────────
-    hip_w  = tw2 + 10 if es_mujer else tw2 + 4
-    short_col = (109, 40, 217) if es_mujer else (17, 24, 39)
-    d.polygon([
-        (cx-tw2,   waist_y),
-        (cx+tw2,   waist_y),
-        (cx+hip_w, hip_y+18),
-        (cx-hip_w, hip_y+18),
-    ], fill=short_col)
+    # ── Caderas ──────────────────────────────────────────────────────────
+    short_col = (109,40,217) if es_mujer else (17,24,39)
+    hip_poly  = [(cx-tw//2,waist_y),(cx+tw//2,waist_y),(cx+hw//2,hip_y),(cx-hw//2,hip_y)]
+    d.polygon(hip_poly, fill=short_col)
 
-    # ── Piernas ───────────────────────────────────────────────────────────────
-    knee_y = hip_y + 80
-    foot_y = knee_y + 72
-    pw2    = pierna_w // 2
+    # ── Piernas separadas, rectas hip→knee→foot ─────────────────────────
+    leg_gap = s(6)
+    leg_x = {}
+    for side in [-1, 1]:
+        lx = cx + side*(leg_gap + lw//2)
+        leg_x[side] = lx
+        d.line([(lx,hip_y),(lx,knee_y)], fill=skin, width=lw+s(6))
+        d.line([(lx,hip_y),(lx,knee_y)], fill=short_col, width=lw)
+        d.line([(lx,knee_y),(lx,foot_y)], fill=skin, width=lw)
+        d.ellipse([(lx-s(9),knee_y-s(9)),(lx+s(9),knee_y+s(9))], fill=skin, outline=shadow, width=s(1))
+        # Zapatilla
+        d.ellipse([(lx-s(15),foot_y-s(4)),(lx+s(15),foot_y+s(13))], fill=(20,20,40))
+        d.ellipse([(lx-s(12),foot_y-s(2)),(lx+s(10),foot_y+s(8))], fill=accent)
+        d.line([(lx-s(9),foot_y+s(1)),(lx+s(7),foot_y+s(1))], fill=(255,255,255,90), width=s(1))
 
-    leg_col = (109, 40, 217) if es_mujer else (17, 24, 39)  # leggings/short color
-
-    # Pierna izquierda
-    d.line([(cx-pw2-8, hip_y+18),(cx-pw2-6, knee_y)], fill=leg_col,  width=pierna_w+4)
-    d.line([(cx-pw2-6, knee_y),  (cx-pw2-4, foot_y)], fill=skin_rgb, width=pierna_w)
-    # Pierna derecha
-    d.line([(cx+pw2+8, hip_y+18),(cx+pw2+6, knee_y)], fill=leg_col,  width=pierna_w+4)
-    d.line([(cx+pw2+6, knee_y),  (cx+pw2+4, foot_y)], fill=skin_rgb, width=pierna_w)
-
-    # Línea de cuádriceps
-    if not es_mujer:
-        d.line([(cx-pw2-4, hip_y+28),(cx-pw2-2, knee_y-8)], fill=(0,0,0,25), width=2)
-        d.line([(cx+pw2+4, hip_y+28),(cx+pw2+2, knee_y-8)], fill=(0,0,0,25), width=2)
-
-    # ── Zapatillas ────────────────────────────────────────────────────────────
-    shoe_col = ring_rgb
-    # Izquierda
-    d.ellipse([(cx-pw2-18, foot_y-4),(cx-pw2+8,  foot_y+14)], fill=(20,20,40))
-    d.ellipse([(cx-pw2-14, foot_y-2),(cx-pw2+6,  foot_y+8)],  fill=shoe_col)
-    # Derecha
-    d.ellipse([(cx+pw2-8,  foot_y-4),(cx+pw2+18, foot_y+14)], fill=(20,20,40))
-    d.ellipse([(cx+pw2-6,  foot_y-2),(cx+pw2+14, foot_y+8)],  fill=shoe_col)
-
-    # ── Zonas musculares señalizadas ──────────────────────────────────────────
-    overlay = Image.new("RGBA", (W, H), (0,0,0,0))
-    od = ImageDraw.Draw(overlay)
-
+    # ── Zonas musculares señalizadas ─────────────────────────────────────
+    ov = Image.new("RGBA",(W,H),(0,0,0,0)); od = ImageDraw.Draw(ov)
     if "grasa" in objetivo or "Perder" in objetivo:
-        # Cintura y abdomen
-        od.rectangle([(cx-30, waist_y-28),(cx+30, waist_y-8)],
-                     fill=(255,107,53,70), outline=(255,107,53,200), width=2)
-        od.rectangle([(cx-hip_w+4, hip_y+10),(cx+hip_w-4, hip_y+32)],
-                     fill=(255,107,53,60), outline=(255,107,53,180), width=2)
+        od.rectangle([(cx-s(22),waist_y-s(18)),(cx+s(22),waist_y-s(2))],
+                     fill=(255,107,53,75), outline=(255,107,53,220), width=s(2))
+        od.rectangle([(cx-hw//2+s(4),hip_y-s(10)),(cx+hw//2-s(4),hip_y+s(8))],
+                     fill=(255,107,53,55), outline=(255,107,53,170), width=s(2))
     elif "muscular" in objetivo or "Ganar" in objetivo:
-        # Pecho
-        od.rectangle([(cx-sho_w//2+6, sho_y+6),(cx+sho_w//2-6, sho_y+38)],
-                     fill=(59,130,246,70), outline=(59,130,246,200), width=2)
-        # Espalda/dorsal
-        od.rectangle([(cx-sho_w//2+6, sho_y+42),(cx+sho_w//2-6, sho_y+72)],
-                     fill=(139,92,246,70), outline=(139,92,246,200), width=2)
-        # Cuádriceps
-        od.rectangle([(cx-hip_w+4, hip_y+20),(cx-4, knee_y-10)],
-                     fill=(16,185,129,60), outline=(16,185,129,180), width=2)
-        od.rectangle([(cx+4, hip_y+20),(cx+hip_w-4, knee_y-10)],
-                     fill=(16,185,129,60), outline=(16,185,129,180), width=2)
-    else:  # recomposición
-        od.rectangle([(cx-20, waist_y-22),(cx+20, waist_y-6)],
-                     fill=(255,107,53,65), outline=(255,107,53,190), width=2)
-        od.rectangle([(cx-hip_w+4, hip_y+10),(cx+hip_w-4, hip_y+30)],
-                     fill=(236,72,153,60), outline=(236,72,153,180), width=2)
+        od.rectangle([(cx-sw//2+s(6),sho_y+s(6)),(cx+sw//2-s(6),sho_y+s(30))],
+                     fill=(59,130,246,70), outline=(59,130,246,210), width=s(2))
+        od.rectangle([(cx-sw//2+s(6),sho_y+s(34)),(cx+sw//2-s(6),sho_y+s(56))],
+                     fill=(139,92,246,60), outline=(139,92,246,190), width=s(2))
+        for side in [-1,1]:
+            lx = leg_x[side]
+            od.rectangle([(lx-s(12),hip_y+s(6)),(lx+s(12),knee_y-s(10))],
+                         fill=(16,185,129,55), outline=(16,185,129,180), width=s(2))
+    else:
+        od.rectangle([(cx-s(16),waist_y-s(14)),(cx+s(16),waist_y-s(2))],
+                     fill=(255,107,53,65), outline=(255,107,53,200), width=s(2))
+        od.rectangle([(cx-hw//2+s(4),hip_y-s(8)),(cx+hw//2-s(4),hip_y+s(8))],
+                     fill=(236,72,153,55), outline=(236,72,153,180), width=s(2))
+    img = Image.alpha_composite(img, ov); d = ImageDraw.Draw(img)
 
-    img_rgba = img.convert("RGBA")
-    img_rgba.alpha_composite(overlay)
-    img = img_rgba.convert("RGB")
-    d   = ImageDraw.Draw(img)
-
-    # ── Marcadores de lesión ──────────────────────────────────────────────────
+    # ── Marcadores de lesión ─────────────────────────────────────────────
     if "Rodilla" in lesion:
-        for lx in [cx-pw2-6, cx+pw2+6]:
-            d.ellipse([(lx-10, knee_y-10),(lx+10, knee_y+10)], fill=(239,68,68))
-            d.text((lx-3, knee_y-6), "!", fill=(255,255,255))
+        for side in [-1,1]:
+            lx = leg_x[side]
+            for r,a in [(s(13),160),(s(9),220),(s(5),255)]:
+                d.ellipse([(lx-r,knee_y-r),(lx+r,knee_y+r)], fill=(239,68,68,a))
     elif "Hombro" in lesion:
-        for lx in [cx-sho_w//2-4, cx+sho_w//2+4]:
-            d.ellipse([(lx-10, sho_y),(lx+10, sho_y+20)], fill=(239,68,68))
-            d.text((lx-3, sho_y+4), "!", fill=(255,255,255))
+        for sx2 in [cx-sw//2, cx+sw//2]:
+            for r,a in [(s(13),160),(s(9),220),(s(5),255)]:
+                d.ellipse([(sx2-r,sho_y-r),(sx2+r,sho_y+r)], fill=(239,68,68,a))
     elif "Espalda" in lesion:
-        d.ellipse([(cx-14, waist_y-26),(cx+14, waist_y-6)], fill=(239,68,68))
-        d.text((cx-5, waist_y-22), "!", fill=(255,255,255))
+        d.ellipse([(cx-s(16),waist_y-s(20)),(cx+s(16),waist_y-s(2))], fill=(239,68,68,200))
     elif "Cervical" in lesion:
-        d.ellipse([(cx-10, neck_top),(cx+10, neck_top+20)], fill=(239,68,68))
-        d.text((cx-3, neck_top+4), "!", fill=(255,255,255))
+        d.ellipse([(cx-s(11),neck_y),(cx+s(11),neck_y+s(16))], fill=(239,68,68,200))
 
-    # ── Badge nivel ───────────────────────────────────────────────────────────
-    if "Más de 3" in nivel:     niv_txt, niv_col = "PRO", (255,215,0)
-    elif "1 a 3" in nivel:      niv_txt, niv_col = "INT", (192,192,192)
-    elif "6 meses" in nivel:    niv_txt, niv_col = "MED", (205,127,50)
-    else:                        niv_txt, niv_col = "INI", (80,200,120)
-    d.ellipse([(W-46, 10),(W-10, 34)], fill=niv_col)
+    # ── Badge nivel ──────────────────────────────────────────────────────
+    if "Más de 3" in nivel:   nb,nc = "PRO",(255,215,0)
+    elif "1 a 3" in nivel:    nb,nc = "INT",(192,192,192)
+    elif "6 meses" in nivel:  nb,nc = "MED",(205,127,50)
+    else:                      nb,nc = "INI",(80,200,120)
+    d.ellipse([(W-s(40),s(10)),(W-s(10),s(30))], fill=nc)
     try:
-        fnt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 10)
-    except:
+        fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", s(8))
+    except Exception:
         fnt = ImageFont.load_default()
-    d.text((W-38, 16), niv_txt, fill=(0,0,0), font=fnt)
+    d.text((W-s(34),s(14)), nb, fill=(0,0,0), font=fnt)
 
-    # ── Badge estado Q2 ───────────────────────────────────────────────────────
     if estado in ("AVANCE","RETROCESO","LENTO"):
-        badge_col = {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}[estado]
-        d.rounded_rectangle([(cx-38, 10),(cx+38, 28)], radius=10, fill=badge_col)
-        d.text((cx-30, 14), estado, fill=(255,255,255), font=fnt)
+        bd = {"AVANCE":(34,197,94),"RETROCESO":(239,68,68),"LENTO":(245,158,11)}[estado]
+        bw2 = s(55)
+        d.rounded_rectangle([(cx-bw2,s(8)),(cx+bw2,s(26))], radius=s(8), fill=bd)
+        d.text((cx-s(24),s(11)), estado, fill=(255,255,255), font=fnt)
 
-    # ── Nombre ────────────────────────────────────────────────────────────────
-    d.text((cx-len(nombre)*3, H-22), nombre, fill=ring_rgb, font=fnt)
+    # Sombra suelo
+    d.ellipse([(cx-s(38),foot_y+s(12)),(cx+s(38),foot_y+s(22))], fill=(0,0,0,70))
 
-    # ── Sombra suelo ──────────────────────────────────────────────────────────
-    shadow_img = Image.new("RGBA", (W, H), (0,0,0,0))
-    sd = ImageDraw.Draw(shadow_img)
-    sd.ellipse([(cx-40, foot_y+8),(cx+40, foot_y+20)], fill=(0,0,0,60))
-    img_rgba = img.convert("RGBA")
-    img_rgba.alpha_composite(shadow_img)
-    img = img_rgba.convert("RGB")
+    # Nombre
+    d.text((cx-s(48), H-s(24)), nombre, fill=accent, font=fnt)
 
-    # Retornar como bytes PNG
+    # ── Reducir 4x → calidad final con antialias ─────────────────────────
+    final = img.resize((300,450), Image.LANCZOS)
     buf = io.BytesIO()
-    img.save(buf, "PNG")
+    final.save(buf, "PNG", optimize=True)
+    buf.seek(0)
     return buf.getvalue()
 
 
 def render_avatar(norm: dict, mot: dict, estado: str = "Q1", height: int = 280):
-    """Genera y muestra el avatar Pillow en Streamlit."""
-    png_bytes = generar_avatar_pillow(norm, mot, estado)
+    """Genera y muestra avatar HD."""
+    png = generar_avatar_pillow(norm, mot, estado)
     col_a, col_b, col_c = st.columns([1, 2, 1])
     with col_b:
-        st.image(png_bytes, width=height)
+        st.image(png, width=height)
+
 
 
 # =============================================================================
@@ -857,6 +858,23 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
             c.drawCentredString(x+col_ws[ci]//2, y-10, _limpiar(cell))
             x += col_ws[ci]
         y -= 24
+
+    # Pasos diarios recomendados
+    y -= 16
+    pasos = calcular_pasos_diarios(norm, mot)
+    c.setFillColorRGB(0.94, 0.99, 0.95)
+    c.rect(60, y-44, 460, 50, fill=1, stroke=1)
+    c.setFillColor(VERDE)
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(70, y-14, "🚶 META DIARIA DE PASOS")
+    c.setFillColor(OSCURO)
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(70, y-34, f"{pasos['pasos_meta']:,} pasos/día")
+    c.setFont("Helvetica", 9)
+    c.setFillColor(color_mm(100,120,100))
+    c.drawString(260, y-20, f"≈ {pasos['km_aprox']} km")
+    c.drawString(260, y-34, f"≈ {pasos['kcal_pasos']} kcal extra")
+    y -= 60
 
     y -= 20
     c.setFont("Helvetica-Bold", 11)
@@ -1153,6 +1171,7 @@ def generar_plan(norm, ult, estado):
 # =============================================================================
 def dashboard_q1(norm, mot, por, id_al):
     nombre = norm.get("Nombre completo","Atleta")
+    pasos  = calcular_pasos_diarios(norm, mot)
     render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
 
     # Avatar + zonas
@@ -1274,6 +1293,23 @@ def dashboard_q1(norm, mot, por, id_al):
                  <span style="font-size:16px;font-weight:900;color:#16A34A;">150g</span></div>
           </div>
         </div>""", unsafe_allow_html=True)
+
+    # Pasos diarios recomendados
+    st.markdown("<div class='sec-head'>ACTIVIDAD DIARIA — PASOS RECOMENDADOS</div>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="panel-card" style="border-left:4px solid #50C878;text-align:center;">
+      <div style="font-size:11px;color:#7D9A84;font-weight:700;letter-spacing:1.5px;">META DIARIA DE PASOS</div>
+      <div style="font-size:42px;font-weight:900;color:#166534;font-family:'Space Grotesk',sans-serif;margin:8px 0;">
+        🚶 {pasos['pasos_meta']:,}
+      </div>
+      <div style="font-size:13px;color:#6B7280;">
+        Equivalente a <strong>{pasos['km_aprox']} km</strong> ·
+        Quema aprox. <strong>{pasos['kcal_pasos']} kcal</strong> adicionales/día
+      </div>
+      <div style="font-size:11px;color:#9CA3AF;margin-top:8px;">
+        Calculado según nivel de actividad, objetivo ({norm.get('Objetivo principal','')}) e IMC actual
+      </div>
+    </div>""", unsafe_allow_html=True)
 
     # Rutina
     st.markdown("<div class='sec-head'>PROGRAMACIÓN NEUROMUSCULAR</div>", unsafe_allow_html=True)
