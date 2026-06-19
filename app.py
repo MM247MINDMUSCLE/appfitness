@@ -530,7 +530,7 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
         radius=badge_h//2, fill=ring_col
     )
     try:
-        fnt_size = max(12, int(H * 0.022))
+        fnt_size = max(20, int(H * 0.026))
         fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fnt_size)
     except Exception:
         fnt = ImageFont.load_default()
@@ -550,14 +550,16 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
 
     def caja(y_top, y_bot, color, label):
         d.rectangle([(cx-zona_w//2, y_top), (cx+zona_w//2, y_bot)],
-                    fill=color+(70,), outline=color+(220,), width=max(2,int(W*0.005)))
-        fs = max(10, int(H*0.018))
+                    fill=color+(85,), outline=color+(255,), width=max(3,int(W*0.008)))
+        fs = max(18, int(H*0.024))
         try:
             f2 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
         except Exception:
             f2 = ImageFont.load_default()
         bb = d.textbbox((0,0), label, font=f2)
         lw_txt = bb[2]-bb[0]
+        # Sombra de texto para contraste
+        d.text((cx-lw_txt//2+2, (y_top+y_bot)//2 - fs//2+2), label, fill=(0,0,0,180), font=f2)
         d.text((cx-lw_txt//2, (y_top+y_bot)//2 - fs//2), label, fill=(255,255,255,255), font=f2)
 
     if "grasa" in objetivo or "Perder" in objetivo:
@@ -574,16 +576,25 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
 
     # ── Marcador de lesión en zona anatómica ─────────────────────────────
     def marcador(yc, label):
-        r = int(W * 0.045)
+        r = int(W * 0.06)
         for ri, alpha in [(r*1.6,140),(r*1.2,200),(r,255)]:
             d.ellipse([(cx-ri, yc-ri),(cx+ri, yc+ri)], fill=(239,68,68,alpha))
-        fs = max(9, int(H*0.015))
+        fs = max(20, int(H*0.022))
         try:
             f3 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
         except Exception:
             f3 = ImageFont.load_default()
         bb = d.textbbox((0,0), "!", font=f3)
         d.text((cx-(bb[2]-bb[0])//2, yc-fs//2), "!", fill=(255,255,255,255), font=f3)
+        # Etiqueta debajo del marcador
+        fs2 = max(16, int(H*0.018))
+        try:
+            f4 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs2)
+        except Exception:
+            f4 = ImageFont.load_default()
+        bb2 = d.textbbox((0,0), label, font=f4)
+        d.text((cx-(bb2[2]-bb2[0])//2+2, yc+r*1.7+2), label, fill=(0,0,0,180), font=f4)
+        d.text((cx-(bb2[2]-bb2[0])//2, yc+r*1.7), label, fill=(239,68,68,255), font=f4)
 
     if "Rodilla" in lesion:
         marcador(y_rodilla, "RODILLA")
@@ -605,18 +616,24 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
     return buf.getvalue()
 
 
-def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", height: int = 320):
+def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", height: int = 320, ancho_columna: bool = False):
     """
     Muestra la foto de frente del cliente con señalizaciones de análisis dibujadas.
-    Si no hay foto de frente disponible, muestra mensaje informativo.
+    Si ancho_columna=True, ocupa el 100% del contenedor donde se llama (sin sub-columnas
+    que la encojan). Si no hay foto de frente disponible, muestra mensaje informativo.
     """
     foto_frente = cargar_foto_disco(id_al, "frente", etapa)
     if foto_frente:
         try:
             procesada = analizar_foto_con_senalizaciones(foto_frente, norm, mot, estado)
-            col_a, col_b, col_c = st.columns([1, 2, 1])
-            with col_b:
-                st.image(procesada, width=height)
+            if ancho_columna:
+                st.image(procesada, use_container_width=True)
+            else:
+                col_a, col_b, col_c = st.columns([1, 3, 1])
+                with col_b:
+                    st.image(procesada, use_container_width=True)
+            with st.expander("🔍 Ver análisis en tamaño completo"):
+                st.image(procesada, use_container_width=True)
         except Exception as e:
             st.warning(f"No se pudo procesar el análisis visual: {e}")
     else:
@@ -1082,10 +1099,12 @@ def dashboard_q1(norm, mot, por, id_al):
     pasos  = calcular_pasos_diarios(norm, mot)
     render_hero("EXPEDIENTE ACTIVO — LÍNEA BASE", "MI REGISTRO MM247", id_al)
 
-    # Análisis visual sobre foto real + zonas
+    # Análisis visual sobre foto real — ANCHO COMPLETO para legibilidad
+    st.markdown("<div class='sec-head'>ANÁLISIS VISUAL — FOTO CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
+    mostrar_analisis_visual(id_al, norm, mot, etapa="q1", estado="Q1", ancho_columna=True)
+
     col_av, col_info = st.columns([1, 2])
     with col_av:
-        mostrar_analisis_visual(id_al, norm, mot, etapa="q1", estado="Q1", height=260)
         lesion = norm.get("Lesión actual","Ninguna")
         imc = mot["imc"]
         comp = ("🔹 Delgado/a" if imc<18.5 else "🟢 Normal" if imc<25 else "🟡 Sobrepeso" if imc<30 else "🔴 Obesidad")
@@ -1295,10 +1314,12 @@ def dashboard_q2(norm, mot, revs_df, id_al):
 
     render_hero("AUDITORÍA COMPARATIVA Q1 vs Q2", "MI AVANCE MM247", id_al)
 
-    # Foto de frente Q2 con señalizaciones de avance/retroceso
+    # Foto de frente Q2 con señalizaciones — ANCHO COMPLETO
+    st.markdown("<div class='sec-head'>ANÁLISIS VISUAL Q2 — FOTO CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
+    mostrar_analisis_visual(id_al, norm, mot, etapa="q2", estado=estado, ancho_columna=True)
+
     col_av, col_info = st.columns([1, 2])
     with col_av:
-        mostrar_analisis_visual(id_al, norm, mot, etapa="q2", estado=estado, height=260)
         col_p = "#22C55E" if dif_p<=0 else "#EF4444"
         col_c = "#22C55E" if dif_c<=0 else "#EF4444"
         st.markdown(f"""
@@ -1852,29 +1873,29 @@ def dashboard_admin(df_existente):
         if not r_df.empty:
             estado_act = str(r_df.iloc[-1].get("Estado_Calculado","AVANCE")).upper()
 
-        # Análisis visual sobre foto real
-        col_av2, col_st2 = st.columns([1,3])
-        with col_av2:
-            etapa_admin = "q2" if not r_df.empty else "q1"
-            estado_render = estado_act if estado_act != "SIN AUDITORÍA" else "Q1"
-            mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, height=200)
-        with col_st2:
-            badge_map = {
-                "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
-                "RETROCESO":     "<span class='badge-retroceso'>⚠️ RETROCESO</span>",
-                "LENTO":         "<span class='badge-lento'>⏳ LENTO</span>",
-                "SIN AUDITORÍA": "<span class='badge-lento'>📋 SIN Q2</span>",
-            }
-            sexo_ic = "👩" if "Femen" in m_calc.get("genero","") else "👨"
-            st.markdown(f"""
-            <div style="padding:8px 0;">
-              <div style="font-size:20px;font-weight:900;color:#0D1F14;">{d_norm.get('Nombre completo','')}</div>
-              <div style="margin:6px 0;">{badge_map.get(estado_act, badge_map['SIN AUDITORÍA'])}</div>
-              <div style="font-size:12px;color:#6B7280;">
-                {sexo_ic} {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg · {m_calc['estatura']} cm<br>
-                IMC: {m_calc['imc']} · {m_calc['origen']}
-              </div>
-            </div>""", unsafe_allow_html=True)
+        # Info de identificación primero
+        etapa_admin = "q2" if not r_df.empty else "q1"
+        estado_render = estado_act if estado_act != "SIN AUDITORÍA" else "Q1"
+        badge_map = {
+            "AVANCE":        "<span class='badge-avance'>🚀 EN AVANCE</span>",
+            "RETROCESO":     "<span class='badge-retroceso'>⚠️ RETROCESO</span>",
+            "LENTO":         "<span class='badge-lento'>⏳ LENTO</span>",
+            "SIN AUDITORÍA": "<span class='badge-lento'>📋 SIN Q2</span>",
+        }
+        sexo_ic = "👩" if "Femen" in m_calc.get("genero","") else "👨"
+        st.markdown(f"""
+        <div style="padding:8px 0;">
+          <div style="font-size:20px;font-weight:900;color:#0D1F14;">{d_norm.get('Nombre completo','')}</div>
+          <div style="margin:6px 0;">{badge_map.get(estado_act, badge_map['SIN AUDITORÍA'])}</div>
+          <div style="font-size:12px;color:#6B7280;">
+            {sexo_ic} {m_calc['genero']} · {int(m_calc['edad'])} años · {m_calc['peso']} kg · {m_calc['estatura']} cm<br>
+            IMC: {m_calc['imc']} · {m_calc['origen']}
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # Análisis visual sobre foto real — ANCHO COMPLETO
+        st.markdown("<div class='sec-head'>ANÁLISIS VISUAL CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
+        mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, ancho_columna=True)
 
         # Deltas
         peso_act   = pf(r_df.iloc[-1].get("Peso_Revision",m_calc["peso"]) if not r_df.empty else m_calc["peso"], m_calc["peso"])
