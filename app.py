@@ -483,25 +483,96 @@ def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
 # =============================================================================
 # AVATAR — PILLOW LOCAL (SIN INTERNET)
 # =============================================================================
+def detectar_persona_en_foto(foto_bytes: bytes):
+    """
+    Usa OpenCV (Haar Cascade) para detectar el rostro real en la foto y
+    estimar las proporciones corporales reales a partir de esa posición.
+    Retorna dict con coordenadas reales (no asumidas) o None si no detecta nada.
+    """
+    import cv2
+    import numpy as np
+
+    nparr = np.frombuffer(foto_bytes, np.uint8)
+    cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if cv_img is None:
+        return None
+
+    H, W = cv_img.shape[:2]
+    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.equalizeHist(gray)
+
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=4, minSize=(int(W*0.05), int(W*0.05)))
+
+    if len(faces) == 0:
+        # Reintento con cascada alternativa (más permisiva)
+        face_cascade2 = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml")
+        faces = face_cascade2.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(int(W*0.04), int(W*0.04)))
+
+    if len(faces) == 0:
+        return None
+
+    # Tomar el rostro más grande (más cercano a cámara / principal)
+    fx, fy, fw, fh = max(faces, key=lambda f: f[2]*f[3])
+
+    # ── Proporciones corporales humanas estándar a partir del rostro real ──
+    # La altura de cabeza ≈ fh (desde frente hasta barbilla aprox.)
+    # Cuerpo completo ≈ 7.5 cabezas de alto (proporción clásica de figura humana)
+    head_h    = fh
+    cx_face   = fx + fw // 2
+    cy_face   = fy + fh // 2
+
+    # Punto superior de cabeza
+    head_top  = fy
+    head_bot  = fy + fh
+    neck_y    = head_bot + int(head_h * 0.15)
+    sho_y     = neck_y + int(head_h * 0.25)
+    chest_y   = sho_y + int(head_h * 0.4)
+    waist_y   = sho_y + int(head_h * 2.2)
+    hip_y     = waist_y + int(head_h * 0.3)
+    knee_y    = hip_y + int(head_h * 2.0)
+    foot_y    = knee_y + int(head_h * 1.9)
+
+    # Limitar a los bordes reales de la imagen
+    waist_y = min(waist_y, H-1)
+    hip_y   = min(hip_y, H-1)
+    knee_y  = min(knee_y, H-1)
+    foot_y  = min(foot_y, H-1)
+
+    return {
+        "W": W, "H": H,
+        "cx": cx_face,
+        "head_top": head_top, "head_bot": head_bot,
+        "neck_y": neck_y, "sho_y": sho_y, "chest_y": chest_y,
+        "waist_y": waist_y, "hip_y": hip_y, "knee_y": knee_y, "foot_y": foot_y,
+        "head_h": head_h, "face_w": fw,
+        "detectado": True,
+    }
+
+
 def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, estado: str = "Q1") -> bytes:
     """
-    Toma la foto real de frente del cliente y dibuja overlays de análisis:
-    - Zona de enfoque muscular según objetivo (proporcional al cuerpo en la foto)
+    Detecta la posición real de la persona en la foto (vía OpenCV) y dibuja
+    señalizaciones de análisis ÚNICAMENTE en las zonas anatómicas reales:
+    - Zona de enfoque muscular según objetivo
     - Marcador de lesión en la zona anatómica correspondiente
-    - Badge de estado (Q1 / AVANCE / RETROCESO / LENTO)
-    Retorna la foto procesada como PNG bytes.
+    - Badge de estado
+    Si no se detecta a la persona, retorna la foto original sin alterar
+    y marca bandera para mostrar aviso en la interfaz.
     """
     from PIL import Image, ImageDraw, ImageFont
 
     img = Image.open(io.BytesIO(foto_bytes)).convert("RGBA")
     W, H = img.size
+
+    pos = detectar_persona_en_foto(foto_bytes)
+
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
 
     objetivo = str(norm.get("Objetivo principal", ""))
     lesion   = str(norm.get("Lesión actual", "Ninguna"))
 
-    # ── Color de estado ──────────────────────────────────────────────────
     if estado == "AVANCE":
         ring_col = (34, 197, 94, 255)
     elif estado == "RETROCESO":
@@ -511,104 +582,101 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
     else:
         ring_col = (80, 200, 120, 255)
 
-    # ── Proporciones corporales estimadas (basado en proporción humana estándar) ──
-    # La cabeza ocupa aprox. el primer 12% de la altura de una foto de cuerpo completo
-    # Hombros ~18%, cintura ~45%, caderas ~52%, rodillas ~75%, pies ~98%
-    y_cabeza  = int(H * 0.10)
-    y_hombros = int(H * 0.20)
-    y_pecho   = int(H * 0.28)
-    y_cintura = int(H * 0.45)
-    y_cadera  = int(H * 0.52)
-    y_rodilla = int(H * 0.76)
-    cx = W // 2
-
-    # ── Badge de estado (esquina superior) ──────────────────────────────
-    badge_w = int(W * 0.28)
-    badge_h = int(H * 0.045)
-    d.rounded_rectangle(
-        [(cx - badge_w//2, int(H*0.02)), (cx + badge_w//2, int(H*0.02) + badge_h)],
-        radius=badge_h//2, fill=ring_col
-    )
     try:
-        fnt_size = max(20, int(H * 0.026))
+        fnt_size = max(16, int(W * 0.045))
         fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fnt_size)
     except Exception:
         fnt = ImageFont.load_default()
+
+    # ── Badge de estado (siempre se muestra, arriba de la imagen) ────────
     label_estado = estado if estado in ("AVANCE","RETROCESO","LENTO") else "LÍNEA BASE"
+    badge_w = int(W * 0.5)
+    badge_h = int(fnt_size * 1.8)
+    bx_top  = int(H * 0.02)
+    d.rounded_rectangle(
+        [(W//2 - badge_w//2, bx_top), (W//2 + badge_w//2, bx_top + badge_h)],
+        radius=badge_h//2, fill=ring_col
+    )
     bbox = d.textbbox((0,0), label_estado, font=fnt)
     tw_txt = bbox[2]-bbox[0]
-    d.text((cx - tw_txt//2, int(H*0.02) + badge_h//2 - fnt_size//2),
+    d.text((W//2 - tw_txt//2, bx_top + badge_h//2 - fnt_size//2),
            label_estado, fill=(255,255,255,255), font=fnt)
 
-    # ── Anillo alrededor de la cabeza ────────────────────────────────────
-    head_r = int(W * 0.13)
-    d.ellipse([(cx-head_r, y_cabeza-head_r//2), (cx+head_r, y_cabeza+head_r)],
-              outline=ring_col, width=max(2, int(W*0.006)))
+    if pos is None:
+        # No se detectó persona: solo badge, sin señalizaciones erróneas
+        result = Image.alpha_composite(img, overlay).convert("RGB")
+        buf = io.BytesIO()
+        result.save(buf, "JPEG", quality=90)
+        buf.seek(0)
+        return buf.getvalue()
 
-    # ── Zona de enfoque según objetivo ───────────────────────────────────
-    zona_w = int(W * 0.32)
+    cx     = pos["cx"]
+    zona_w = int(pos["face_w"] * 2.6)
+    fs2    = max(14, int(pos["head_h"] * 0.32))
+    try:
+        f2 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs2)
+    except Exception:
+        f2 = ImageFont.load_default()
 
     def caja(y_top, y_bot, color, label):
         d.rectangle([(cx-zona_w//2, y_top), (cx+zona_w//2, y_bot)],
-                    fill=color+(85,), outline=color+(255,), width=max(3,int(W*0.008)))
-        fs = max(18, int(H*0.024))
-        try:
-            f2 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
-        except Exception:
-            f2 = ImageFont.load_default()
+                    fill=color+(85,), outline=color+(255,), width=max(2,int(W*0.006)))
         bb = d.textbbox((0,0), label, font=f2)
         lw_txt = bb[2]-bb[0]
-        # Sombra de texto para contraste
-        d.text((cx-lw_txt//2+2, (y_top+y_bot)//2 - fs//2+2), label, fill=(0,0,0,180), font=f2)
-        d.text((cx-lw_txt//2, (y_top+y_bot)//2 - fs//2), label, fill=(255,255,255,255), font=f2)
+        ty = (y_top+y_bot)//2 - fs2//2
+        d.text((cx-lw_txt//2+2, ty+2), label, fill=(0,0,0,180), font=f2)
+        d.text((cx-lw_txt//2, ty), label, fill=(255,255,255,255), font=f2)
 
+    # ── Anillo en la cabeza real detectada ────────────────────────────────
+    head_r = int(pos["face_w"] * 0.75)
+    cy_head = (pos["head_top"] + pos["head_bot"]) // 2
+    d.ellipse([(cx-head_r, cy_head-head_r),(cx+head_r, cy_head+head_r)],
+              outline=ring_col, width=max(3, int(W*0.008)))
+
+    # ── Zonas de enfoque sobre posiciones anatómicas REALES ──────────────
     if "grasa" in objetivo or "Perder" in objetivo:
-        caja(y_cintura - int(H*0.04), y_cintura + int(H*0.03), (255,107,53), "ABDOMEN")
-        caja(y_cadera, y_cadera + int(H*0.05), (255,107,53), "CARDIO")
+        caja(pos["waist_y"] - int(pos["head_h"]*0.5), pos["waist_y"] + int(pos["head_h"]*0.2), (255,107,53), "ABDOMEN")
+        caja(pos["hip_y"], pos["hip_y"] + int(pos["head_h"]*0.6), (255,107,53), "CARDIO")
     elif "muscular" in objetivo or "Ganar" in objetivo:
-        caja(y_pecho - int(H*0.02), y_pecho + int(H*0.05), (59,130,246), "PECHO")
-        caja(y_hombros, y_hombros + int(H*0.03), (139,92,246), "HOMBROS")
-        caja(y_rodilla - int(H*0.10), y_rodilla - int(H*0.02), (16,185,129), "CUÁDRICEPS")
+        caja(pos["chest_y"] - int(pos["head_h"]*0.2), pos["chest_y"] + int(pos["head_h"]*0.5), (59,130,246), "PECHO")
+        caja(pos["sho_y"], pos["sho_y"] + int(pos["head_h"]*0.35), (139,92,246), "HOMBROS")
+        if pos["knee_y"] < H:
+            caja(pos["knee_y"] - int(pos["head_h"]*1.2), pos["knee_y"] - int(pos["head_h"]*0.2), (16,185,129), "CUÁDRICEPS")
     else:
-        caja(y_pecho, y_pecho + int(H*0.04), (59,130,246), "PECHO")
-        caja(y_cintura - int(H*0.02), y_cintura + int(H*0.03), (255,107,53), "ABS")
-        caja(y_cadera, y_cadera + int(H*0.04), (236,72,153), "GLÚTEO")
+        caja(pos["chest_y"], pos["chest_y"] + int(pos["head_h"]*0.45), (59,130,246), "PECHO")
+        caja(pos["waist_y"] - int(pos["head_h"]*0.3), pos["waist_y"] + int(pos["head_h"]*0.2), (255,107,53), "ABS")
+        caja(pos["hip_y"], pos["hip_y"] + int(pos["head_h"]*0.5), (236,72,153), "GLÚTEO")
 
-    # ── Marcador de lesión en zona anatómica ─────────────────────────────
+    # ── Marcador de lesión en zona anatómica REAL ─────────────────────────
+    fs3 = max(14, int(pos["head_h"]*0.28))
+    try:
+        f3 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs3)
+    except Exception:
+        f3 = ImageFont.load_default()
+
     def marcador(yc, label):
-        r = int(W * 0.06)
-        for ri, alpha in [(r*1.6,140),(r*1.2,200),(r,255)]:
+        r = int(pos["face_w"] * 0.35)
+        for ri, alpha in [(int(r*1.6),140),(int(r*1.2),200),(r,255)]:
             d.ellipse([(cx-ri, yc-ri),(cx+ri, yc+ri)], fill=(239,68,68,alpha))
-        fs = max(20, int(H*0.022))
-        try:
-            f3 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs)
-        except Exception:
-            f3 = ImageFont.load_default()
         bb = d.textbbox((0,0), "!", font=f3)
-        d.text((cx-(bb[2]-bb[0])//2, yc-fs//2), "!", fill=(255,255,255,255), font=f3)
-        # Etiqueta debajo del marcador
-        fs2 = max(16, int(H*0.018))
-        try:
-            f4 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs2)
-        except Exception:
-            f4 = ImageFont.load_default()
-        bb2 = d.textbbox((0,0), label, font=f4)
-        d.text((cx-(bb2[2]-bb2[0])//2+2, yc+r*1.7+2), label, fill=(0,0,0,180), font=f4)
-        d.text((cx-(bb2[2]-bb2[0])//2, yc+r*1.7), label, fill=(239,68,68,255), font=f4)
+        d.text((cx-(bb[2]-bb[0])//2, yc-fs3//2), "!", fill=(255,255,255,255), font=f3)
+        bb2 = d.textbbox((0,0), label, font=f3)
+        ly = yc + int(r*1.7)
+        d.text((cx-(bb2[2]-bb2[0])//2+1, ly+1), label, fill=(0,0,0,180), font=f3)
+        d.text((cx-(bb2[2]-bb2[0])//2, ly), label, fill=(239,68,68,255), font=f3)
 
-    if "Rodilla" in lesion:
-        marcador(y_rodilla, "RODILLA")
+    if "Rodilla" in lesion and pos["knee_y"] < H:
+        marcador(pos["knee_y"], "RODILLA")
     elif "Hombro" in lesion:
-        d.ellipse([(cx-int(W*0.20)-int(W*0.05), y_hombros-int(W*0.05)),
-                   (cx-int(W*0.20)+int(W*0.05), y_hombros+int(W*0.05))], fill=(239,68,68,220))
-        d.ellipse([(cx+int(W*0.20)-int(W*0.05), y_hombros-int(W*0.05)),
-                   (cx+int(W*0.20)+int(W*0.05), y_hombros+int(W*0.05))], fill=(239,68,68,220))
+        r = int(pos["face_w"]*0.32)
+        for side in [-1,1]:
+            sx = cx + side*int(pos["face_w"]*1.3)
+            d.ellipse([(sx-r,pos["sho_y"]-r),(sx+r,pos["sho_y"]+r)], fill=(239,68,68,220))
     elif "Espalda" in lesion:
-        marcador(y_cintura, "ESPALDA")
+        marcador(pos["waist_y"], "ESPALDA")
     elif "Cervical" in lesion:
-        marcador(y_hombros - int(H*0.04), "CERVICAL")
+        marcador(pos["neck_y"], "CERVICAL")
 
-    # ── Componer overlay sobre la foto ───────────────────────────────────
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
     result.save(buf, "JPEG", quality=90)
@@ -616,22 +684,25 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
     return buf.getvalue()
 
 
-def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", height: int = 320, ancho_columna: bool = False):
+def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", ancho_px: int = 280):
     """
-    Muestra la foto de frente del cliente con señalizaciones de análisis dibujadas.
-    Si ancho_columna=True, ocupa el 100% del contenedor donde se llama (sin sub-columnas
-    que la encojan). Si no hay foto de frente disponible, muestra mensaje informativo.
+    Muestra la foto de frente del cliente con señalizaciones de análisis
+    REALES (detectadas con visión por computadora), en tamaño moderado
+    para no romper el flujo del reporte. Incluye opción de ver en grande.
     """
     foto_frente = cargar_foto_disco(id_al, "frente", etapa)
     if foto_frente:
         try:
             procesada = analizar_foto_con_senalizaciones(foto_frente, norm, mot, estado)
-            if ancho_columna:
-                st.image(procesada, use_container_width=True)
-            else:
-                col_a, col_b, col_c = st.columns([1, 3, 1])
-                with col_b:
-                    st.image(procesada, use_container_width=True)
+            pos_check = detectar_persona_en_foto(foto_frente)
+
+            col_a, col_b, col_c = st.columns([1, 1.3, 1])
+            with col_b:
+                st.image(procesada, width=ancho_px)
+
+            if pos_check is None:
+                st.info("ℹ️ No se detectó automáticamente a la persona en la foto. Se muestra solo el estado general. Para mejor detección, usa una foto de frente con buena iluminación y rostro visible.")
+
             with st.expander("🔍 Ver análisis en tamaño completo"):
                 st.image(procesada, use_container_width=True)
         except Exception as e:
@@ -640,13 +711,13 @@ def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1"
         st.markdown(f"""
         <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
                     border:2px dashed #50C87850;border-radius:16px;
-                    padding:40px;text-align:center;margin:16px 0;">
-          <div style="font-size:40px;">📸</div>
-          <div style="font-size:14px;color:#8FC99E;margin-top:10px;font-weight:600;">
+                    padding:32px;text-align:center;margin:14px 0;">
+          <div style="font-size:34px;">📸</div>
+          <div style="font-size:13px;color:#8FC99E;margin-top:8px;font-weight:600;">
             Sube tu foto de frente para ver el análisis visual
           </div>
-          <div style="font-size:11px;color:#50C87880;margin-top:6px;">
-            Las señalizaciones de zonas de enfoque se generan sobre tu fotografía real
+          <div style="font-size:10px;color:#50C87880;margin-top:4px;">
+            Las señalizaciones se generan detectando tu posición real en la fotografía
           </div>
         </div>""", unsafe_allow_html=True)
 
@@ -1101,7 +1172,7 @@ def dashboard_q1(norm, mot, por, id_al):
 
     # Análisis visual sobre foto real — ANCHO COMPLETO para legibilidad
     st.markdown("<div class='sec-head'>ANÁLISIS VISUAL — FOTO CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
-    mostrar_analisis_visual(id_al, norm, mot, etapa="q1", estado="Q1", ancho_columna=True)
+    mostrar_analisis_visual(id_al, norm, mot, etapa="q1", estado="Q1")
 
     col_av, col_info = st.columns([1, 2])
     with col_av:
@@ -1316,7 +1387,7 @@ def dashboard_q2(norm, mot, revs_df, id_al):
 
     # Foto de frente Q2 con señalizaciones — ANCHO COMPLETO
     st.markdown("<div class='sec-head'>ANÁLISIS VISUAL Q2 — FOTO CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
-    mostrar_analisis_visual(id_al, norm, mot, etapa="q2", estado=estado, ancho_columna=True)
+    mostrar_analisis_visual(id_al, norm, mot, etapa="q2", estado=estado)
 
     col_av, col_info = st.columns([1, 2])
     with col_av:
@@ -1895,7 +1966,7 @@ def dashboard_admin(df_existente):
 
         # Análisis visual sobre foto real — ANCHO COMPLETO
         st.markdown("<div class='sec-head'>ANÁLISIS VISUAL CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
-        mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, ancho_columna=True)
+        mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, ancho_px=240)
 
         # Deltas
         peso_act   = pf(r_df.iloc[-1].get("Peso_Revision",m_calc["peso"]) if not r_df.empty else m_calc["peso"], m_calc["peso"])
