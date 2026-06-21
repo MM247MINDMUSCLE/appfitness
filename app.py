@@ -591,132 +591,214 @@ def detectar_persona_en_foto(foto_bytes: bytes):
 
 def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, estado: str = "Q1") -> bytes:
     """
-    Detecta la posición real de la persona en la foto (vía OpenCV) y dibuja
-    señalizaciones de análisis ÚNICAMENTE en las zonas anatómicas reales:
-    - Zona de enfoque muscular según objetivo
-    - Marcador de lesión en la zona anatómica correspondiente
-    - Badge de estado
-    Si no se detecta a la persona, retorna la foto original sin alterar
-    y marca bandera para mostrar aviso en la interfaz.
+    Detecta la posición real de la persona en la foto y dibuja un ANÁLISIS
+    CLÍNICO COMPLETO con marcadores numerados conectados a una leyenda lateral,
+    usando TODOS los datos relevantes del cliente: objetivo, lesión, postura,
+    IMC/ICA, biofeedback digestivo, estancamiento, recuperación y estrés.
+    Cada punto numerado en el cuerpo corresponde a una entrada en la leyenda.
     """
     from PIL import Image, ImageDraw, ImageFont
 
-    img = Image.open(io.BytesIO(foto_bytes)).convert("RGBA")
-    W, H = img.size
+    img_orig = Image.open(io.BytesIO(foto_bytes)).convert("RGBA")
+    W0, H0 = img_orig.size
+
+    # ── Lienzo ampliado: foto + banda lateral derecha para la leyenda ────────
+    leyenda_w = int(W0 * 0.62)
+    W, H = W0 + leyenda_w, H0
+    canvas = Image.new("RGBA", (W, H), (10, 22, 14, 255))
+    canvas.paste(img_orig, (0, 0))
+    d = ImageDraw.Draw(canvas)
 
     pos = detectar_persona_en_foto(foto_bytes)
 
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(overlay)
-
-    objetivo = str(norm.get("Objetivo principal", ""))
-    lesion   = str(norm.get("Lesión actual", "Ninguna"))
+    objetivo   = str(norm.get("Objetivo principal", ""))
+    lesion     = str(norm.get("Lesión actual", "Ninguna"))
+    postura    = str(norm.get("Mala postura", "No"))
+    biofeed    = str(norm.get("Biofeedback_Dig", "Sin molestias"))
+    estanc     = str(norm.get("Historial_Est", "No estoy estancado"))
+    recup      = str(norm.get("Recuperacion_Base", "Normal"))
+    estres     = pf(norm.get("Estres_Ext", "5"), 5.0)
+    imc        = mot.get("imc", 22.0)
+    ica        = mot.get("ica", 0.48)
+    fuerza_q1  = pf(norm.get("P_Fuerza_Q1", "5"), 5.0)
 
     if estado == "AVANCE":
-        ring_col = (34, 197, 94, 255)
+        ring_col = (34, 197, 94, 255); estado_txt = "AVANCE"
     elif estado == "RETROCESO":
-        ring_col = (239, 68, 68, 255)
+        ring_col = (239, 68, 68, 255); estado_txt = "RETROCESO"
     elif estado == "LENTO":
-        ring_col = (245, 158, 11, 255)
+        ring_col = (245, 158, 11, 255); estado_txt = "LENTO"
     else:
-        ring_col = (80, 200, 120, 255)
+        ring_col = (80, 200, 120, 255); estado_txt = "LÍNEA BASE"
 
-    try:
-        fnt_size = max(16, int(W * 0.045))
-        fnt = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fnt_size)
-    except Exception:
-        fnt = ImageFont.load_default()
+    def font(sz, bold=True):
+        path = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" if bold else \
+               "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        try:
+            return ImageFont.truetype(path, sz)
+        except Exception:
+            return ImageFont.load_default()
 
-    # ── Badge de estado (siempre se muestra, arriba de la imagen) ────────
-    label_estado = estado if estado in ("AVANCE","RETROCESO","LENTO") else "LÍNEA BASE"
-    badge_w = int(W * 0.5)
-    badge_h = int(fnt_size * 1.8)
-    bx_top  = int(H * 0.02)
+    fnt_title = font(max(16, int(W0*0.05)))
+    fnt_item_n= font(max(13, int(W0*0.034)))
+    fnt_item_t= font(max(11, int(W0*0.028)))
+    fnt_marker= font(max(14, int(W0*0.032)))
+
+    # ── Badge de estado arriba de la foto ─────────────────────────────────
+    badge_w = int(W0 * 0.55)
+    badge_h = int(fnt_title.size * 1.7)
+    bx_top  = int(H0 * 0.015)
     d.rounded_rectangle(
-        [(W//2 - badge_w//2, bx_top), (W//2 + badge_w//2, bx_top + badge_h)],
+        [(W0//2 - badge_w//2, bx_top), (W0//2 + badge_w//2, bx_top + badge_h)],
         radius=badge_h//2, fill=ring_col
     )
-    bbox = d.textbbox((0,0), label_estado, font=fnt)
-    tw_txt = bbox[2]-bbox[0]
-    d.text((W//2 - tw_txt//2, bx_top + badge_h//2 - fnt_size//2),
-           label_estado, fill=(255,255,255,255), font=fnt)
+    bbox = d.textbbox((0,0), estado_txt, font=fnt_title)
+    d.text((W0//2 - (bbox[2]-bbox[0])//2, bx_top + badge_h//2 - fnt_title.size//2),
+           estado_txt, fill=(255,255,255,255), font=fnt_title)
 
-    if pos is None:
-        # No se detectó persona: solo badge, sin señalizaciones erróneas
-        result = Image.alpha_composite(img, overlay).convert("RGB")
-        buf = io.BytesIO()
-        result.save(buf, "JPEG", quality=90)
-        buf.seek(0)
-        return buf.getvalue()
+    # ── Panel de leyenda lateral (fondo) ──────────────────────────────────
+    pad = int(W0 * 0.04)
+    d.rectangle([(W0, 0), (W, H)], fill=(13, 31, 20, 255))
+    ly = int(H0 * 0.04)
+    d.text((W0+pad, ly), "ANÁLISIS CLÍNICO", fill=(80,200,120,255), font=fnt_title)
+    ly += int(fnt_title.size * 1.6)
+    d.line([(W0+pad, ly), (W-pad, ly)], fill=(80,200,120,80), width=2)
+    ly += int(H0 * 0.025)
 
-    cx     = pos["cx"]
-    zona_w = int(pos["face_w"] * 2.6)
-    fs2    = max(14, int(pos["head_h"] * 0.32))
-    try:
-        f2 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs2)
-    except Exception:
-        f2 = ImageFont.load_default()
+    items = []   # cada item: (numero, color, titulo, detalle, punto_xy_en_foto_o_None)
 
-    def caja(y_top, y_bot, color, label):
-        d.rectangle([(cx-zona_w//2, y_top), (cx+zona_w//2, y_bot)],
-                    fill=color+(85,), outline=color+(255,), width=max(2,int(W*0.006)))
-        bb = d.textbbox((0,0), label, font=f2)
-        lw_txt = bb[2]-bb[0]
-        ty = (y_top+y_bot)//2 - fs2//2
-        d.text((cx-lw_txt//2+2, ty+2), label, fill=(0,0,0,180), font=f2)
-        d.text((cx-lw_txt//2, ty), label, fill=(255,255,255,255), font=f2)
+    # Helper para registrar puntos sobre el cuerpo detectado
+    def punto(cx_pt, cy_pt, color, numero):
+        r = max(10, int(W0 * 0.028))
+        d.ellipse([(cx_pt-r, cy_pt-r),(cx_pt+r, cy_pt+r)], fill=color+(235,), outline=(255,255,255,255), width=2)
+        bb = d.textbbox((0,0), str(numero), font=fnt_marker)
+        d.text((cx_pt-(bb[2]-bb[0])//2, cy_pt-fnt_marker.size//2), str(numero), fill=(255,255,255,255), font=fnt_marker)
 
-    # ── Anillo en la cabeza real detectada ────────────────────────────────
-    head_r = int(pos["face_w"] * 0.75)
-    cy_head = (pos["head_top"] + pos["head_bot"]) // 2
-    d.ellipse([(cx-head_r, cy_head-head_r),(cx+head_r, cy_head+head_r)],
-              outline=ring_col, width=max(3, int(W*0.008)))
+    contador = 1
 
-    # ── Zonas de enfoque sobre posiciones anatómicas REALES ──────────────
-    if "grasa" in objetivo or "Perder" in objetivo:
-        caja(pos["waist_y"] - int(pos["head_h"]*0.5), pos["waist_y"] + int(pos["head_h"]*0.2), (255,107,53), "ABDOMEN")
-        caja(pos["hip_y"], pos["hip_y"] + int(pos["head_h"]*0.6), (255,107,53), "CARDIO")
-    elif "muscular" in objetivo or "Ganar" in objetivo:
-        caja(pos["chest_y"] - int(pos["head_h"]*0.2), pos["chest_y"] + int(pos["head_h"]*0.5), (59,130,246), "PECHO")
-        caja(pos["sho_y"], pos["sho_y"] + int(pos["head_h"]*0.35), (139,92,246), "HOMBROS")
-        if pos["knee_y"] < H:
-            caja(pos["knee_y"] - int(pos["head_h"]*1.2), pos["knee_y"] - int(pos["head_h"]*0.2), (16,185,129), "CUÁDRICEPS")
+    if pos is not None:
+        cx = pos["cx"]
+
+        # 1. Zona de enfoque muscular principal según objetivo
+        if "grasa" in objetivo or "Perder" in objetivo:
+            py = pos["waist_y"]
+            punto(cx, py, (255,107,53), contador)
+            items.append((contador, (255,107,53), "Zona abdominal/cintura",
+                          "Prioridad: déficit calórico + cardio HIIT enfocado en grasa visceral."))
+            contador += 1
+        elif "muscular" in objetivo or "Ganar" in objetivo:
+            py = pos["chest_y"]
+            punto(cx, py, (59,130,246), contador)
+            items.append((contador, (59,130,246), "Pecho / Tren superior",
+                          "Prioridad: hipertrofia con sobrecarga progresiva semanal."))
+            contador += 1
+            py2 = pos["sho_y"]
+            punto(cx - int(pos["face_w"]*1.4), py2, (139,92,246), contador)
+            items.append((contador, (139,92,246), "Hombros / Deltoides",
+                          "Trabajo complementario para simetría y estabilidad articular."))
+            contador += 1
+        else:
+            py = pos["chest_y"]
+            punto(cx, py, (59,130,246), contador)
+            items.append((contador, (59,130,246), "Recomposición — Torso",
+                          "Balance entre pérdida de grasa y ganancia muscular simultánea."))
+            contador += 1
+
+        # 2. Marcador de lesión (si existe) — el más crítico visualmente
+        if "Rodilla" in lesion and pos["knee_y"] < H0:
+            for side in [-1, 1]:
+                punto(cx + side*int(pos["face_w"]*0.9), pos["knee_y"], (239,68,68), contador)
+            items.append((contador, (239,68,68), "LESIÓN: Rodilla",
+                          "Evitar impacto axial. Rutina adaptada sin sentadilla profunda."))
+            contador += 1
+        elif "Hombro" in lesion:
+            for side in [-1, 1]:
+                punto(cx + side*int(pos["face_w"]*1.3), pos["sho_y"], (239,68,68), contador)
+            items.append((contador, (239,68,68), "LESIÓN: Hombro",
+                          "Evitar press por encima de cabeza con carga máxima."))
+            contador += 1
+        elif "Espalda" in lesion:
+            punto(cx, pos["waist_y"] - int(pos["head_h"]*0.3), (239,68,68), contador)
+            items.append((contador, (239,68,68), "LESIÓN: Espalda baja",
+                          "Activación de core obligatoria antes de cargas axiales."))
+            contador += 1
+        elif "Cervical" in lesion:
+            punto(cx, pos["neck_y"], (239,68,68), contador)
+            items.append((contador, (239,68,68), "LESIÓN: Cervical",
+                          "Evitar encogimientos pesados y press militar tras nuca."))
+            contador += 1
+
+        # 3. Postura (si reportada)
+        if postura != "No":
+            punto(cx, pos["sho_y"] + int(pos["head_h"]*0.5), (245,158,11), contador)
+            items.append((contador, (245,158,11), f"Postura: {postura.replace('Sí — ','').capitalize()}",
+                          "Incluir ejercicios correctivos posturales en cada sesión."))
+            contador += 1
+
     else:
-        caja(pos["chest_y"], pos["chest_y"] + int(pos["head_h"]*0.45), (59,130,246), "PECHO")
-        caja(pos["waist_y"] - int(pos["head_h"]*0.3), pos["waist_y"] + int(pos["head_h"]*0.2), (255,107,53), "ABS")
-        caja(pos["hip_y"], pos["hip_y"] + int(pos["head_h"]*0.5), (236,72,153), "GLÚTEO")
+        items.append((0, (150,150,150), "Detección no disponible",
+                      "Sube una foto de frente con buena iluminación para ubicar zonas exactas."))
 
-    # ── Marcador de lesión en zona anatómica REAL ─────────────────────────
-    fs3 = max(14, int(pos["head_h"]*0.28))
-    try:
-        f3 = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", fs3)
-    except Exception:
-        f3 = ImageFont.load_default()
+    # 4. Composición corporal (siempre, no depende de detección)
+    origen_imc = ("Bajo peso" if imc<18.5 else "Normal" if imc<25 else "Sobrepeso" if imc<30 else "Obesidad")
+    items.append((contador, (16,185,129), f"IMC {imc} — {origen_imc}",
+                  f"ICA: {ica} · Indicador de distribución de grasa central."))
+    contador += 1
 
-    def marcador(yc, label):
-        r = int(pos["face_w"] * 0.35)
-        for ri, alpha in [(int(r*1.6),140),(int(r*1.2),200),(r,255)]:
-            d.ellipse([(cx-ri, yc-ri),(cx+ri, yc+ri)], fill=(239,68,68,alpha))
-        bb = d.textbbox((0,0), "!", font=f3)
-        d.text((cx-(bb[2]-bb[0])//2, yc-fs3//2), "!", fill=(255,255,255,255), font=f3)
-        bb2 = d.textbbox((0,0), label, font=f3)
-        ly = yc + int(r*1.7)
-        d.text((cx-(bb2[2]-bb2[0])//2+1, ly+1), label, fill=(0,0,0,180), font=f3)
-        d.text((cx-(bb2[2]-bb2[0])//2, ly), label, fill=(239,68,68,255), font=f3)
+    # 5. Biofeedback digestivo
+    if "pesadez" in biofeed.lower() or "Gases" in biofeed:
+        items.append((contador, (236,72,153), "Biofeedback digestivo alterado",
+                      "Rotar fuentes de carbohidrato. Posible sensibilidad alimentaria."))
+        contador += 1
 
-    if "Rodilla" in lesion and pos["knee_y"] < H:
-        marcador(pos["knee_y"], "RODILLA")
-    elif "Hombro" in lesion:
-        r = int(pos["face_w"]*0.32)
-        for side in [-1,1]:
-            sx = cx + side*int(pos["face_w"]*1.3)
-            d.ellipse([(sx-r,pos["sho_y"]-r),(sx+r,pos["sho_y"]+r)], fill=(239,68,68,220))
-    elif "Espalda" in lesion:
-        marcador(pos["waist_y"], "ESPALDA")
-    elif "Cervical" in lesion:
-        marcador(pos["neck_y"], "CERVICAL")
+    # 6. Estancamiento previo
+    if "Más de 6" in estanc or "1 a 3" in estanc:
+        items.append((contador, (168,85,247), f"Estancamiento previo: {estanc}",
+                      "Requiere variación de estímulo y posible recalculo calórico."))
+        contador += 1
 
-    result = Image.alpha_composite(img, overlay).convert("RGB")
+    # 7. Recuperación / estrés
+    if "adolorido" in recup.lower():
+        items.append((contador, (244,114,182), "Recuperación muscular lenta",
+                      "Aumentar descanso entre sesiones del mismo grupo muscular."))
+        contador += 1
+    if estres >= 7:
+        items.append((contador, (250,204,21), f"Estrés externo alto ({int(estres)}/10)",
+                      "Factor limitante para recuperación. Priorizar higiene de sueño."))
+        contador += 1
+
+    # ── Dibujar leyenda lateral con todos los items ───────────────────────
+    for num, color, titulo, detalle in items:
+        if ly > H - int(H0*0.06):
+            break  # evitar desbordar el lienzo
+        # Círculo numerado
+        r_leg = max(11, int(W0*0.026))
+        d.ellipse([(W0+pad, ly), (W0+pad+r_leg*2, ly+r_leg*2)], fill=color+(255,))
+        bb = d.textbbox((0,0), str(num), font=fnt_item_n)
+        d.text((W0+pad+r_leg-(bb[2]-bb[0])//2, ly+r_leg-fnt_item_n.size//2), str(num),
+               fill=(255,255,255,255), font=fnt_item_n)
+        # Título
+        tx = W0 + pad + r_leg*2 + int(pad*0.6)
+        d.text((tx, ly), titulo, fill=(255,255,255,255), font=fnt_item_n)
+        ly += int(fnt_item_n.size * 1.3)
+        # Detalle (wrap simple por longitud)
+        max_chars = max(20, int((leyenda_w - (tx - W0)) / (fnt_item_t.size*0.52)))
+        palabras = detalle.split()
+        linea = ""
+        for palabra in palabras:
+            test = (linea + " " + palabra).strip()
+            if len(test) > max_chars:
+                d.text((tx, ly), linea, fill=(180,200,185,255), font=fnt_item_t)
+                ly += int(fnt_item_t.size * 1.35)
+                linea = palabra
+            else:
+                linea = test
+        if linea:
+            d.text((tx, ly), linea, fill=(180,200,185,255), font=fnt_item_t)
+            ly += int(fnt_item_t.size * 1.35)
+        ly += int(H0 * 0.02)
+
+    result = canvas.convert("RGB")
     buf = io.BytesIO()
     result.save(buf, "JPEG", quality=90)
     buf.seek(0)
@@ -725,9 +807,10 @@ def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, e
 
 def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", ancho_px: int = 280):
     """
-    Muestra la foto de frente del cliente con señalizaciones de análisis
-    REALES (detectadas con visión por computadora), en tamaño moderado
-    para no romper el flujo del reporte. Incluye opción de ver en grande.
+    Muestra la foto de frente del cliente junto con un panel de análisis
+    clínico lateral con marcadores numerados. La imagen combinada (foto +
+    leyenda) se muestra a ancho completo del contenedor para que el texto
+    de la leyenda sea legible.
     """
     foto_frente = cargar_foto_disco(id_al, "frente", etapa)
     if foto_frente:
@@ -735,15 +818,10 @@ def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1"
             procesada = analizar_foto_con_senalizaciones(foto_frente, norm, mot, estado)
             pos_check = detectar_persona_en_foto(foto_frente)
 
-            col_a, col_b, col_c = st.columns([1, 1.3, 1])
-            with col_b:
-                st.image(procesada, width=ancho_px)
+            st.image(procesada, use_container_width=True)
 
             if pos_check is None:
-                st.info("ℹ️ No se detectó automáticamente a la persona en la foto. Se muestra solo el estado general. Para mejor detección, usa una foto de frente con buena iluminación y rostro visible.")
-
-            with st.expander("🔍 Ver análisis en tamaño completo"):
-                st.image(procesada, use_container_width=True)
+                st.info("ℹ️ No se detectó automáticamente a la persona en la foto. Se muestra el análisis clínico general sin marcadores corporales. Para mejor detección, usa una foto de frente con buena iluminación y rostro visible.")
         except Exception as e:
             st.warning(f"No se pudo procesar el análisis visual: {e}")
     else:
@@ -2099,4 +2177,5 @@ else:
         formulario_q1(df_existente)
     elif vista == "avance":
         formulario_q2(df_existente)
+
 
