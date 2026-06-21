@@ -485,46 +485,83 @@ def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
 # =============================================================================
 def detectar_persona_en_foto(foto_bytes: bytes):
     """
-    Usa OpenCV (Haar Cascade) para detectar el rostro real en la foto y
-    estimar las proporciones corporales reales a partir de esa posición.
-    Retorna dict con coordenadas reales (no asumidas) o None si no detecta nada.
+    Detecta la posición real de la cabeza en la foto analizando tonos de piel
+    en bandas horizontales — 100% Pillow, SIN dependencias externas (sin cv2).
+    Estima las proporciones corporales reales a partir de esa posición.
+    Retorna dict con coordenadas reales o None si no detecta nada confiable.
     """
-    import cv2
-    import numpy as np
+    from PIL import Image
 
-    nparr = np.frombuffer(foto_bytes, np.uint8)
-    cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if cv_img is None:
+    img = Image.open(io.BytesIO(foto_bytes)).convert("RGB")
+    W, H = img.size
+
+    # Reducir para análisis rápido (no afecta las coordenadas finales, se reescalan)
+    analysis_w = 200
+    scale = analysis_w / W
+    analysis_h = max(1, int(H * scale))
+    small = img.resize((analysis_w, analysis_h))
+    pixels = small.load()
+
+    def es_piel(r, g, b):
+        # Regla de detección de tono de piel humana (rango amplio, varias etnias)
+        return (r > 95 and g > 40 and b > 20 and
+                r > g and r > b and
+                (max(r, g, b) - min(r, g, b)) > 15 and
+                abs(int(r) - int(g)) > 10)
+
+    band_h = max(1, analysis_h // 60)
+    bandas = []
+    for y0 in range(0, analysis_h, band_h):
+        count, total = 0, 0
+        sum_x_piel = 0
+        for y in range(y0, min(y0 + band_h, analysis_h)):
+            for x in range(0, analysis_w, 2):
+                r, g, b = pixels[x, y]
+                total += 1
+                if es_piel(r, g, b):
+                    count += 1
+                    sum_x_piel += x
+        ratio = count / total if total else 0
+        cx_banda = (sum_x_piel / count) if count > 0 else None
+        bandas.append((y0, ratio, cx_banda))
+
+    # Buscar primera banda con concentración significativa de piel (inicio de cabeza)
+    umbral = 0.12
+    idx_inicio = None
+    for i, (y0, ratio, cxb) in enumerate(bandas):
+        if ratio > umbral:
+            idx_inicio = i
+            break
+
+    if idx_inicio is None:
         return None
 
-    H, W = cv_img.shape[:2]
-    gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.equalizeHist(gray)
+    cabeza_y0 = bandas[idx_inicio][0]
 
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=4, minSize=(int(W*0.05), int(W*0.05)))
+    # Encontrar fin de zona de piel concentrada (fin de cabeza) y centro X promedio
+    cabeza_y1 = cabeza_y0 + band_h
+    cx_samples = []
+    for i in range(idx_inicio, len(bandas)):
+        y0, ratio, cxb = bandas[i]
+        if ratio > umbral * 0.55:
+            cabeza_y1 = y0 + band_h
+            if cxb is not None:
+                cx_samples.append(cxb)
+        else:
+            break
 
-    if len(faces) == 0:
-        # Reintento con cascada alternativa (más permisiva)
-        face_cascade2 = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml")
-        faces = face_cascade2.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(int(W*0.04), int(W*0.04)))
-
-    if len(faces) == 0:
+    if not cx_samples:
         return None
 
-    # Tomar el rostro más grande (más cercano a cámara / principal)
-    fx, fy, fw, fh = max(faces, key=lambda f: f[2]*f[3])
+    cx_analysis = sum(cx_samples) / len(cx_samples)
 
-    # ── Proporciones corporales humanas estándar a partir del rostro real ──
-    # La altura de cabeza ≈ fh (desde frente hasta barbilla aprox.)
-    # Cuerpo completo ≈ 7.5 cabezas de alto (proporción clásica de figura humana)
-    head_h    = fh
-    cx_face   = fx + fw // 2
-    cy_face   = fy + fh // 2
+    # Reescalar a coordenadas reales de la imagen original
+    head_top = int(cabeza_y0 / scale)
+    head_bot = int(cabeza_y1 / scale)
+    cx_real  = int(cx_analysis / scale)
+    head_h   = max(head_bot - head_top, int(H * 0.04))  # mínimo razonable
 
-    # Punto superior de cabeza
-    head_top  = fy
-    head_bot  = fy + fh
+    # ── Proporciones corporales humanas estándar a partir de la cabeza real ──
     neck_y    = head_bot + int(head_h * 0.15)
     sho_y     = neck_y + int(head_h * 0.25)
     chest_y   = sho_y + int(head_h * 0.4)
@@ -533,19 +570,21 @@ def detectar_persona_en_foto(foto_bytes: bytes):
     knee_y    = hip_y + int(head_h * 2.0)
     foot_y    = knee_y + int(head_h * 1.9)
 
-    # Limitar a los bordes reales de la imagen
-    waist_y = min(waist_y, H-1)
-    hip_y   = min(hip_y, H-1)
-    knee_y  = min(knee_y, H-1)
-    foot_y  = min(foot_y, H-1)
+    waist_y = min(waist_y, H - 1)
+    hip_y   = min(hip_y, H - 1)
+    knee_y  = min(knee_y, H - 1)
+    foot_y  = min(foot_y, H - 1)
+
+    # face_w estimado proporcional a head_h (proporción típica ancho/alto de rostro)
+    face_w = int(head_h * 0.78)
 
     return {
         "W": W, "H": H,
-        "cx": cx_face,
+        "cx": cx_real,
         "head_top": head_top, "head_bot": head_bot,
         "neck_y": neck_y, "sho_y": sho_y, "chest_y": chest_y,
         "waist_y": waist_y, "hip_y": hip_y, "knee_y": knee_y, "foot_y": foot_y,
-        "head_h": head_h, "face_w": fw,
+        "head_h": head_h, "face_w": face_w,
         "detectado": True,
     }
 
