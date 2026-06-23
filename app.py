@@ -483,269 +483,101 @@ def mostrar_foto(col, id_al: str, tipo: str, etapa: str, label: str):
 # =============================================================================
 # AVATAR — PILLOW LOCAL (SIN INTERNET)
 # =============================================================================
-def detectar_persona_en_foto(foto_bytes: bytes):
+def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1"):
     """
-    Detecta la posición real de la cabeza en la foto analizando tonos de piel
-    en bandas horizontales — 100% Pillow, SIN dependencias externas (sin cv2).
-    Estima las proporciones corporales reales a partir de esa posición.
-    Retorna dict con coordenadas reales o None si no detecta nada confiable.
-    """
-    from PIL import Image
-
-    img = Image.open(io.BytesIO(foto_bytes)).convert("RGB")
-    W, H = img.size
-
-    # Reducir para análisis rápido (no afecta las coordenadas finales, se reescalan)
-    analysis_w = 200
-    scale = analysis_w / W
-    analysis_h = max(1, int(H * scale))
-    small = img.resize((analysis_w, analysis_h))
-    pixels = small.load()
-
-    def es_piel(r, g, b):
-        # Regla de detección de tono de piel humana (rango amplio, varias etnias)
-        return (r > 95 and g > 40 and b > 20 and
-                r > g and r > b and
-                (max(r, g, b) - min(r, g, b)) > 15 and
-                abs(int(r) - int(g)) > 10)
-
-    band_h = max(1, analysis_h // 60)
-    bandas = []
-    for y0 in range(0, analysis_h, band_h):
-        count, total = 0, 0
-        sum_x_piel = 0
-        for y in range(y0, min(y0 + band_h, analysis_h)):
-            for x in range(0, analysis_w, 2):
-                r, g, b = pixels[x, y]
-                total += 1
-                if es_piel(r, g, b):
-                    count += 1
-                    sum_x_piel += x
-        ratio = count / total if total else 0
-        cx_banda = (sum_x_piel / count) if count > 0 else None
-        bandas.append((y0, ratio, cx_banda))
-
-    # Buscar primera banda con concentración significativa de piel (inicio de cabeza)
-    umbral = 0.12
-    idx_inicio = None
-    for i, (y0, ratio, cxb) in enumerate(bandas):
-        if ratio > umbral:
-            idx_inicio = i
-            break
-
-    if idx_inicio is None:
-        return None
-
-    cabeza_y0 = bandas[idx_inicio][0]
-
-    # Encontrar fin de zona de piel concentrada (fin de cabeza) y centro X promedio
-    cabeza_y1 = cabeza_y0 + band_h
-    cx_samples = []
-    for i in range(idx_inicio, len(bandas)):
-        y0, ratio, cxb = bandas[i]
-        if ratio > umbral * 0.55:
-            cabeza_y1 = y0 + band_h
-            if cxb is not None:
-                cx_samples.append(cxb)
-        else:
-            break
-
-    if not cx_samples:
-        return None
-
-    cx_analysis = sum(cx_samples) / len(cx_samples)
-
-    # Reescalar a coordenadas reales de la imagen original
-    head_top = int(cabeza_y0 / scale)
-    head_bot = int(cabeza_y1 / scale)
-    cx_real  = int(cx_analysis / scale)
-    head_h   = max(head_bot - head_top, int(H * 0.04))  # mínimo razonable
-
-    # ── Proporciones corporales humanas estándar a partir de la cabeza real ──
-    neck_y    = head_bot + int(head_h * 0.15)
-    sho_y     = neck_y + int(head_h * 0.25)
-    chest_y   = sho_y + int(head_h * 0.4)
-    waist_y   = sho_y + int(head_h * 2.2)
-    hip_y     = waist_y + int(head_h * 0.3)
-    knee_y    = hip_y + int(head_h * 2.0)
-    foot_y    = knee_y + int(head_h * 1.9)
-
-    waist_y = min(waist_y, H - 1)
-    hip_y   = min(hip_y, H - 1)
-    knee_y  = min(knee_y, H - 1)
-    foot_y  = min(foot_y, H - 1)
-
-    # face_w estimado proporcional a head_h (proporción típica ancho/alto de rostro)
-    face_w = int(head_h * 0.78)
-
-    return {
-        "W": W, "H": H,
-        "cx": cx_real,
-        "head_top": head_top, "head_bot": head_bot,
-        "neck_y": neck_y, "sho_y": sho_y, "chest_y": chest_y,
-        "waist_y": waist_y, "hip_y": hip_y, "knee_y": knee_y, "foot_y": foot_y,
-        "head_h": head_h, "face_w": face_w,
-        "detectado": True,
-    }
-
-
-def analizar_foto_con_senalizaciones(foto_bytes: bytes, norm: dict, mot: dict, estado: str = "Q1") -> bytes:
-    """
-    Detecta la posición real de la persona en la foto y dibuja DIRECTAMENTE
-    sobre ella, sin paneles ni lienzos adicionales:
-    - Badge de estado (arriba)
-    - Anillo en la cabeza real detectada
-    - Una zona de enfoque muscular según objetivo (rectángulo + etiqueta corta)
-    - Marcador de lesión en la zona anatómica correspondiente (si existe)
-    Simple, directo, sin información sobrante.
-    """
-    from PIL import Image, ImageDraw, ImageFont
-
-    img = Image.open(io.BytesIO(foto_bytes)).convert("RGBA")
-    W, H = img.size
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(overlay)
-
-    pos      = detectar_persona_en_foto(foto_bytes)
-    objetivo = str(norm.get("Objetivo principal", ""))
-    lesion   = str(norm.get("Lesión actual", "Ninguna"))
-
-    if estado == "AVANCE":
-        ring_col = (34, 197, 94, 255)
-    elif estado == "RETROCESO":
-        ring_col = (239, 68, 68, 255)
-    elif estado == "LENTO":
-        ring_col = (245, 158, 11, 255)
-    else:
-        ring_col = (80, 200, 120, 255)
-
-    def font(sz):
-        try:
-            return ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", sz)
-        except Exception:
-            return ImageFont.load_default()
-
-    fnt = font(max(16, int(W * 0.045)))
-
-    # ── Badge de estado ────────────────────────────────────────────────────
-    label_estado = estado if estado in ("AVANCE","RETROCESO","LENTO") else "LÍNEA BASE"
-    badge_w = int(W * 0.5)
-    badge_h = int(fnt.size * 1.8)
-    bx_top  = int(H * 0.02)
-    d.rounded_rectangle(
-        [(W//2 - badge_w//2, bx_top), (W//2 + badge_w//2, bx_top + badge_h)],
-        radius=badge_h//2, fill=ring_col
-    )
-    bbox = d.textbbox((0,0), label_estado, font=fnt)
-    d.text((W//2 - (bbox[2]-bbox[0])//2, bx_top + badge_h//2 - fnt.size//2),
-           label_estado, fill=(255,255,255,255), font=fnt)
-
-    if pos is None:
-        result = Image.alpha_composite(img, overlay).convert("RGB")
-        buf = io.BytesIO()
-        result.save(buf, "JPEG", quality=90)
-        buf.seek(0)
-        return buf.getvalue()
-
-    cx = pos["cx"]
-
-    # ── Anillo en la cabeza real ────────────────────────────────────────────
-    head_r = int(pos["face_w"] * 0.75)
-    cy_head = (pos["head_top"] + pos["head_bot"]) // 2
-    d.ellipse([(cx-head_r, cy_head-head_r),(cx+head_r, cy_head+head_r)],
-              outline=ring_col, width=max(3, int(W*0.008)))
-
-    # ── Una sola zona de enfoque principal según objetivo ──────────────────
-    zona_w = int(pos["face_w"] * 2.6)
-    fs2 = max(14, int(pos["head_h"] * 0.32))
-    f2 = font(fs2)
-
-    def caja(y_top, y_bot, color, label):
-        d.rectangle([(cx-zona_w//2, y_top), (cx+zona_w//2, y_bot)],
-                    fill=color+(85,), outline=color+(255,), width=max(2,int(W*0.006)))
-        bb = d.textbbox((0,0), label, font=f2)
-        lw_txt = bb[2]-bb[0]
-        ty = (y_top+y_bot)//2 - fs2//2
-        d.text((cx-lw_txt//2+2, ty+2), label, fill=(0,0,0,180), font=f2)
-        d.text((cx-lw_txt//2, ty), label, fill=(255,255,255,255), font=f2)
-
-    if "grasa" in objetivo or "Perder" in objetivo:
-        caja(pos["waist_y"] - int(pos["head_h"]*0.5), pos["waist_y"] + int(pos["head_h"]*0.2),
-             (255,107,53), "ABDOMEN")
-    elif "muscular" in objetivo or "Ganar" in objetivo:
-        caja(pos["chest_y"] - int(pos["head_h"]*0.2), pos["chest_y"] + int(pos["head_h"]*0.5),
-             (59,130,246), "PECHO")
-    else:
-        caja(pos["waist_y"] - int(pos["head_h"]*0.3), pos["waist_y"] + int(pos["head_h"]*0.2),
-             (236,72,153), "ABS")
-
-    # ── Marcador de lesión (si existe) ──────────────────────────────────────
-    fs3 = max(14, int(pos["head_h"]*0.28))
-    f3 = font(fs3)
-
-    def marcador(yc, label):
-        r = int(pos["face_w"] * 0.35)
-        for ri, alpha in [(int(r*1.6),140),(int(r*1.2),200),(r,255)]:
-            d.ellipse([(cx-ri, yc-ri),(cx+ri, yc+ri)], fill=(239,68,68,alpha))
-        bb = d.textbbox((0,0), "!", font=f3)
-        d.text((cx-(bb[2]-bb[0])//2, yc-fs3//2), "!", fill=(255,255,255,255), font=f3)
-        bb2 = d.textbbox((0,0), label, font=f3)
-        ly = yc + int(r*1.7)
-        d.text((cx-(bb2[2]-bb2[0])//2+1, ly+1), label, fill=(0,0,0,180), font=f3)
-        d.text((cx-(bb2[2]-bb2[0])//2, ly), label, fill=(239,68,68,255), font=f3)
-
-    if "Rodilla" in lesion and pos["knee_y"] < H:
-        marcador(pos["knee_y"], "RODILLA")
-    elif "Hombro" in lesion:
-        r = int(pos["face_w"]*0.32)
-        for side in [-1,1]:
-            sx = cx + side*int(pos["face_w"]*1.3)
-            d.ellipse([(sx-r,pos["sho_y"]-r),(sx+r,pos["sho_y"]+r)], fill=(239,68,68,220))
-    elif "Espalda" in lesion:
-        marcador(pos["waist_y"], "ESPALDA")
-    elif "Cervical" in lesion:
-        marcador(pos["neck_y"], "CERVICAL")
-
-    result = Image.alpha_composite(img, overlay).convert("RGB")
-    buf = io.BytesIO()
-    result.save(buf, "JPEG", quality=90)
-    buf.seek(0)
-    return buf.getvalue()
-
-
-def mostrar_analisis_visual(id_al: str, norm: dict, mot: dict, etapa: str = "q1", estado: str = "Q1", ancho_px: int = 260):
-    """
-    Muestra la foto de frente con señalizaciones simples y directas,
-    en tamaño moderado (no a ancho completo) para no romper el flujo
-    del dashboard. Incluye opción de ver en grande si se necesita.
+    Muestra la foto de frente del cliente SIN NINGÚN dibujo ni señalización
+    encima (sin círculos, óvalos, rectángulos). La foto se presenta limpia,
+    junto a un panel lateral con los datos críticos del cliente en texto.
     """
     foto_frente = cargar_foto_disco(id_al, "frente", etapa)
-    if foto_frente:
-        try:
-            procesada = analizar_foto_con_senalizaciones(foto_frente, norm, mot, estado)
-            pos_check = detectar_persona_en_foto(foto_frente)
 
-            col_a, col_b, col_c = st.columns([1, 1.2, 1])
-            with col_b:
-                st.image(procesada, width=ancho_px)
+    col_foto, col_datos = st.columns([1, 1.3])
 
-            if pos_check is None:
-                st.caption("ℹ️ No se detectó la posición exacta. Usa una foto con buena iluminación y rostro visible para mejores resultados.")
+    with col_foto:
+        if foto_frente:
+            st.image(foto_frente, use_container_width=True)
+        else:
+            st.markdown(f"""
+            <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
+                        border:2px dashed #50C87850;border-radius:16px;
+                        padding:40px;text-align:center;min-height:280px;
+                        display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <div style="font-size:34px;">📸</div>
+              <div style="font-size:13px;color:#8FC99E;margin-top:8px;font-weight:600;">
+                Sin foto de frente disponible
+              </div>
+            </div>""", unsafe_allow_html=True)
 
-            with st.expander("🔍 Ver en tamaño completo"):
-                st.image(procesada, use_container_width=True)
-        except Exception as e:
-            st.warning(f"No se pudo procesar el análisis visual: {e}")
-    else:
+    with col_datos:
+        # ── Badge de estado ──────────────────────────────────────────────
+        badge_map = {
+            "AVANCE":    ("#22C55E", "#DCFCE7", "🚀 EN AVANCE"),
+            "RETROCESO": ("#EF4444", "#FEE2E2", "⚠️ RETROCESO"),
+            "LENTO":     ("#F59E0B", "#FEF9C3", "⏳ PROGRESO LENTO"),
+        }
+        bc, bbg, blbl = badge_map.get(estado, ("#50C878", "#F0FDF4", "✅ LÍNEA BASE"))
         st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#0D1F14,#1A3D24);
-                    border:2px dashed #50C87850;border-radius:16px;
-                    padding:32px;text-align:center;margin:14px 0;">
-          <div style="font-size:34px;">📸</div>
-          <div style="font-size:13px;color:#8FC99E;margin-top:8px;font-weight:600;">
-            Sube tu foto de frente para ver el análisis visual
+        <div style="margin-bottom:12px;">
+          <span style="background:{bbg};color:{bc};border:1.5px solid {bc};
+                       padding:5px 16px;border-radius:20px;font-size:12px;
+                       font-weight:700;letter-spacing:0.5px;">{blbl}</span>
+        </div>""", unsafe_allow_html=True)
+
+        # ── Nivel de conocimiento (gym) ──────────────────────────────────
+        nivel_raw = str(norm.get("Tiempo entrenando", ""))
+        if "Más de 3" in nivel_raw:
+            nivel_lbl, nivel_color = "🏆 Experimentado", "#FFD700"
+        elif "1 a 3" in nivel_raw or "6 meses a 1" in nivel_raw:
+            nivel_lbl, nivel_color = "⭐ Intermedio", "#C0C0C0"
+        else:
+            nivel_lbl, nivel_color = "🌱 Novato", "#50C878"
+
+        lesion   = str(norm.get("Lesión actual", "Ninguna"))
+        objetivo = str(norm.get("Objetivo principal", "--"))
+        sueno    = norm.get("P_Sueno_Q1", "5")
+        energia  = norm.get("P_Energia_Q1", "5")
+        fuerza   = norm.get("P_Fuerza_Q1", "5")
+        estres   = norm.get("Estres_Ext", "5")
+        dias     = str(norm.get("Días entrenar", "--"))
+        prot     = str(norm.get("Menu_Proteinas", "--"))
+        carb     = str(norm.get("Menu_Carbohidratos", "--"))
+        gras     = str(norm.get("Menu_Grasas", "--"))
+
+        def fila(icono, label, valor, color="#0D1F14"):
+            return f"""
+            <div style="display:flex;justify-content:space-between;align-items:center;
+                        padding:9px 0;border-bottom:1px solid #F0F4F1;">
+              <span style="font-size:12px;color:#6B7280;">{icono} {label}</span>
+              <span style="font-size:13px;font-weight:700;color:{color};text-align:right;
+                           max-width:55%;">{valor}</span>
+            </div>"""
+
+        html = "<div class='panel-card' style='padding:18px 20px;'>"
+        html += fila("🏋️", "Nivel", f"<span style='color:{nivel_color};'>{nivel_lbl}</span>")
+        html += fila("🎯", "Meta", objetivo)
+        if lesion != "Ninguna":
+            html += fila("🚨", "Lesión", lesion, color="#EF4444")
+        else:
+            html += fila("✅", "Lesiones", "Ninguna reportada", color="#22C55E")
+        html += fila("📅", "Días/semana", dias)
+        html += fila("😴", "Calidad sueño", f"{sueno}/10")
+        html += fila("⚡", "Energía", f"{energia}/10")
+        html += fila("💪", "Fuerza", f"{fuerza}/10")
+        html += fila("🧠", "Estrés externo", f"{estres}/10")
+        html += "</div>"
+        st.markdown(html, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class="panel-card" style="padding:18px 20px;margin-top:10px;">
+          <div style="font-size:11px;color:#7D9A84;font-weight:700;letter-spacing:1px;
+                      text-transform:uppercase;margin-bottom:8px;">🍽️ Alimentación elegida</div>
+          <div style="font-size:12px;color:#374151;line-height:1.8;">
+            <strong>Proteína:</strong> {prot}<br>
+            <strong>Carbohidratos:</strong> {carb}<br>
+            <strong>Grasas:</strong> {gras}
           </div>
         </div>""", unsafe_allow_html=True)
+
 
 
 # =============================================================================
@@ -800,15 +632,14 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
     c.showPage() if False else None
     y = header_page("HOJA 1 — PERFIL CLÍNICO Y LÍNEA BASE")
 
-    # Análisis visual sobre foto real (lado derecho)
+    # Foto de frente real (sin procesamiento, lado derecho)
     try:
         foto_frente = cargar_foto_disco(id_al, "frente", "q1")
         if foto_frente:
-            av_bytes = analizar_foto_con_senalizaciones(foto_frente, norm, mot, "Q1")
-            av_img   = Image.open(io.BytesIO(av_bytes))
+            av_img   = Image.open(io.BytesIO(foto_frente)).convert("RGB")
             av_img.thumbnail((160, 240))
             av_path  = f"/tmp/mm247_fotos/an_{id_al}_q1.jpg"
-            av_img.save(av_path)
+            av_img.save(av_path, "JPEG", quality=88)
             c.drawImage(av_path, W-180, y-220, width=150, height=220, preserveAspectRatio=True)
     except Exception:
         pass
@@ -1037,22 +868,47 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
 
     y -= (foto_h + 30)
 
-    # Análisis visual sobre foto real en PDF
+    # Foto de frente + ficha de datos del cliente
     c.setFont("Helvetica-Bold", 10)
     c.setFillColor(VERDE)
-    c.drawString(60, y, "ANÁLISIS VISUAL (ZONAS DE ENFOQUE Y SEÑALIZACIONES)")
+    c.drawString(60, y, "FOTOGRAFÍA Y FICHA CLÍNICA DEL CLIENTE")
     y -= 16
     try:
         foto_frente_an = cargar_foto_disco(id_al, "frente", "q1")
         if foto_frente_an:
-            av_bytes = analizar_foto_con_senalizaciones(foto_frente_an, norm, mot, "Q1")
-            av_path  = f"/tmp/mm247_fotos/an_pdf_{id_al}_q1.jpg"
-            with open(av_path,"wb") as f: f.write(av_bytes)
-            c.drawImage(av_path, W//2-80, y-240, width=160, height=240, preserveAspectRatio=True)
+            av_img = Image.open(io.BytesIO(foto_frente_an)).convert("RGB")
+            av_img.thumbnail((160, 240))
+            av_path = f"/tmp/mm247_fotos/an_pdf_{id_al}_q1.jpg"
+            av_img.save(av_path, "JPEG", quality=88)
+            c.drawImage(av_path, 60, y-240, width=160, height=240, preserveAspectRatio=True)
         else:
             c.setFillColor(color_mm(150,150,150))
             c.setFont("Helvetica", 9)
-            c.drawCentredString(W//2, y-100, "Sin foto de frente disponible para análisis")
+            c.drawString(60, y-30, "Sin foto de frente disponible")
+
+        # Ficha de datos al lado de la foto
+        fx0 = 240
+        fy0 = y - 12
+        nivel_raw = str(norm.get("Tiempo entrenando",""))
+        nivel_lbl = ("Experimentado" if "Más de 3" in nivel_raw else
+                     "Intermedio" if "1 a 3" in nivel_raw or "6 meses a 1" in nivel_raw else "Novato")
+        ficha = [
+            ("Nivel", nivel_lbl),
+            ("Meta", norm.get("Objetivo principal","--")),
+            ("Lesión", norm.get("Lesión actual","Ninguna")),
+            ("Días/semana", norm.get("Días entrenar","--")),
+            ("Sueño", f"{norm.get('P_Sueno_Q1','5')}/10"),
+            ("Energía", f"{norm.get('P_Energia_Q1','5')}/10"),
+            ("Fuerza", f"{norm.get('P_Fuerza_Q1','5')}/10"),
+            ("Estrés", f"{norm.get('Estres_Ext','5')}/10"),
+        ]
+        c.setFont("Helvetica-Bold", 9)
+        for lbl, val in ficha:
+            c.setFillColor(color_mm(80,120,90))
+            c.drawString(fx0, fy0, f"{lbl}:")
+            c.setFillColor(OSCURO)
+            c.drawString(fx0+85, fy0, _limpiar(str(val)))
+            fy0 -= 16
     except Exception:
         pass
 
@@ -1114,21 +970,39 @@ def generar_pdf(norm, mot, por, revs_df, id_al, rutas_fotos_q1=None, rutas_fotos
 
         y -= (foto_h + 30)
 
-        # Análisis visual Q2 sobre foto real
+        # Foto Q2 + ficha de seguimiento
         c.setFont("Helvetica-Bold",10); c.setFillColor(VERDE)
-        c.drawString(60, y, f"ANÁLISIS VISUAL Q2 — DICTAMEN: {estado}")
+        c.drawString(60, y, f"FOTOGRAFÍA Y SEGUIMIENTO Q2 — DICTAMEN: {estado}")
         y -= 16
         try:
             foto_frente_q2 = cargar_foto_disco(id_al, "frente", "q2")
             if foto_frente_q2:
-                av2_bytes = analizar_foto_con_senalizaciones(foto_frente_q2, norm, mot, estado)
-                av2_path  = f"/tmp/mm247_fotos/an_pdf_{id_al}_q2.jpg"
-                with open(av2_path,"wb") as f: f.write(av2_bytes)
-                c.drawImage(av2_path, W//2-80, y-220, width=160, height=220, preserveAspectRatio=True)
+                av2_img  = Image.open(io.BytesIO(foto_frente_q2)).convert("RGB")
+                av2_img.thumbnail((160, 220))
+                av2_path = f"/tmp/mm247_fotos/an_pdf_{id_al}_q2.jpg"
+                av2_img.save(av2_path, "JPEG", quality=88)
+                c.drawImage(av2_path, 60, y-220, width=160, height=220, preserveAspectRatio=True)
             else:
                 c.setFillColor(color_mm(150,150,150))
                 c.setFont("Helvetica", 9)
-                c.drawCentredString(W//2, y-100, "Sin foto de frente Q2 disponible")
+                c.drawString(60, y-30, "Sin foto de frente Q2 disponible")
+
+            fx0, fy0 = 240, y - 12
+            ficha_q2 = [
+                ("Adherencia", ult.get("Adherencia Real al Sistema","--")),
+                ("Sobrecarga", ult.get("Sobrecarga Progresiva","--")),
+                ("Tolerancia", ult.get("Tolerancia Metabólica","--")),
+                ("Fuerza Q2", f"{ult.get('Progreso_Fuerza','5')}/10"),
+                ("Energía Q2", f"{ult.get('Energia','5')}/10"),
+                ("Sueño Q2", f"{ult.get('Calidad_Sueno','5')}/10"),
+            ]
+            c.setFont("Helvetica-Bold", 9)
+            for lbl, val in ficha_q2:
+                c.setFillColor(color_mm(80,120,90))
+                c.drawString(fx0, fy0, f"{lbl}:")
+                c.setFillColor(OSCURO)
+                c.drawString(fx0+85, fy0, _limpiar(str(val)))
+                fy0 -= 16
         except Exception:
             pass
 
@@ -1992,7 +1866,7 @@ def dashboard_admin(df_existente):
 
         # Análisis visual sobre foto real — ANCHO COMPLETO
         st.markdown("<div class='sec-head'>ANÁLISIS VISUAL CON SEÑALIZACIONES</div>", unsafe_allow_html=True)
-        mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render, ancho_px=240)
+        mostrar_analisis_visual(id_sel, d_norm, m_calc, etapa=etapa_admin, estado=estado_render)
 
         # Deltas
         peso_act   = pf(r_df.iloc[-1].get("Peso_Revision",m_calc["peso"]) if not r_df.empty else m_calc["peso"], m_calc["peso"])
